@@ -1,10 +1,10 @@
 [package]
-name = "TrimsheetMaker"
-version = "0.1.0"
-edition = "2021"
+name = "trimsheet_maker"
+version = "0.0.0"
+edition = "2024"
 
 [dependencies]
-bevy = "0.14.2"
+bevy = "0.19.1"
 bevy_egui = "0.36.0"
 exr = "1.74.0"
 rayon = "1.12.0"
