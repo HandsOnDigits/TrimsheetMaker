@@ -5679,6 +5679,7 @@ dependencies = [
  "bevy_egui",
  "exr",
  "rayon",
+ "serde_json",
  "walkdir",
  "xatlas-rs-v2",
 ]
