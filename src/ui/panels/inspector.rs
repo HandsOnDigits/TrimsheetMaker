@@ -2,6 +2,8 @@ use bevy_egui::egui;
 
 use super::{Atlas, EditorUi};
 
+use crate::ui::MaterialTexture;
+
 pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
     ui.heading("Inspector");
 
@@ -38,14 +40,6 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
             ui.text_edit_singleline(&mut material.name);
             ui.end_row();
 
-            ui.label("Source");
-            ui.label(&material.source);
-            ui.end_row();
-
-            ui.separator();
-            ui.separator();
-            ui.end_row();
-
             ui.label("Position");
 
             ui.horizontal(|ui| {
@@ -75,13 +69,43 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
 
     ui.separator();
 
-    ui.label(egui::RichText::new("Texture").strong());
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new("Textures").strong());
 
-    ui.add_space(4.0);
-
-    ui.label(egui::RichText::new(&material.source).weak());
+        if ui.button("+").clicked() {
+            material.textures.push(MaterialTexture {
+                name: "Texture".into(),
+                path: String::new(),
+            });
+        }
+    });
 
     ui.add_space(8.0);
 
-    let _ = ui.button("Replace Texture…");
+    let mut remove_index = None;
+
+    for (i, texture) in material.textures.iter_mut().enumerate() {
+        ui.group(|ui| {
+            ui.horizontal(|ui| {
+                ui.text_edit_singleline(&mut texture.name);
+
+                if ui.small_button("×").clicked() {
+                    remove_index = Some(i);
+                }
+            });
+
+            ui.add_space(4.0);
+
+            ui.horizontal(|ui| {
+                ui.label("File");
+                ui.add(egui::TextEdit::singleline(&mut texture.path).desired_width(f32::INFINITY));
+            });
+        });
+
+        ui.add_space(6.0);
+    }
+
+    if let Some(index) = remove_index {
+        material.textures.remove(index);
+    }
 }

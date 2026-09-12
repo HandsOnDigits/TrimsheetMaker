@@ -14,7 +14,6 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
     egui::ScrollArea::vertical()
         .id_salt("materials_scroll")
         .show(ui, |ui| {
-            // Avoid borrowing `editor_ui` mutably while iterating the atlas.
             let mut clicked = None;
 
             for material in &atlas.materials {
@@ -84,10 +83,12 @@ fn material_row(ui: &mut egui::Ui, material: &AtlasMaterial, selected: bool) -> 
         ui.visuals().text_color(),
     );
 
+    let texture_count = material.textures.len();
+
     ui.painter().text(
         text_pos + egui::vec2(0.0, 19.0),
         egui::Align2::LEFT_TOP,
-        format!("#{}  {}", material.index, material.source),
+        format!("#{}  {} textures", material.index, texture_count),
         egui::FontId::proportional(11.0),
         ui.visuals().weak_text_color(),
     );

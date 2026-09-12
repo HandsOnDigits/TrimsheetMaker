@@ -58,7 +58,20 @@ impl Default for Atlas {
                 AtlasMaterial {
                     index: 0,
                     name: "Brick".into(),
-                    source: "brick.png".into(),
+                    textures: vec![
+                        MaterialTexture {
+                            name: "Albedo".into(),
+                            path: "brick_albedo.png".into(),
+                        },
+                        MaterialTexture {
+                            name: "Normal".into(),
+                            path: "brick_normal.png".into(),
+                        },
+                        MaterialTexture {
+                            name: "Roughness".into(),
+                            path: "brick_roughness.png".into(),
+                        },
+                    ],
                     x: 32,
                     y: 32,
                     width: 256,
@@ -67,7 +80,24 @@ impl Default for Atlas {
                 AtlasMaterial {
                     index: 1,
                     name: "Metal".into(),
-                    source: "metal.png".into(),
+                    textures: vec![
+                        MaterialTexture {
+                            name: "Albedo".into(),
+                            path: "metal_albedo.png".into(),
+                        },
+                        MaterialTexture {
+                            name: "Normal".into(),
+                            path: "metal_normal.png".into(),
+                        },
+                        MaterialTexture {
+                            name: "Metallic".into(),
+                            path: "metal_metallic.png".into(),
+                        },
+                        MaterialTexture {
+                            name: "Roughness".into(),
+                            path: "metal_roughness.png".into(),
+                        },
+                    ],
                     x: 320,
                     y: 32,
                     width: 128,
@@ -76,7 +106,20 @@ impl Default for Atlas {
                 AtlasMaterial {
                     index: 2,
                     name: "Wood".into(),
-                    source: "wood.png".into(),
+                    textures: vec![
+                        MaterialTexture {
+                            name: "Albedo".into(),
+                            path: "wood_albedo.png".into(),
+                        },
+                        MaterialTexture {
+                            name: "Normal".into(),
+                            path: "wood_normal.png".into(),
+                        },
+                        MaterialTexture {
+                            name: "Roughness".into(),
+                            path: "wood_roughness.png".into(),
+                        },
+                    ],
                     x: 480,
                     y: 32,
                     width: 256,
@@ -85,7 +128,20 @@ impl Default for Atlas {
                 AtlasMaterial {
                     index: 3,
                     name: "Concrete".into(),
-                    source: "concrete.png".into(),
+                    textures: vec![
+                        MaterialTexture {
+                            name: "Albedo".into(),
+                            path: "concrete_albedo.png".into(),
+                        },
+                        MaterialTexture {
+                            name: "Normal".into(),
+                            path: "concrete_normal.png".into(),
+                        },
+                        MaterialTexture {
+                            name: "Roughness".into(),
+                            path: "concrete_roughness.png".into(),
+                        },
+                    ],
                     x: 32,
                     y: 320,
                     width: 192,
@@ -116,13 +172,10 @@ impl Atlas {
 
     pub fn add_placeholder(&mut self) -> usize {
         let index = self.next_index();
-
         let size = 128;
         let margin = 16;
-
         let mut x = margin;
         let mut y = margin;
-
         loop {
             let candidate = Rect {
                 x,
@@ -130,7 +183,6 @@ impl Atlas {
                 width: size,
                 height: size,
             };
-
             let overlaps = self.materials.iter().any(|material| {
                 candidate.overlaps(Rect {
                     x: material.x,
@@ -139,33 +191,27 @@ impl Atlas {
                     height: material.height,
                 })
             });
-
             if !overlaps && x + size <= self.width && y + size <= self.height {
                 break;
             }
-
             x += size + margin;
-
             if x + size > self.width {
                 x = margin;
                 y += size + margin;
             }
-
             if y + size > self.height {
                 self.height += 512;
             }
         }
-
         self.materials.push(AtlasMaterial {
             index,
             name: format!("Material {index}"),
-            source: "new_material.png".into(),
+            textures: vec![],
             x,
             y,
             width: size,
             height: size,
         });
-
         index
     }
 
@@ -178,12 +224,19 @@ impl Atlas {
 pub struct AtlasMaterial {
     pub index: usize,
     pub name: String,
-    pub source: String,
+
+    pub textures: Vec<MaterialTexture>,
 
     pub x: u32,
     pub y: u32,
     pub width: u32,
     pub height: u32,
+}
+
+#[derive(Clone)]
+pub struct MaterialTexture {
+    pub name: String,
+    pub path: String,
 }
 
 #[derive(Clone, Copy)]
