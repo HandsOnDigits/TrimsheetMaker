@@ -97,14 +97,6 @@ impl Default for Atlas {
 }
 
 impl Atlas {
-    pub fn selected(&self, index: Option<usize>) -> Option<&AtlasMaterial> {
-        index.and_then(|index| {
-            self.materials
-                .iter()
-                .find(|material| material.index == index)
-        })
-    }
-
     pub fn selected_mut(&mut self, index: Option<usize>) -> Option<&mut AtlasMaterial> {
         index.and_then(|index| {
             self.materials
