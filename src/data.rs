@@ -29,25 +29,6 @@ impl TextureNaming {
 
 impl Default for TextureNaming {
     fn default() -> Self {
-        Self {
-            groups: vec![
-                TextureGroup {
-                    name: "Base Color".into(),
-                    suffixes: vec!["_base_color".into()],
-                },
-                TextureGroup {
-                    name: "Normal".into(),
-                    suffixes: vec!["_normal".into()],
-                },
-                TextureGroup {
-                    name: "Height".into(),
-                    suffixes: vec!["_height".into()],
-                },
-                TextureGroup {
-                    name: "ORM".into(),
-                    suffixes: vec!["_orm".into()],
-                },
-            ],
-        }
+        Self { groups: Vec::new() }
     }
 }
