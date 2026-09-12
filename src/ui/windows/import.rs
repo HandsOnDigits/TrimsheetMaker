@@ -37,15 +37,18 @@ pub fn import_window(ctx: &egui::Context, editor_ui: &mut EditorUi) {
 
                 if ui.button("Browse").clicked() {
                     if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                        editor_ui.import_root = Some(path.clone());
-
-                        match crate::importer::materials::scan(&path, &editor_ui.texture_naming) {
-                            Ok(materials) => {
-                                editor_ui.import_materials = materials;
+                        match crate::importer::materials::scan(&path) {
+                            Ok(scan) => {
+                                editor_ui.import_root = Some(path);
+                                editor_ui.import_materials = scan.materials;
+                                editor_ui.texture_naming = scan.naming;
                             }
                             Err(error) => {
                                 eprintln!("Failed to scan material folder: {error}");
+
+                                editor_ui.import_root = None;
                                 editor_ui.import_materials.clear();
+                                editor_ui.texture_naming = crate::data::TextureNaming::default();
                             }
                         }
                     }
@@ -62,7 +65,22 @@ pub fn import_window(ctx: &egui::Context, editor_ui: &mut EditorUi) {
 
                 ui.add_space(8.0);
 
-                // Build a group -> materials/files preview.
+                ui.label("Detected Texture Naming");
+
+                ui.add_space(4.0);
+
+                for group in &editor_ui.texture_naming.groups {
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new(&group.name).strong());
+
+                        ui.separator();
+
+                        ui.label(group.suffixes.join(", "));
+                    });
+                }
+
+                ui.add_space(8.0);
+
                 let mut groups: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
 
                 for material in &editor_ui.import_materials {
@@ -84,7 +102,7 @@ pub fn import_window(ctx: &egui::Context, editor_ui: &mut EditorUi) {
                 if groups.is_empty() {
                     ui.label("No recognized textures found.");
                 } else {
-                    ui.label("Detected Texture Groups");
+                    ui.label("Detected Textures");
 
                     ui.add_space(4.0);
 
@@ -123,7 +141,8 @@ pub fn import_window(ctx: &egui::Context, editor_ui: &mut EditorUi) {
                     close_window = true;
                 }
 
-                let can_import = editor_ui.import_root.is_some();
+                let can_import =
+                    editor_ui.import_root.is_some() && !editor_ui.import_materials.is_empty();
 
                 if ui
                     .add_enabled(can_import, egui::Button::new("Import"))
