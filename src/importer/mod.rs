@@ -4,7 +4,6 @@ pub mod materials;
 
 pub struct MaterialSource {
     pub name: String,
-    pub folder: PathBuf,
     pub textures: Vec<MaterialTextureSource>,
 }
 
