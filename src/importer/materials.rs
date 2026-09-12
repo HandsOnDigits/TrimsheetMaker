@@ -59,11 +59,7 @@ pub fn scan(root: &Path) -> io::Result<MaterialScan> {
             textures.push(MaterialTextureSource { group, path });
         }
 
-        materials.push(MaterialSource {
-            name,
-            folder: folder.clone(),
-            textures,
-        });
+        materials.push(MaterialSource { name, textures });
     }
 
     Ok(MaterialScan { materials, naming })
