@@ -1,6 +1,5 @@
-use bevy_egui::egui;
-
 use super::EditorUi;
+use bevy_egui::egui;
 
 use crate::data::{Atlas, AtlasMaterial};
 
@@ -116,6 +115,19 @@ fn draw_material_region(
     material: &AtlasMaterial,
     selected: bool,
 ) {
+    if let Some(texture_id) = material
+        .textures
+        .first()
+        .and_then(|texture| texture.egui_texture)
+    {
+        painter.image(
+            texture_id,
+            rect,
+            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+            egui::Color32::WHITE,
+        );
+    }
+
     let fill = if selected {
         egui::Color32::from_rgba_unmultiplied(80, 140, 255, 100)
     } else {

@@ -14,7 +14,7 @@ mod status_bar;
 use status_bar::status_bar;
 
 use bevy::prelude::*;
-use bevy_egui::{EguiContexts, egui};
+use bevy_egui::{EguiContexts, EguiTextureHandle, egui};
 
 use super::EditorUi;
 
@@ -26,6 +26,18 @@ pub fn editor_ui(
     mut atlas: ResMut<Atlas>,
     mut images: ResMut<Assets<Image>>,
 ) -> Result {
+    for material in &mut atlas.materials {
+        for texture in &mut material.textures {
+            if texture.egui_texture.is_none() {
+                if let Some(image) = &texture.image {
+                    let texture_id = contexts.add_image(EguiTextureHandle::Weak(image.id()));
+
+                    texture.egui_texture = Some(texture_id);
+                }
+            }
+        }
+    }
+
     let ctx = contexts.ctx_mut()?;
 
     let mut root_ui = egui::Ui::new(

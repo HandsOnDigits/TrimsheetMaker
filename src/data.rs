@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_egui::egui;
 
 use std::path::PathBuf;
 
@@ -13,6 +14,7 @@ pub struct MaterialTexture {
 
     // Runtime representation, if loaded.
     pub image: Option<Handle<Image>>,
+    pub egui_texture: Option<egui::TextureId>,
 }
 
 pub struct MaterialSource {
@@ -151,6 +153,7 @@ impl Atlas {
                 group: texture.group,
                 path: texture.path,
                 image: None,
+                egui_texture: None,
             })
             .collect();
 

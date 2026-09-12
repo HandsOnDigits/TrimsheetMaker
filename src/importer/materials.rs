@@ -58,6 +58,7 @@ pub fn scan(root: &Path) -> io::Result<MaterialScan> {
                 group,
                 path,
                 image: None,
+                egui_texture: None,
             });
         }
 

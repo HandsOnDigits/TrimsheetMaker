@@ -77,6 +77,7 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
                 group: "Texture".into(),
                 path: std::path::PathBuf::new(),
                 image: None,
+                egui_texture: None,
             });
         }
     });
