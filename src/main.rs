@@ -4,6 +4,7 @@ use bevy_egui::EguiPlugin;
 mod ui;
 use ui::EditorUiPlugin;
 
+mod assets;
 mod data;
 mod importer;
 

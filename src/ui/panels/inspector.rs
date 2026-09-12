@@ -1,8 +1,8 @@
 use bevy_egui::egui;
 
-use super::{Atlas, EditorUi};
+use super::EditorUi;
 
-use crate::ui::MaterialTexture;
+use crate::data::{Atlas, MaterialTexture};
 
 pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
     ui.heading("Inspector");
@@ -74,8 +74,9 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
 
         if ui.button("+").clicked() {
             material.textures.push(MaterialTexture {
-                name: "Texture".into(),
-                path: String::new(),
+                group: "Texture".into(),
+                path: std::path::PathBuf::new(),
+                image: None,
             });
         }
     });
@@ -87,7 +88,7 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
     for (i, texture) in material.textures.iter_mut().enumerate() {
         ui.group(|ui| {
             ui.horizontal(|ui| {
-                ui.text_edit_singleline(&mut texture.name);
+                ui.label(egui::RichText::new(&texture.group).strong());
 
                 if ui.small_button("×").clicked() {
                     remove_index = Some(i);
@@ -98,7 +99,14 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
 
             ui.horizontal(|ui| {
                 ui.label("File");
-                ui.add(egui::TextEdit::singleline(&mut texture.path).desired_width(f32::INFINITY));
+
+                let path = texture.path.display().to_string();
+
+                ui.add(
+                    egui::TextEdit::singleline(&mut path.clone())
+                        .desired_width(f32::INFINITY)
+                        .interactive(false),
+                );
             });
         });
 

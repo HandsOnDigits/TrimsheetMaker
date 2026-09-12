@@ -1,6 +1,8 @@
 use bevy_egui::egui;
 
-use super::{Atlas, AtlasMaterial, EditorUi};
+use super::EditorUi;
+
+use crate::data::{Atlas, AtlasMaterial};
 
 pub fn atlas_view(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
     ui.horizontal(|ui| {

@@ -4,12 +4,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::data::{TextureGroup, TextureNaming};
-
-use super::{MaterialSource, MaterialTextureSource};
+use crate::data::{MaterialSource, MaterialTexture, TextureGroup, TextureNaming};
 
 pub struct MaterialScan {
-    pub materials: Vec<MaterialSource>,
+    pub materials: HashMap<String, MaterialSource>,
     pub naming: TextureNaming,
 }
 
@@ -28,7 +26,7 @@ pub fn scan(root: &Path) -> io::Result<MaterialScan> {
 
     let naming = detect_naming(&folders)?;
 
-    let mut materials = Vec::new();
+    let mut materials = HashMap::new();
 
     for folder in &folders {
         let name = folder
@@ -56,10 +54,14 @@ pub fn scan(root: &Path) -> io::Result<MaterialScan> {
                 continue;
             };
 
-            textures.push(MaterialTextureSource { group, path });
+            textures.push(MaterialTexture {
+                group,
+                path,
+                image: None,
+            });
         }
 
-        materials.push(MaterialSource { name, textures });
+        materials.insert(name.clone(), MaterialSource { name, textures });
     }
 
     Ok(MaterialScan { materials, naming })

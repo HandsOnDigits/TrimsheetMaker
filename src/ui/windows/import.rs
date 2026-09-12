@@ -1,10 +1,16 @@
 use std::collections::BTreeMap;
 
+use bevy::prelude::*;
 use bevy_egui::egui;
 
-use crate::ui::EditorUi;
+use crate::{data::Atlas, ui::EditorUi};
 
-pub fn import_window(ctx: &egui::Context, editor_ui: &mut EditorUi) {
+pub fn import_window(
+    ctx: &egui::Context,
+    editor_ui: &mut EditorUi,
+    atlas: &mut Atlas,
+    images: &mut Assets<Image>,
+) {
     if !editor_ui.show_import_window {
         return;
     }
@@ -83,7 +89,7 @@ pub fn import_window(ctx: &egui::Context, editor_ui: &mut EditorUi) {
 
                 let mut groups: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
 
-                for material in &editor_ui.import_materials {
+                for material in editor_ui.import_materials.values() {
                     for texture in &material.textures {
                         let filename = texture
                             .path
@@ -97,6 +103,10 @@ pub fn import_window(ctx: &egui::Context, editor_ui: &mut EditorUi) {
                             .or_default()
                             .push((material.name.clone(), filename));
                     }
+                }
+
+                for textures in groups.values_mut() {
+                    textures.sort_by(|a, b| a.0.cmp(&b.0));
                 }
 
                 if groups.is_empty() {
@@ -148,7 +158,15 @@ pub fn import_window(ctx: &egui::Context, editor_ui: &mut EditorUi) {
                     .add_enabled(can_import, egui::Button::new("Import"))
                     .clicked()
                 {
-                    // Import materials here.
+                    let materials = std::mem::take(&mut editor_ui.import_materials);
+
+                    for source in materials.into_values() {
+                        atlas.add_material(source);
+                    }
+
+                    atlas.load_textures(images);
+
+                    editor_ui.import_root = None;
                     close_window = true;
                 }
             });

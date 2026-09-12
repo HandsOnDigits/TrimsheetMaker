@@ -16,14 +16,15 @@ use status_bar::status_bar;
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
 
-use super::{Atlas, AtlasMaterial, EditorUi};
+use super::EditorUi;
 
-use crate::ui::windows;
+use crate::{data::Atlas, ui::windows};
 
 pub fn editor_ui(
     mut contexts: EguiContexts,
     mut editor_ui: ResMut<EditorUi>,
     mut atlas: ResMut<Atlas>,
+    mut images: ResMut<Assets<Image>>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
 
@@ -71,7 +72,7 @@ pub fn editor_ui(
 
     atlas_view(&mut root_ui, &mut editor_ui, &mut atlas);
 
-    windows::import::import_window(ctx, &mut editor_ui);
+    windows::import::import_window(ctx, &mut editor_ui, &mut atlas, &mut images);
 
     Ok(())
 }

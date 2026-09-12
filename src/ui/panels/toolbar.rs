@@ -1,6 +1,8 @@
 use bevy_egui::egui;
 
-use super::{Atlas, EditorUi};
+use super::EditorUi;
+
+use crate::data::Atlas;
 
 pub fn toolbar(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
     ui.horizontal(|ui| {

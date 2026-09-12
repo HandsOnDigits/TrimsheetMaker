@@ -1,6 +1,8 @@
 use bevy_egui::egui;
 
-use super::{Atlas, EditorUi};
+use super::EditorUi;
+
+use crate::data::Atlas;
 
 pub fn status_bar(ui: &mut egui::Ui, editor_ui: &EditorUi, atlas: &Atlas) {
     ui.horizontal(|ui| {

@@ -185,6 +185,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.104"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
+
+[[package]]
 name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3410,6 +3416,7 @@ checksum = "85ab80394333c02fe689eaf900ab500fbd0c2213da414687ebf995a65d5a6104"
 dependencies = [
  "bytemuck",
  "byteorder-lite",
+ "exr",
  "moxcms",
  "num-traits",
  "png",
@@ -5709,6 +5716,7 @@ dependencies = [
 name = "trimsheet_maker"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "bevy",
  "bevy_egui",
  "exr",
@@ -5716,7 +5724,6 @@ dependencies = [
  "rfd",
  "serde",
  "serde_json",
- "walkdir",
  "xatlas-rs-v2",
 ]
 
