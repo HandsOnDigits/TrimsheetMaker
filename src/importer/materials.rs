@@ -1,173 +1,191 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
+    io,
     path::{Path, PathBuf},
 };
 
 use crate::data::{TextureGroup, TextureNaming};
 
-pub struct MaterialSource {
-    pub name: String,
-    pub folder: PathBuf,
-    pub textures: Vec<MaterialTextureSource>,
-}
-
-pub struct MaterialTextureSource {
-    pub group: String,
-    pub path: PathBuf,
-}
+use super::{MaterialSource, MaterialTextureSource};
 
 pub struct MaterialScan {
     pub materials: Vec<MaterialSource>,
     pub naming: TextureNaming,
 }
 
-pub fn scan(root: &Path) -> std::io::Result<MaterialScan> {
+pub fn scan(root: &Path) -> io::Result<MaterialScan> {
     let mut folders = Vec::new();
 
     for entry in std::fs::read_dir(root)? {
         let entry = entry?;
-        let path = entry.path();
 
-        if path.is_dir() {
-            folders.push(path);
+        if entry.file_type()?.is_dir() {
+            folders.push(entry.path());
         }
     }
+
+    folders.sort();
 
     let naming = detect_naming(&folders)?;
 
     let mut materials = Vec::new();
 
-    for folder in folders {
-        materials.push(scan_material(&folder, &naming)?);
-    }
+    for folder in &folders {
+        let name = folder
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("Unnamed")
+            .to_owned();
 
-    materials.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        let mut textures = Vec::new();
+
+        for entry in std::fs::read_dir(folder)? {
+            let entry = entry?;
+
+            if !entry.file_type()?.is_file() {
+                continue;
+            }
+
+            let path = entry.path();
+
+            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+
+            let Some(group) = naming.group_for_filename(stem) else {
+                continue;
+            };
+
+            textures.push(MaterialTextureSource { group, path });
+        }
+
+        materials.push(MaterialSource {
+            name,
+            folder: folder.clone(),
+            textures,
+        });
+    }
 
     Ok(MaterialScan { materials, naming })
 }
 
-fn detect_naming(folders: &[PathBuf]) -> std::io::Result<TextureNaming> {
-    let mut candidates: HashMap<String, usize> = HashMap::new();
+fn detect_naming(folders: &[PathBuf]) -> io::Result<TextureNaming> {
+    let mut suffix_folders: HashMap<String, HashSet<PathBuf>> = HashMap::new();
 
     for folder in folders {
+        let folder_tokens = tokenize(
+            folder
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default(),
+        );
+
         for entry in std::fs::read_dir(folder)? {
             let entry = entry?;
-            let path = entry.path();
 
-            if !path.is_file() {
+            if !entry.file_type()?.is_file() {
                 continue;
             }
 
-            let Some(stem) = path.file_stem().and_then(|name| name.to_str()) else {
+            let path = entry.path();
+
+            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
                 continue;
             };
 
-            for candidate in suffix_candidates(stem) {
-                *candidates.entry(candidate).or_default() += 1;
+            let tokens = tokenize(stem);
+
+            let Some(suffix_start) = material_prefix_end(&tokens, &folder_tokens) else {
+                continue;
+            };
+
+            if suffix_start >= tokens.len() {
+                continue;
             }
+
+            let suffix = tokens[suffix_start..].join("_");
+
+            suffix_folders
+                .entry(suffix)
+                .or_default()
+                .insert(folder.clone());
         }
     }
 
-    // A suffix that occurs more than once across the material set
-    // is a useful indication that it represents a texture type.
-    let mut suffixes: Vec<(String, usize)> = candidates
+    let mut suffixes: Vec<(String, usize)> = suffix_folders
         .into_iter()
-        .filter(|(_, count)| *count >= 2)
+        .map(|(suffix, folders)| {
+            let count = folders.len();
+            (suffix, count)
+        })
         .collect();
 
-    // Longest candidates first.
-    suffixes.sort_by(|a, b| b.0.len().cmp(&a.0.len()).then_with(|| b.1.cmp(&a.1)));
+    // Most widely used suffixes first.
+    //
+    // Longer suffixes win when they have the same support.
+    suffixes.sort_by(|a, b| {
+        b.1.cmp(&a.1)
+            .then_with(|| b.0.matches('_').count().cmp(&a.0.matches('_').count()))
+            .then_with(|| b.0.len().cmp(&a.0.len()))
+    });
 
-    // Remove candidates that are just a shorter suffix of an already
-    // recognized suffix.
-    let mut recognized = Vec::new();
+    let mut groups = Vec::new();
 
     for (suffix, _) in suffixes {
-        if recognized
-            .iter()
-            .any(|existing: &String| existing.ends_with(&suffix))
-        {
+        // Don't add `_color` if `_base_color` has already
+        // been identified as the more specific suffix.
+        if groups.iter().any(|group: &TextureGroup| {
+            group
+                .suffixes
+                .iter()
+                .any(|existing| existing.ends_with(&format!("_{suffix}")))
+        }) {
             continue;
         }
 
-        recognized.push(suffix);
+        groups.push(TextureGroup {
+            name: display_name(&suffix),
+            suffixes: vec![format!("_{suffix}")],
+        });
     }
-
-    recognized.sort();
-
-    let groups = recognized
-        .into_iter()
-        .map(|suffix| TextureGroup {
-            name: display_group_name(&suffix),
-            suffixes: vec![suffix],
-        })
-        .collect();
 
     Ok(TextureNaming { groups })
 }
 
-fn suffix_candidates(stem: &str) -> Vec<String> {
-    let parts: Vec<&str> = stem.split('_').collect();
-
-    let mut candidates = Vec::new();
-
-    for start in 1..parts.len() {
-        let suffix = format!("_{}", parts[start..].join("_"));
-        candidates.push(suffix.to_lowercase());
+fn material_prefix_end(filename: &[String], material: &[String]) -> Option<usize> {
+    if material.is_empty() || filename.len() < material.len() {
+        return None;
     }
 
-    candidates
+    for start in 0..=filename.len() - material.len() {
+        if filename[start..start + material.len()] == *material {
+            return Some(start + material.len());
+        }
+    }
+
+    None
 }
 
-fn display_group_name(suffix: &str) -> String {
+fn tokenize(value: &str) -> Vec<String> {
+    value
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|part| !part.is_empty())
+        .map(|part| part.to_lowercase())
+        .collect()
+}
+
+fn display_name(suffix: &str) -> String {
     suffix
-        .trim_start_matches('_')
         .split('_')
+        .filter(|part| !part.is_empty())
         .map(|part| {
             let mut chars = part.chars();
 
             match chars.next() {
-                Some(first) => {
-                    format!("{}{}", first.to_uppercase(), chars.as_str().to_lowercase())
-                }
+                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
                 None => String::new(),
             }
         })
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-fn scan_material(folder: &Path, naming: &TextureNaming) -> std::io::Result<MaterialSource> {
-    let name = folder
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("Material")
-        .to_owned();
-
-    let mut textures = Vec::new();
-
-    for entry in std::fs::read_dir(folder)? {
-        let entry = entry?;
-        let path = entry.path();
-
-        if !path.is_file() {
-            continue;
-        }
-
-        let Some(stem) = path.file_stem().and_then(|name| name.to_str()) else {
-            continue;
-        };
-
-        let Some(group) = naming.group_for_filename(stem) else {
-            continue;
-        };
-
-        textures.push(MaterialTextureSource { group, path });
-    }
-
-    Ok(MaterialSource {
-        name,
-        folder: folder.to_owned(),
-        textures,
-    })
 }

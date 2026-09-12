@@ -28,7 +28,7 @@ pub struct EditorUi {
     pub show_import_window: bool,
 
     pub import_root: Option<std::path::PathBuf>,
-    pub import_materials: Vec<importer::materials::MaterialSource>,
+    pub import_materials: Vec<importer::MaterialSource>,
 
     pub texture_naming: data::TextureNaming,
 
