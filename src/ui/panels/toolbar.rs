@@ -27,6 +27,11 @@ pub fn toolbar(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
 
             ui.separator();
 
+            if ui.button("Import Materials…").clicked() {
+                editor_ui.show_import_window = true;
+                ui.close();
+            }
+
             if ui.button("Export Atlas…").clicked() {
                 ui.close();
             }

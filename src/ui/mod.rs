@@ -1,7 +1,10 @@
 use bevy::prelude::*;
 use bevy_egui::{EguiPrimaryContextPass, egui};
 
+use crate::{data, importer};
+
 mod panels;
+mod windows;
 
 pub struct EditorUiPlugin;
 
@@ -21,6 +24,14 @@ fn setup(mut commands: Commands) {
 #[derive(Resource)]
 pub struct EditorUi {
     pub selected_material: Option<usize>,
+
+    pub show_import_window: bool,
+
+    pub import_root: Option<std::path::PathBuf>,
+    pub import_materials: Vec<importer::materials::MaterialSource>,
+
+    pub texture_naming: data::TextureNaming,
+
     pub atlas_zoom: f32,
     pub atlas_pan: egui::Vec2,
 
@@ -32,6 +43,10 @@ pub struct EditorUi {
 impl Default for EditorUi {
     fn default() -> Self {
         Self {
+            show_import_window: false,
+            import_root: None,
+            import_materials: Vec::new(),
+            texture_naming: default(),
             selected_material: Some(0),
             atlas_zoom: 1.0,
             atlas_pan: egui::Vec2::ZERO,

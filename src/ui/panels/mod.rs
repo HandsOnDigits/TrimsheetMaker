@@ -18,6 +18,8 @@ use bevy_egui::{EguiContexts, egui};
 
 use super::{Atlas, AtlasMaterial, EditorUi};
 
+use crate::ui::windows;
+
 pub fn editor_ui(
     mut contexts: EguiContexts,
     mut editor_ui: ResMut<EditorUi>,
@@ -68,6 +70,8 @@ pub fn editor_ui(
     }
 
     atlas_view(&mut root_ui, &mut editor_ui, &mut atlas);
+
+    windows::import::import_window(ctx, &mut editor_ui);
 
     Ok(())
 }

@@ -2,8 +2,10 @@ use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
 
 mod ui;
-
 use ui::EditorUiPlugin;
+
+mod data;
+mod importer;
 
 fn main() {
     App::new()
