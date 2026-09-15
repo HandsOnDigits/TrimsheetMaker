@@ -79,6 +79,8 @@ fn detect_naming(folders: &[PathBuf]) -> io::Result<TextureNaming> {
                 .unwrap_or_default(),
         );
 
+        let mut folder_suffixes = Vec::new();
+
         for entry in std::fs::read_dir(folder)? {
             let entry = entry?;
 
@@ -94,15 +96,31 @@ fn detect_naming(folders: &[PathBuf]) -> io::Result<TextureNaming> {
 
             let tokens = tokenize(stem);
 
-            let Some(suffix_start) = material_prefix_end(&tokens, &folder_tokens) else {
+            let Some(prefix_end) = material_prefix_end(&tokens, &folder_tokens) else {
                 continue;
             };
 
-            if suffix_start >= tokens.len() {
+            if prefix_end >= tokens.len() {
                 continue;
             }
 
-            let suffix = tokens[suffix_start..].join("_");
+            folder_suffixes.push(tokens[prefix_end..].to_vec());
+        }
+
+        if folder_suffixes.is_empty() {
+            continue;
+        }
+
+        // Find tokens that are shared at the beginning of every
+        // texture filename in this material folder.
+        let common_prefix_len = common_prefix_len(&folder_suffixes);
+
+        for suffix_tokens in folder_suffixes {
+            if common_prefix_len >= suffix_tokens.len() {
+                continue;
+            }
+
+            let suffix = suffix_tokens[common_prefix_len..].join("_");
 
             suffix_folders
                 .entry(suffix)
@@ -131,8 +149,6 @@ fn detect_naming(folders: &[PathBuf]) -> io::Result<TextureNaming> {
     let mut groups = Vec::new();
 
     for (suffix, _) in suffixes {
-        // Don't add `_color` if `_base_color` has already
-        // been identified as the more specific suffix.
         if groups.iter().any(|group: &TextureGroup| {
             group
                 .suffixes
@@ -149,6 +165,27 @@ fn detect_naming(folders: &[PathBuf]) -> io::Result<TextureNaming> {
     }
 
     Ok(TextureNaming { groups })
+}
+
+fn common_prefix_len(tokens: &[Vec<String>]) -> usize {
+    let Some(first) = tokens.first() else {
+        return 0;
+    };
+
+    let mut length = first.len();
+
+    for other in &tokens[1..] {
+        length = length.min(other.len());
+
+        for index in 0..length {
+            if first[index] != other[index] {
+                length = index;
+                break;
+            }
+        }
+    }
+
+    length
 }
 
 fn material_prefix_end(filename: &[String], material: &[String]) -> Option<usize> {

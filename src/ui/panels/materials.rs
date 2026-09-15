@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use bevy_egui::egui;
 
 use super::EditorUi;
@@ -10,6 +12,39 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
     ui.horizontal(|ui| {
         ui.label(format!("{} materials", atlas.materials.len()));
     });
+
+    ui.separator();
+
+    // Collect all texture groups currently available in the atlas.
+    let groups: BTreeSet<String> = atlas
+        .materials
+        .iter()
+        .flat_map(|material| {
+            material
+                .textures
+                .iter()
+                .map(|texture| texture.group.clone())
+        })
+        .collect();
+
+    ui.label("Preview Map");
+
+    let selected_group = editor_ui
+        .preview_texture_group
+        .clone()
+        .unwrap_or_else(|| "Select texture map...".to_string());
+
+    egui::ComboBox::from_id_salt("preview_texture_group_editor")
+        .selected_text(selected_group)
+        .show_ui(ui, |ui| {
+            for group in &groups {
+                ui.selectable_value(
+                    &mut editor_ui.preview_texture_group,
+                    Some(group.clone()),
+                    group,
+                );
+            }
+        });
 
     ui.separator();
 

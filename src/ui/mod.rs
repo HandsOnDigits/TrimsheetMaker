@@ -34,6 +34,9 @@ pub struct EditorUi {
 
     pub texture_naming: data::TextureNaming,
 
+    // Texture group currently displayed in the atlas.
+    pub preview_texture_group: Option<String>,
+
     pub atlas_zoom: f32,
     pub atlas_pan: egui::Vec2,
 
@@ -49,7 +52,11 @@ impl Default for EditorUi {
             import_root: None,
             import_materials: HashMap::new(),
             texture_naming: default(),
-            selected_material: Some(0),
+
+            selected_material: None,
+
+            preview_texture_group: None,
+
             atlas_zoom: 1.0,
             atlas_pan: egui::Vec2::ZERO,
             show_materials: true,

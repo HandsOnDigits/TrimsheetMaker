@@ -73,11 +73,24 @@ fn draw_atlas(painter: &egui::Painter, viewport: egui::Rect, editor_ui: &EditorU
     );
 
     for material in &atlas.materials {
+        let Some(preview_group) = editor_ui.preview_texture_group.as_deref() else {
+            continue;
+        };
+
+        let has_preview_texture = material
+            .textures
+            .iter()
+            .any(|texture| texture.group.eq_ignore_ascii_case(preview_group));
+
+        if !has_preview_texture {
+            continue;
+        }
+
         let rect = atlas_material_rect(material, atlas_rect, zoom);
 
         let selected = editor_ui.selected_material == Some(material.index);
 
-        draw_material_region(painter, rect, material, selected);
+        draw_material_region(painter, rect, material, selected, Some(preview_group));
     }
 }
 
@@ -114,12 +127,15 @@ fn draw_material_region(
     rect: egui::Rect,
     material: &AtlasMaterial,
     selected: bool,
+    preview_group: Option<&str>,
 ) {
-    if let Some(texture_id) = material
-        .textures
-        .first()
-        .and_then(|texture| texture.egui_texture)
-    {
+    if let Some(texture_id) = preview_group.and_then(|group| {
+        material
+            .textures
+            .iter()
+            .find(|texture| texture.group.eq_ignore_ascii_case(group))
+            .and_then(|texture| texture.egui_texture)
+    }) {
         painter.image(
             texture_id,
             rect,
@@ -191,7 +207,19 @@ fn atlas_material_at_position(
         .iter()
         .rev()
         .find(|material| {
-            atlas_x >= material.x
+            let has_preview_texture = editor_ui
+                .preview_texture_group
+                .as_deref()
+                .map(|group| {
+                    material
+                        .textures
+                        .iter()
+                        .any(|texture| texture.group.eq_ignore_ascii_case(group))
+                })
+                .unwrap_or(false);
+
+            has_preview_texture
+                && atlas_x >= material.x
                 && atlas_x < material.x + material.width
                 && atlas_y >= material.y
                 && atlas_y < material.y + material.height

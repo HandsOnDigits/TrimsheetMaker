@@ -109,6 +109,59 @@ pub fn import_window(
                     textures.sort_by(|a, b| a.0.cmp(&b.0));
                 }
 
+                if editor_ui.preview_texture_group.is_none() {
+                    ui.add_space(8.0);
+
+                    ui.label("Default Preview Map");
+
+                    ui.add_space(4.0);
+
+                    let available_groups: Vec<String> = editor_ui
+                        .texture_naming
+                        .groups
+                        .iter()
+                        .map(|group| group.name.clone())
+                        .collect();
+
+                    if available_groups.is_empty() {
+                        ui.label("No texture groups detected.");
+                    } else {
+                        if editor_ui.preview_texture_group.is_none() && !groups.is_empty() {
+                            ui.separator();
+                        
+                            ui.label(egui::RichText::new("Default Preview Map").strong());
+                        
+                            ui.add_space(4.0);
+                        
+                            let selected_preview_group = editor_ui
+                                .preview_texture_group
+                                .clone()
+                                .unwrap_or_else(|| "Select a texture map...".to_string());
+                        
+                            egui::ComboBox::from_id_salt("preview_texture_group")
+                                .selected_text(selected_preview_group)
+                                .show_ui(ui, |ui| {
+                                    for group in groups.keys() {
+                                        ui.selectable_value(
+                                            &mut editor_ui.preview_texture_group,
+                                            Some(group.clone()),
+                                            group,
+                                        );
+                                    }
+                                });
+                        
+                            ui.add_space(4.0);
+                        
+                            if editor_ui.preview_texture_group.is_none() {
+                                ui.label(
+                                    egui::RichText::new("Select which texture map should be displayed in the atlas.")
+                                        .weak(),
+                                );
+                            }
+                        }
+                    }
+                }
+
                 if groups.is_empty() {
                     ui.label("No recognized textures found.");
                 } else {
