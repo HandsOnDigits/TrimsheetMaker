@@ -56,11 +56,8 @@ pub fn atlas_view(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas
 
 fn draw_atlas(painter: &egui::Painter, viewport: egui::Rect, editor_ui: &EditorUi, atlas: &Atlas) {
     let zoom = editor_ui.atlas_zoom;
-
     let atlas_size = egui::vec2(atlas.width as f32 * zoom, atlas.height as f32 * zoom);
-
     let center = viewport.center() + editor_ui.atlas_pan;
-
     let atlas_rect = egui::Rect::from_center_size(center, atlas_size);
 
     draw_checkerboard(painter, atlas_rect, zoom);
@@ -72,25 +69,14 @@ fn draw_atlas(painter: &egui::Painter, viewport: egui::Rect, editor_ui: &EditorU
         egui::StrokeKind::Outside,
     );
 
+    let preview_group = editor_ui.preview_texture_group.as_deref();
+
     for material in &atlas.materials {
-        let Some(preview_group) = editor_ui.preview_texture_group.as_deref() else {
-            continue;
-        };
-
-        let has_preview_texture = material
-            .textures
-            .iter()
-            .any(|texture| texture.group.eq_ignore_ascii_case(preview_group));
-
-        if !has_preview_texture {
-            continue;
-        }
-
         let rect = atlas_material_rect(material, atlas_rect, zoom);
-
         let selected = editor_ui.selected_material == Some(material.index);
 
-        draw_material_region(painter, rect, material, selected, Some(preview_group));
+        // Always draw the material region; preview images render if egui_texture exists
+        draw_material_region(painter, rect, material, selected, preview_group);
     }
 }
 
@@ -129,11 +115,19 @@ fn draw_material_region(
     selected: bool,
     preview_group: Option<&str>,
 ) {
+    let fill = if selected {
+        egui::Color32::from_rgba_unmultiplied(80, 140, 255, 40)
+    } else {
+        egui::Color32::from_rgba_unmultiplied(120, 120, 120, 10)
+    };
+
+    painter.rect_filled(rect, 0.0, fill);
+
     if let Some(texture_id) = preview_group.and_then(|group| {
         material
             .textures
             .iter()
-            .find(|texture| texture.group.eq_ignore_ascii_case(group))
+            .find(|texture| texture.id.eq_ignore_ascii_case(group))
             .and_then(|texture| texture.egui_texture)
     }) {
         painter.image(
@@ -143,14 +137,6 @@ fn draw_material_region(
             egui::Color32::WHITE,
         );
     }
-
-    let fill = if selected {
-        egui::Color32::from_rgba_unmultiplied(80, 140, 255, 100)
-    } else {
-        egui::Color32::from_rgba_unmultiplied(120, 120, 120, 45)
-    };
-
-    painter.rect_filled(rect, 0.0, fill);
 
     let stroke = if selected {
         egui::Stroke::new(2.0, egui::Color32::from_rgb(80, 170, 255))
@@ -214,7 +200,7 @@ fn atlas_material_at_position(
                     material
                         .textures
                         .iter()
-                        .any(|texture| texture.group.eq_ignore_ascii_case(group))
+                        .any(|texture| texture.id.eq_ignore_ascii_case(group))
                 })
                 .unwrap_or(false);
 

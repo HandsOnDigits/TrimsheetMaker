@@ -74,7 +74,7 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
 
         if ui.button("+").clicked() {
             material.textures.push(MaterialTexture {
-                group: "Texture".into(),
+                id: "Texture".into(),
                 path: std::path::PathBuf::new(),
                 image: None,
                 egui_texture: None,
@@ -89,7 +89,7 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
     for (i, texture) in material.textures.iter_mut().enumerate() {
         ui.group(|ui| {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(&texture.group).strong());
+                ui.label(egui::RichText::new(&texture.id).strong());
 
                 if ui.small_button("×").clicked() {
                     remove_index = Some(i);

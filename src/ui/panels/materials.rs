@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use bevy_egui::egui;
 
 use super::EditorUi;
@@ -15,36 +13,124 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
 
     ui.separator();
 
-    // Collect all texture groups currently available in the atlas.
-    let groups: BTreeSet<String> = atlas
-        .materials
-        .iter()
-        .flat_map(|material| {
-            material
-                .textures
-                .iter()
-                .map(|texture| texture.group.clone())
-        })
-        .collect();
-
     ui.label("Preview Map");
 
-    let selected_group = editor_ui
+    let selected_group_name = editor_ui
         .preview_texture_group
-        .clone()
-        .unwrap_or_else(|| "Select texture map...".to_string());
+        .as_deref()
+        .and_then(|id| {
+            editor_ui
+                .texture_naming
+                .groups
+                .iter()
+                .find(|group| group.id == id)
+                .map(|group| group.name.as_str())
+        })
+        .unwrap_or("Select texture map...")
+        .to_string();
 
     egui::ComboBox::from_id_salt("preview_texture_group_editor")
-        .selected_text(selected_group)
+        .selected_text(selected_group_name)
         .show_ui(ui, |ui| {
-            for group in &groups {
+            for group in &editor_ui.texture_naming.groups {
                 ui.selectable_value(
                     &mut editor_ui.preview_texture_group,
-                    Some(group.clone()),
-                    group,
+                    Some(group.id.clone()),
+                    &group.name,
                 );
             }
         });
+
+    ui.separator();
+
+    ui.label(egui::RichText::new("Texture Groups").strong());
+
+    let mut remove_group = None;
+    let mut naming_changed = false;
+
+    for (index, group) in editor_ui.texture_naming.groups.iter_mut().enumerate() {
+        egui::Frame::group(ui.style()).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("Name");
+
+                ui.add(egui::TextEdit::singleline(&mut group.name).desired_width(100.0));
+
+                if ui.button("Remove").clicked() {
+                    remove_group = Some(index);
+                }
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Suffixes");
+
+                let input = editor_ui
+                    .suffix_inputs
+                    .entry(group.id.clone())
+                    .or_insert_with(|| group.suffixes.join(", "));
+
+                let response = ui.add(
+                    egui::TextEdit::singleline(input)
+                        .desired_width(180.0)
+                        .hint_text("_base_color, _basecolor"),
+                );
+
+                if response.lost_focus() {
+                    group.suffixes = input
+                        .split(',')
+                        .map(str::trim)
+                        .filter(|suffix| !suffix.is_empty())
+                        .map(|suffix| {
+                            if suffix.starts_with('_') {
+                                suffix.to_ascii_lowercase()
+                            } else {
+                                format!("_{}", suffix.to_ascii_lowercase())
+                            }
+                        })
+                        .collect();
+
+                    naming_changed = true;
+                }
+            });
+        });
+
+        ui.add_space(4.0);
+    }
+
+    if naming_changed {
+        editor_ui
+            .texture_naming
+            .reclassify_materials(&mut editor_ui.import_materials);
+
+        editor_ui.texture_naming.reclassify_atlas(atlas);
+    }
+
+    if let Some(index) = remove_group {
+        let removed_id = editor_ui.texture_naming.groups[index].id.clone();
+
+        editor_ui.texture_naming.groups.remove(index);
+        editor_ui.suffix_inputs.remove(&removed_id);
+
+        if editor_ui.preview_texture_group.as_deref() == Some(removed_id.as_str()) {
+            editor_ui.preview_texture_group = None;
+        }
+
+        editor_ui.texture_naming.reclassify_atlas(atlas);
+
+        editor_ui
+            .texture_naming
+            .reclassify_materials(&mut editor_ui.import_materials);
+    }
+
+    if ui.button("＋ Add Group").clicked() {
+        editor_ui
+            .texture_naming
+            .groups
+            .push(crate::data::TextureGroup {
+                id: uuid::Uuid::new_v4().to_string(),
+                name: "New Group".to_string(),
+                suffixes: vec!["_new".to_string()],
+            });
+    }
 
     ui.separator();
 

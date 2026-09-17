@@ -1,13 +1,15 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
 
+use std::collections::BTreeMap;
+
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone)]
 pub struct MaterialTexture {
-    pub group: String,
+    pub id: String,
 
     // Original source file. Never discard this.
     pub path: PathBuf,
@@ -24,6 +26,7 @@ pub struct MaterialSource {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TextureGroup {
+    pub id: String,
     pub name: String,
     pub suffixes: Vec<String>,
 }
@@ -34,6 +37,38 @@ pub struct TextureNaming {
 }
 
 impl TextureNaming {
+    pub fn reclassify_atlas(&self, atlas: &mut Atlas) {
+        for material in &mut atlas.materials {
+            for texture in &mut material.textures {
+                texture.id = self
+                    .group_for_filename(
+                        texture
+                            .path
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .unwrap_or_default(),
+                    )
+                    .unwrap_or_default();
+            }
+        }
+    }
+
+    pub fn reclassify_materials(&self, materials: &mut BTreeMap<String, MaterialSource>) {
+        for material in materials.values_mut() {
+            for texture in &mut material.textures {
+                if let Some(group) = self.group_for_filename(
+                    texture
+                        .path
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or_default(),
+                ) {
+                    texture.id = group;
+                }
+            }
+        }
+    }
+
     pub fn group_for_filename(&self, filename: &str) -> Option<String> {
         self.groups
             .iter()
@@ -42,10 +77,43 @@ impl TextureNaming {
                 filename
                     .to_ascii_lowercase()
                     .ends_with(&suffix.to_ascii_lowercase())
-                    .then_some((suffix.len(), &group.name))
+                    .then_some((suffix.len(), &group.id))
             })
             .max_by_key(|(length, _)| *length)
-            .map(|(_, name)| name.clone())
+            .map(|(_, id)| id.clone())
+    }
+
+    pub fn merge_detected(&mut self, detected: TextureNaming) {
+        for detected_group in detected.groups {
+            let mut matched = false;
+
+            for existing_group in &mut self.groups {
+                let suffix_matches = detected_group.suffixes.iter().any(|detected_suffix| {
+                    existing_group.suffixes.iter().any(|existing_suffix| {
+                        existing_suffix.eq_ignore_ascii_case(detected_suffix)
+                    })
+                });
+
+                if suffix_matches {
+                    for suffix in detected_group.suffixes.clone() {
+                        if !existing_group
+                            .suffixes
+                            .iter()
+                            .any(|existing| existing.eq_ignore_ascii_case(&suffix))
+                        {
+                            existing_group.suffixes.push(suffix);
+                        }
+                    }
+
+                    matched = true;
+                    break;
+                }
+            }
+
+            if !matched {
+                self.groups.push(detected_group);
+            }
+        }
     }
 }
 
@@ -150,7 +218,7 @@ impl Atlas {
             .textures
             .into_iter()
             .map(|texture| MaterialTexture {
-                group: texture.group,
+                id: texture.id,
                 path: texture.path,
                 image: None,
                 egui_texture: None,

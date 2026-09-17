@@ -47,7 +47,7 @@ pub fn import_window(
                             Ok(scan) => {
                                 editor_ui.import_root = Some(path);
                                 editor_ui.import_materials = scan.materials;
-                                editor_ui.texture_naming = scan.naming;
+                                editor_ui.texture_naming.merge_detected(scan.naming);
                             }
                             Err(error) => {
                                 eprintln!("Failed to scan material folder: {error}");
@@ -99,7 +99,7 @@ pub fn import_window(
                             .to_owned();
 
                         groups
-                            .entry(texture.group.clone())
+                            .entry(texture.id.clone())
                             .or_default()
                             .push((material.name.clone(), filename));
                     }
@@ -116,82 +116,39 @@ pub fn import_window(
 
                     ui.add_space(4.0);
 
-                    let available_groups: Vec<String> = editor_ui
+                    let available_groups: Vec<_> = editor_ui
                         .texture_naming
                         .groups
                         .iter()
-                        .map(|group| group.name.clone())
+                        .filter(|group| {
+                            groups.contains_key(&group.id) || groups.contains_key(&group.name)
+                        })
                         .collect();
 
                     if available_groups.is_empty() {
                         ui.label("No texture groups detected.");
                     } else {
-                        if editor_ui.preview_texture_group.is_none() && !groups.is_empty() {
-                            ui.separator();
-                        
-                            ui.label(egui::RichText::new("Default Preview Map").strong());
-                        
-                            ui.add_space(4.0);
-                        
-                            let selected_preview_group = editor_ui
-                                .preview_texture_group
-                                .clone()
-                                .unwrap_or_else(|| "Select a texture map...".to_string());
-                        
-                            egui::ComboBox::from_id_salt("preview_texture_group")
-                                .selected_text(selected_preview_group)
-                                .show_ui(ui, |ui| {
-                                    for group in groups.keys() {
-                                        ui.selectable_value(
-                                            &mut editor_ui.preview_texture_group,
-                                            Some(group.clone()),
-                                            group,
-                                        );
-                                    }
-                                });
-                        
-                            ui.add_space(4.0);
-                        
-                            if editor_ui.preview_texture_group.is_none() {
-                                ui.label(
-                                    egui::RichText::new("Select which texture map should be displayed in the atlas.")
-                                        .weak(),
-                                );
-                            }
-                        }
+                        egui::ComboBox::from_id_salt("preview_texture_group")
+                            .selected_text("Select a texture map...")
+                            .show_ui(ui, |ui| {
+                                for group in available_groups {
+                                    ui.selectable_value(
+                                        &mut editor_ui.preview_texture_group,
+                                        Some(group.id.clone()),
+                                        &group.name,
+                                    );
+                                }
+                            });
+
+                        ui.add_space(4.0);
+
+                        ui.label(
+                            egui::RichText::new(
+                                "Select which texture map should be displayed in the atlas.",
+                            )
+                            .weak(),
+                        );
                     }
-                }
-
-                if groups.is_empty() {
-                    ui.label("No recognized textures found.");
-                } else {
-                    ui.label("Detected Textures");
-
-                    ui.add_space(4.0);
-
-                    egui::ScrollArea::vertical()
-                        .max_height(250.0)
-                        .show(ui, |ui| {
-                            for (group, textures) in &groups {
-                                egui::CollapsingHeader::new(egui::RichText::new(group).strong())
-                                    .default_open(true)
-                                    .show(ui, |ui| {
-                                        for (material_name, filename) in textures {
-                                            ui.horizontal(|ui| {
-                                                ui.add_space(12.0);
-
-                                                ui.label(
-                                                    egui::RichText::new(material_name).strong(),
-                                                );
-
-                                                ui.separator();
-
-                                                ui.label(filename);
-                                            });
-                                        }
-                                    });
-                            }
-                        });
                 }
             } else {
                 ui.label("Select a folder containing material folders.");

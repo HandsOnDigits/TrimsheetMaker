@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use bevy::prelude::*;
 use bevy_egui::{EguiPrimaryContextPass, egui};
@@ -30,9 +30,10 @@ pub struct EditorUi {
     pub show_import_window: bool,
 
     pub import_root: Option<std::path::PathBuf>,
-    pub import_materials: HashMap<String, data::MaterialSource>,
+    pub import_materials: BTreeMap<String, data::MaterialSource>,
 
     pub texture_naming: data::TextureNaming,
+    pub suffix_inputs: BTreeMap<String, String>,
 
     // Texture group currently displayed in the atlas.
     pub preview_texture_group: Option<String>,
@@ -50,8 +51,10 @@ impl Default for EditorUi {
         Self {
             show_import_window: false,
             import_root: None,
-            import_materials: HashMap::new(),
+            import_materials: BTreeMap::new(),
+
             texture_naming: default(),
+            suffix_inputs: BTreeMap::new(),
 
             selected_material: None,
 

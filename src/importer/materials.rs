@@ -4,10 +4,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use std::collections::BTreeMap;
+
 use crate::data::{MaterialSource, MaterialTexture, TextureGroup, TextureNaming};
 
 pub struct MaterialScan {
-    pub materials: HashMap<String, MaterialSource>,
+    pub materials: BTreeMap<String, MaterialSource>,
     pub naming: TextureNaming,
 }
 
@@ -26,7 +28,7 @@ pub fn scan(root: &Path) -> io::Result<MaterialScan> {
 
     let naming = detect_naming(&folders)?;
 
-    let mut materials = HashMap::new();
+    let mut materials = BTreeMap::new();
 
     for folder in &folders {
         let name = folder
@@ -55,7 +57,7 @@ pub fn scan(root: &Path) -> io::Result<MaterialScan> {
             };
 
             textures.push(MaterialTexture {
-                group,
+                id: group,
                 path,
                 image: None,
                 egui_texture: None,
@@ -159,6 +161,7 @@ fn detect_naming(folders: &[PathBuf]) -> io::Result<TextureNaming> {
         }
 
         groups.push(TextureGroup {
+            id: uuid::Uuid::new_v4().to_string(),
             name: display_name(&suffix),
             suffixes: vec![format!("_{suffix}")],
         });

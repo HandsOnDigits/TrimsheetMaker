@@ -5724,6 +5724,7 @@ dependencies = [
  "rfd",
  "serde",
  "serde_json",
+ "uuid",
  "xatlas-rs-v2",
 ]
 
