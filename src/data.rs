@@ -40,15 +40,15 @@ impl TextureNaming {
     pub fn reclassify_atlas(&self, atlas: &mut Atlas) {
         for material in &mut atlas.materials {
             for texture in &mut material.textures {
-                texture.id = self
-                    .group_for_filename(
-                        texture
-                            .path
-                            .file_name()
-                            .and_then(|name| name.to_str())
-                            .unwrap_or_default(),
-                    )
-                    .unwrap_or_default();
+                if let Some(group) = self.group_for_filename(
+                    texture
+                        .path
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or_default(),
+                ) {
+                    texture.id = group;
+                }
             }
         }
     }
@@ -70,17 +70,20 @@ impl TextureNaming {
     }
 
     pub fn group_for_filename(&self, filename: &str) -> Option<String> {
+        let stem = std::path::Path::new(filename)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(filename);
+
         self.groups
             .iter()
             .flat_map(|group| group.suffixes.iter().map(move |suffix| (group, suffix)))
-            .filter_map(|(group, suffix)| {
-                filename
-                    .to_ascii_lowercase()
-                    .ends_with(&suffix.to_ascii_lowercase())
-                    .then_some((suffix.len(), &group.id))
+            .filter(|(_, suffix)| {
+                stem.to_ascii_lowercase()
+                    .ends_with(&suffix.trim().to_ascii_lowercase())
             })
-            .max_by_key(|(length, _)| *length)
-            .map(|(_, id)| id.clone())
+            .max_by_key(|(_, suffix)| suffix.len())
+            .map(|(group, _)| group.id.clone())
     }
 
     pub fn merge_detected(&mut self, detected: TextureNaming) {
