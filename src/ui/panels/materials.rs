@@ -142,7 +142,14 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
             for material in &atlas.materials {
                 let selected = editor_ui.selected_material == Some(material.index);
 
-                if material_row(ui, material, selected).clicked() {
+                if material_row(
+                    ui,
+                    material,
+                    selected,
+                    editor_ui.preview_texture_group.as_deref(),
+                )
+                .clicked()
+                {
                     clicked = Some(material.index);
                 }
             }
@@ -166,7 +173,12 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
     }
 }
 
-fn material_row(ui: &mut egui::Ui, material: &AtlasMaterial, selected: bool) -> egui::Response {
+fn material_row(
+    ui: &mut egui::Ui,
+    material: &AtlasMaterial,
+    selected: bool,
+    preview_texture_group: Option<&str>,
+) -> egui::Response {
     let height = 48.0;
     let width = ui.available_width();
 
@@ -180,21 +192,42 @@ fn material_row(ui: &mut egui::Ui, material: &AtlasMaterial, selected: bool) -> 
             .rect_filled(rect, 4.0, ui.visuals().widgets.hovered.bg_fill);
     }
 
+    // Thumbnail
     let thumbnail_rect = egui::Rect::from_min_size(
         rect.left_top() + egui::vec2(6.0, 6.0),
         egui::vec2(36.0, 36.0),
     );
 
+    // Background behind the preview.
     ui.painter()
         .rect_filled(thumbnail_rect, 3.0, egui::Color32::from_gray(55));
 
-    ui.painter().text(
-        thumbnail_rect.center(),
-        egui::Align2::CENTER_CENTER,
-        material.index.to_string(),
-        egui::FontId::proportional(14.0),
-        egui::Color32::WHITE,
-    );
+    // Find the texture belonging to the selected preview group.
+    let preview_texture = preview_texture_group.and_then(|group_id| {
+        material
+            .textures
+            .iter()
+            .find(|texture| texture.id == group_id)
+            .and_then(|texture| texture.egui_texture)
+    });
+
+    if let Some(texture_id) = preview_texture {
+        ui.painter().image(
+            texture_id,
+            thumbnail_rect,
+            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+            egui::Color32::WHITE,
+        );
+    } else {
+        // No texture for this material/group.
+        ui.painter().text(
+            thumbnail_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "—",
+            egui::FontId::proportional(14.0),
+            egui::Color32::WHITE,
+        );
+    }
 
     let text_pos = rect.left_top() + egui::vec2(52.0, 7.0);
 
@@ -204,16 +237,6 @@ fn material_row(ui: &mut egui::Ui, material: &AtlasMaterial, selected: bool) -> 
         &material.name,
         egui::FontId::proportional(14.0),
         ui.visuals().text_color(),
-    );
-
-    let texture_count = material.textures.len();
-
-    ui.painter().text(
-        text_pos + egui::vec2(0.0, 19.0),
-        egui::Align2::LEFT_TOP,
-        format!("#{}  {} textures", material.index, texture_count),
-        egui::FontId::proportional(11.0),
-        ui.visuals().weak_text_color(),
     );
 
     response
