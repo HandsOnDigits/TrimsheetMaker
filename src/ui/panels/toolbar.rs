@@ -20,21 +20,21 @@ pub fn toolbar(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
             }
 
             if ui.button("Open Project…").clicked() {
-                ui.close();
+                todo!(/*Open project implementation goes here.*/);
             }
 
             if ui.button("Save Project").clicked() {
-                ui.close();
+                todo!(/*Save implementation goes here.*/);
             }
 
             ui.separator();
 
-            if ui.button("Import Materials…").clicked() {
+            if ui.button("Import multiple Materials…").clicked() {
                 editor_ui.show_import_multiple_materials_window = true;
                 ui.close();
             }
 
-            if ui.button("Import Material…").clicked() {
+            if ui.button("Import single Material…").clicked() {
                 editor_ui.show_import_single_material_window = true;
                 ui.close();
             }
@@ -42,47 +42,21 @@ pub fn toolbar(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
             ui.separator();
 
             if ui.button("Export Atlas…").clicked() {
-                ui.close();
-            }
-        });
-
-        ui.menu_button("Edit", |ui| {
-            if ui.button("Import Material…").clicked() {
-                editor_ui.show_import_single_material_window = true;
-                ui.close();
-            }
-
-            if ui.button("Remove Selected").clicked() {
-                if let Some(index) = editor_ui.selected_material {
-                    atlas.remove(index);
-                    editor_ui.selected_material = None;
-                }
-
-                ui.close();
+                todo!(/*Atlas export implementation goes here.*/);
             }
         });
 
         ui.separator();
 
-        if ui
-            .add_sized([130.0, 30.0], egui::Button::new("＋ Import Material"))
-            .clicked()
-        {
-            editor_ui.show_import_single_material_window = true;
+        if ui.button("Remove Selected").clicked() {
+            if let Some(index) = editor_ui.selected_material {
+                atlas.remove(index);
+                editor_ui.selected_material = None;
+            }
         }
 
-        if ui
-            .add_sized([100.0, 30.0], egui::Button::new("Pack Atlas"))
-            .clicked()
-        {
-            // Real atlas packing goes here.
-        }
-
-        if ui
-            .add_sized([90.0, 30.0], egui::Button::new("Export"))
-            .clicked()
-        {
-            // Export implementation goes here.
+        if ui.button("Pack Atlas").clicked() {
+            todo!(/*Real atlas packing goes here.*/);
         }
 
         ui.separator();
