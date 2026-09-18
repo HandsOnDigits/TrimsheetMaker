@@ -298,9 +298,10 @@ impl Atlas {
         self.materials.retain(|material| material.index != index);
     }
 
-    pub fn load_textures(&mut self, images: &mut Assets<Image>) {
+    pub fn load_textures(&mut self, images: &mut Assets<Image>, preferred_group: Option<&str>) {
         for material_index in 0..self.materials.len() {
-            let mut material_size = None;
+            let mut first_size = None;
+            let mut preferred_size = None;
 
             {
                 let material = &mut self.materials[material_index];
@@ -312,11 +313,14 @@ impl Atlas {
 
                     match crate::assets::exr::load_exr(&texture.path) {
                         Ok(image) => {
-                            let width = image.width();
-                            let height = image.height();
+                            let size = (image.width(), image.height());
 
-                            if material_size.is_none() {
-                                material_size = Some((width, height));
+                            if first_size.is_none() {
+                                first_size = Some(size);
+                            }
+
+                            if preferred_group == Some(texture.id.as_str()) {
+                                preferred_size = Some(size);
                             }
 
                             texture.image = Some(images.add(image));
@@ -331,6 +335,8 @@ impl Atlas {
                     }
                 }
             }
+
+            let material_size = preferred_size.or(first_size);
 
             if let Some((width, height)) = material_size {
                 let needs_placement = {

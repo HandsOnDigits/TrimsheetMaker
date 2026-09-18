@@ -12,7 +12,7 @@ pub fn toolbar(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
             if ui.button("New Atlas").clicked() {
                 *atlas = Atlas::default();
 
-                editor_ui.selected_material = Some(0);
+                editor_ui.selected_material = None;
                 editor_ui.atlas_zoom = 1.0;
                 editor_ui.atlas_pan = egui::Vec2::ZERO;
 
@@ -30,9 +30,16 @@ pub fn toolbar(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
             ui.separator();
 
             if ui.button("Import Materials…").clicked() {
-                editor_ui.show_import_window = true;
+                editor_ui.show_import_multiple_materials_window = true;
                 ui.close();
             }
+
+            if ui.button("Import Material…").clicked() {
+                editor_ui.show_import_single_material_window = true;
+                ui.close();
+            }
+
+            ui.separator();
 
             if ui.button("Export Atlas…").clicked() {
                 ui.close();
@@ -40,10 +47,8 @@ pub fn toolbar(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
         });
 
         ui.menu_button("Edit", |ui| {
-            if ui.button("Add Material").clicked() {
-                let index = atlas.add_placeholder();
-                editor_ui.selected_material = Some(index);
-
+            if ui.button("Import Material…").clicked() {
+                editor_ui.show_import_single_material_window = true;
                 ui.close();
             }
 
@@ -60,11 +65,10 @@ pub fn toolbar(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
         ui.separator();
 
         if ui
-            .add_sized([130.0, 30.0], egui::Button::new("＋ Add Material"))
+            .add_sized([130.0, 30.0], egui::Button::new("＋ Import Material"))
             .clicked()
         {
-            let index = atlas.add_placeholder();
-            editor_ui.selected_material = Some(index);
+            editor_ui.show_import_single_material_window = true;
         }
 
         if ui

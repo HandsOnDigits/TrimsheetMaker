@@ -27,10 +27,16 @@ fn setup(mut commands: Commands) {
 pub struct EditorUi {
     pub selected_material: Option<usize>,
 
-    pub show_import_window: bool,
+    pub show_import_multiple_materials_window: bool,
+    pub show_import_single_material_window: bool,
 
-    pub import_root: Option<std::path::PathBuf>,
+    pub multiple_materials_root: Option<std::path::PathBuf>,
     pub import_materials: BTreeMap<String, data::MaterialSource>,
+
+    pub single_material_root: Option<std::path::PathBuf>,
+
+    pub single_material_name: String,
+    pub single_material_textures: BTreeMap<String, Option<std::path::PathBuf>>,
 
     pub texture_naming: data::TextureNaming,
     pub suffix_inputs: BTreeMap<String, String>,
@@ -49,9 +55,16 @@ pub struct EditorUi {
 impl Default for EditorUi {
     fn default() -> Self {
         Self {
-            show_import_window: false,
-            import_root: None,
+            multiple_materials_root: None,
             import_materials: BTreeMap::new(),
+
+            single_material_root: None,
+
+            single_material_name: String::new(),
+            single_material_textures: BTreeMap::new(),
+
+            show_import_multiple_materials_window: false,
+            show_import_single_material_window: false,
 
             texture_naming: default(),
             suffix_inputs: BTreeMap::new(),

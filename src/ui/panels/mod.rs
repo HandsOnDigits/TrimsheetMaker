@@ -84,7 +84,21 @@ pub fn editor_ui(
 
     atlas_view(&mut root_ui, &mut editor_ui, &mut atlas);
 
-    windows::import::import_window(ctx, &mut editor_ui, &mut atlas, &mut images);
+    // Bulk/folder import.
+    windows::import_multiple_materials::import_multiple_materials_window(
+        ctx,
+        &mut editor_ui,
+        &mut atlas,
+        &mut images,
+    );
+
+    // Single-material import.
+    windows::import_single_material::import_single_material_window(
+        ctx,
+        &mut editor_ui,
+        &mut atlas,
+        &mut images,
+    );
 
     Ok(())
 }

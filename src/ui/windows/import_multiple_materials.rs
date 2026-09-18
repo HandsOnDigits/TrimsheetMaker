@@ -5,17 +5,17 @@ use bevy_egui::egui;
 
 use crate::{data::Atlas, ui::EditorUi};
 
-pub fn import_window(
+pub fn import_multiple_materials_window(
     ctx: &egui::Context,
     editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
     images: &mut Assets<Image>,
 ) {
-    if !editor_ui.show_import_window {
+    if !editor_ui.show_import_multiple_materials_window {
         return;
     }
 
-    let mut open = editor_ui.show_import_window;
+    let mut open = editor_ui.show_import_multiple_materials_window;
     let mut close_window = false;
 
     egui::Window::new("Import Materials")
@@ -30,7 +30,7 @@ pub fn import_window(
 
             ui.horizontal(|ui| {
                 let path = editor_ui
-                    .import_root
+                    .multiple_materials_root
                     .as_ref()
                     .map(|path| path.display().to_string())
                     .unwrap_or_else(|| "No folder selected".into());
@@ -43,16 +43,16 @@ pub fn import_window(
 
                 if ui.button("Browse").clicked() {
                     if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                        match crate::importer::materials::scan(&path) {
+                        match crate::importer::multiple_materials::scan(&path) {
                             Ok(scan) => {
-                                editor_ui.import_root = Some(path);
+                                editor_ui.multiple_materials_root = Some(path);
                                 editor_ui.import_materials = scan.materials;
                                 editor_ui.texture_naming.merge_detected(scan.naming);
                             }
                             Err(error) => {
                                 eprintln!("Failed to scan material folder: {error}");
 
-                                editor_ui.import_root = None;
+                                editor_ui.multiple_materials_root = None;
                                 editor_ui.import_materials.clear();
                                 editor_ui.texture_naming = crate::data::TextureNaming::default();
                             }
@@ -63,7 +63,7 @@ pub fn import_window(
 
             ui.separator();
 
-            if editor_ui.import_root.is_some() {
+            if editor_ui.multiple_materials_root.is_some() {
                 ui.label(format!(
                     "{} material folders found",
                     editor_ui.import_materials.len()
@@ -161,8 +161,8 @@ pub fn import_window(
                     close_window = true;
                 }
 
-                let can_import =
-                    editor_ui.import_root.is_some() && !editor_ui.import_materials.is_empty();
+                let can_import = editor_ui.multiple_materials_root.is_some()
+                    && !editor_ui.import_materials.is_empty();
 
                 if ui
                     .add_enabled(can_import, egui::Button::new("Import"))
@@ -174,9 +174,9 @@ pub fn import_window(
                         atlas.add_material(source);
                     }
 
-                    atlas.load_textures(images);
+                    atlas.load_textures(images, editor_ui.preview_texture_group.as_deref());
 
-                    editor_ui.import_root = None;
+                    editor_ui.multiple_materials_root = None;
                     close_window = true;
                 }
             });
@@ -186,5 +186,5 @@ pub fn import_window(
         open = false;
     }
 
-    editor_ui.show_import_window = open;
+    editor_ui.show_import_multiple_materials_window = open;
 }

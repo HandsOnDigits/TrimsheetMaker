@@ -4,73 +4,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use std::collections::BTreeMap;
+use crate::data::{TextureGroup, TextureNaming};
 
-use crate::data::{MaterialSource, MaterialTexture, TextureGroup, TextureNaming};
-
-pub struct MaterialScan {
-    pub materials: BTreeMap<String, MaterialSource>,
-    pub naming: TextureNaming,
-}
-
-pub fn scan(root: &Path) -> io::Result<MaterialScan> {
-    let mut folders = Vec::new();
-
-    for entry in std::fs::read_dir(root)? {
-        let entry = entry?;
-
-        if entry.file_type()?.is_dir() {
-            folders.push(entry.path());
-        }
-    }
-
-    folders.sort();
-
-    let naming = detect_naming(&folders)?;
-
-    let mut materials = BTreeMap::new();
-
-    for folder in &folders {
-        let name = folder
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("Unnamed")
-            .to_owned();
-
-        let mut textures = Vec::new();
-
-        for entry in std::fs::read_dir(folder)? {
-            let entry = entry?;
-
-            if !entry.file_type()?.is_file() {
-                continue;
-            }
-
-            let path = entry.path();
-
-            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
-                continue;
-            };
-
-            let Some(group) = naming.group_for_filename(stem) else {
-                continue;
-            };
-
-            textures.push(MaterialTexture {
-                id: group,
-                path,
-                image: None,
-                egui_texture: None,
-            });
-        }
-
-        materials.insert(name.clone(), MaterialSource { name, textures });
-    }
-
-    Ok(MaterialScan { materials, naming })
-}
-
-fn detect_naming(folders: &[PathBuf]) -> io::Result<TextureNaming> {
+pub fn detect_naming(folders: &[PathBuf]) -> io::Result<TextureNaming> {
     let mut suffix_folders: HashMap<String, HashSet<PathBuf>> = HashMap::new();
 
     for folder in folders {
@@ -113,8 +49,6 @@ fn detect_naming(folders: &[PathBuf]) -> io::Result<TextureNaming> {
             continue;
         }
 
-        // Find tokens that are shared at the beginning of every
-        // texture filename in this material folder.
         let common_prefix_len = common_prefix_len(&folder_suffixes);
 
         for suffix_tokens in folder_suffixes {
@@ -133,15 +67,9 @@ fn detect_naming(folders: &[PathBuf]) -> io::Result<TextureNaming> {
 
     let mut suffixes: Vec<(String, usize)> = suffix_folders
         .into_iter()
-        .map(|(suffix, folders)| {
-            let count = folders.len();
-            (suffix, count)
-        })
+        .map(|(suffix, folders)| (suffix, folders.len()))
         .collect();
 
-    // Most widely used suffixes first.
-    //
-    // Longer suffixes win when they have the same support.
     suffixes.sort_by(|a, b| {
         b.1.cmp(&a.1)
             .then_with(|| b.0.matches('_').count().cmp(&a.0.matches('_').count()))
@@ -168,6 +96,32 @@ fn detect_naming(folders: &[PathBuf]) -> io::Result<TextureNaming> {
     }
 
     Ok(TextureNaming { groups })
+}
+
+pub fn collect_texture_paths(folder: &Path) -> io::Result<Vec<PathBuf>> {
+    let mut textures = Vec::new();
+
+    for entry in std::fs::read_dir(folder)? {
+        let entry = entry?;
+
+        if !entry.file_type()?.is_file() {
+            continue;
+        }
+
+        let path = entry.path();
+
+        if path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("exr"))
+        {
+            textures.push(path);
+        }
+    }
+
+    textures.sort();
+
+    Ok(textures)
 }
 
 fn common_prefix_len(tokens: &[Vec<String>]) -> usize {
