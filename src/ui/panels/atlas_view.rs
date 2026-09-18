@@ -143,14 +143,6 @@ fn draw_material_region(
     };
 
     painter.rect_stroke(rect, 0.0, stroke, egui::StrokeKind::Inside);
-
-    painter.text(
-        rect.center(),
-        egui::Align2::CENTER_CENTER,
-        material.index.to_string(),
-        egui::FontId::proportional(16.0),
-        egui::Color32::WHITE,
-    );
 }
 
 fn draw_rotated_texture(
