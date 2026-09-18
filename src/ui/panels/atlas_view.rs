@@ -235,10 +235,6 @@ fn atlas_material_at_position(
 
     let atlas_rect = egui::Rect::from_center_size(center, atlas_size);
 
-    if !atlas_rect.contains(position) {
-        return None;
-    }
-
     let atlas_x = ((position.x - atlas_rect.left()) / zoom) as u32;
 
     let atlas_y = ((position.y - atlas_rect.top()) / zoom) as u32;
