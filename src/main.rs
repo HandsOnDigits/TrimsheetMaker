@@ -7,6 +7,7 @@ use ui::EditorUiPlugin;
 mod assets;
 mod data;
 mod importer;
+mod transform;
 
 fn main() {
     App::new()

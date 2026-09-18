@@ -7,6 +7,8 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::transform::Transform;
+
 #[derive(Clone)]
 pub struct MaterialTexture {
     pub id: String,
@@ -165,15 +167,15 @@ impl Atlas {
                     };
 
                     let overlaps = self.materials.iter().any(|material| {
-                        if material.width == 0 || material.height == 0 {
+                        if material.transform.width == 0 || material.transform.height == 0 {
                             return false;
                         }
 
                         candidate.overlaps(Rect {
-                            x: material.x,
-                            y: material.y,
-                            width: material.width,
-                            height: material.height,
+                            x: material.transform.x,
+                            y: material.transform.y,
+                            width: material.transform.width,
+                            height: material.transform.height,
                         })
                     });
 
@@ -232,10 +234,7 @@ impl Atlas {
             index,
             name: source.name,
             textures,
-            x: 0,
-            y: 0,
-            width: 0,
-            height: 0,
+            transform: Transform::default(),
         });
 
         index
@@ -254,35 +253,44 @@ impl Atlas {
                 width: size,
                 height: size,
             };
+
             let overlaps = self.materials.iter().any(|material| {
                 candidate.overlaps(Rect {
-                    x: material.x,
-                    y: material.y,
-                    width: material.width,
-                    height: material.height,
+                    x: material.transform.x,
+                    y: material.transform.y,
+                    width: material.transform.width,
+                    height: material.transform.height,
                 })
             });
+
             if !overlaps && x + size <= self.width && y + size <= self.height {
                 break;
             }
+
             x += size + margin;
             if x + size > self.width {
                 x = margin;
                 y += size + margin;
             }
+
             if y + size > self.height {
                 self.height += 512;
             }
         }
+
         self.materials.push(AtlasMaterial {
             index,
             name: format!("Material {index}"),
             textures: vec![],
-            x,
-            y,
-            width: size,
-            height: size,
+            transform: Transform {
+                x,
+                y,
+                width: size,
+                height: size,
+                ..Default::default()
+            },
         });
+
         index
     }
 
@@ -327,7 +335,8 @@ impl Atlas {
             if let Some((width, height)) = material_size {
                 let needs_placement = {
                     let material = &self.materials[material_index];
-                    material.width == 0 || material.height == 0
+
+                    material.transform.width == 0 || material.transform.height == 0
                 };
 
                 if needs_placement {
@@ -335,10 +344,10 @@ impl Atlas {
 
                     let material = &mut self.materials[material_index];
 
-                    material.x = x;
-                    material.y = y;
-                    material.width = width;
-                    material.height = height;
+                    material.transform.x = x;
+                    material.transform.y = y;
+                    material.transform.width = width;
+                    material.transform.height = height;
                 }
             }
         }
@@ -351,10 +360,7 @@ pub struct AtlasMaterial {
 
     pub textures: Vec<MaterialTexture>,
 
-    pub x: u32,
-    pub y: u32,
-    pub width: u32,
-    pub height: u32,
+    pub transform: Transform,
 }
 
 #[derive(Clone, Copy)]

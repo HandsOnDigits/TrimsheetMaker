@@ -2,7 +2,10 @@ use bevy_egui::egui;
 
 use super::EditorUi;
 
-use crate::data::{Atlas, MaterialTexture};
+use crate::{
+    data::{Atlas, MaterialTexture},
+    transform::Rotation,
+};
 
 pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
     ui.heading("Inspector");
@@ -44,10 +47,10 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
 
             ui.horizontal(|ui| {
                 ui.label("X");
-                ui.add(egui::DragValue::new(&mut material.x).speed(1));
+                ui.add(egui::DragValue::new(&mut material.transform.x).speed(1));
 
                 ui.label("Y");
-                ui.add(egui::DragValue::new(&mut material.y).speed(1));
+                ui.add(egui::DragValue::new(&mut material.transform.y).speed(1));
             });
 
             ui.end_row();
@@ -56,13 +59,32 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
 
             ui.horizontal(|ui| {
                 ui.label("W");
-                ui.add(egui::DragValue::new(&mut material.width).speed(1));
+                ui.add(egui::DragValue::new(&mut material.transform.width).speed(1));
 
                 ui.label("H");
-                ui.add(egui::DragValue::new(&mut material.height).speed(1));
+                ui.add(egui::DragValue::new(&mut material.transform.height).speed(1));
             });
 
             ui.end_row();
+
+            ui.horizontal(|ui| {
+                ui.label("Rotation");
+
+                if ui.button("-90").clicked() {
+                    material.transform.rotation = match material.transform.rotation {
+                        Rotation::Deg0 => Rotation::Deg270,
+                        Rotation::Deg90 => Rotation::Deg0,
+                        Rotation::Deg180 => Rotation::Deg90,
+                        Rotation::Deg270 => Rotation::Deg180,
+                    };
+                }
+
+                ui.label(format!("{}°", material.transform.rotation.degrees()));
+
+                if ui.button("+90").clicked() {
+                    material.transform.rotation = material.transform.rotation.next();
+                }
+            });
         });
 
     ui.add_space(16.0);

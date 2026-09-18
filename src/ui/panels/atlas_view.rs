@@ -1,7 +1,10 @@
 use super::EditorUi;
 use bevy_egui::egui;
 
-use crate::data::{Atlas, AtlasMaterial};
+use crate::{
+    data::{Atlas, AtlasMaterial},
+    transform::Rotation,
+};
 
 pub fn atlas_view(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
     ui.horizontal(|ui| {
@@ -130,12 +133,7 @@ fn draw_material_region(
             .find(|texture| texture.id.eq_ignore_ascii_case(group))
             .and_then(|texture| texture.egui_texture)
     }) {
-        painter.image(
-            texture_id,
-            rect,
-            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-            egui::Color32::WHITE,
-        );
+        draw_rotated_texture(painter, rect, texture_id, material.transform.rotation);
     }
 
     let stroke = if selected {
@@ -155,13 +153,78 @@ fn draw_material_region(
     );
 }
 
+fn draw_rotated_texture(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    texture_id: egui::TextureId,
+    rotation: Rotation,
+) {
+    let mut mesh = egui::Mesh::with_texture(texture_id);
+
+    let min = rect.min;
+    let max = rect.max;
+
+    let uv = match rotation {
+        Rotation::Deg0 => [
+            egui::pos2(0.0, 0.0),
+            egui::pos2(1.0, 0.0),
+            egui::pos2(1.0, 1.0),
+            egui::pos2(0.0, 1.0),
+        ],
+
+        Rotation::Deg90 => [
+            egui::pos2(0.0, 1.0),
+            egui::pos2(0.0, 0.0),
+            egui::pos2(1.0, 0.0),
+            egui::pos2(1.0, 1.0),
+        ],
+
+        Rotation::Deg180 => [
+            egui::pos2(1.0, 1.0),
+            egui::pos2(0.0, 1.0),
+            egui::pos2(0.0, 0.0),
+            egui::pos2(1.0, 0.0),
+        ],
+
+        Rotation::Deg270 => [
+            egui::pos2(1.0, 0.0),
+            egui::pos2(1.0, 1.0),
+            egui::pos2(0.0, 1.0),
+            egui::pos2(0.0, 0.0),
+        ],
+    };
+
+    let vertices = [
+        (min, uv[0]),
+        (egui::pos2(max.x, min.y), uv[1]),
+        (max, uv[2]),
+        (egui::pos2(min.x, max.y), uv[3]),
+    ];
+
+    for (position, uv) in vertices {
+        mesh.vertices.push(egui::epaint::Vertex {
+            pos: position,
+            uv,
+            color: egui::Color32::WHITE,
+        });
+    }
+
+    mesh.add_triangle(0, 1, 2);
+    mesh.add_triangle(0, 2, 3);
+
+    painter.add(egui::Shape::mesh(mesh));
+}
+
 fn atlas_material_rect(material: &AtlasMaterial, atlas_rect: egui::Rect, zoom: f32) -> egui::Rect {
     let min = egui::pos2(
-        atlas_rect.left() + material.x as f32 * zoom,
-        atlas_rect.top() + material.y as f32 * zoom,
+        atlas_rect.left() + material.transform.x as f32 * zoom,
+        atlas_rect.top() + material.transform.y as f32 * zoom,
     );
 
-    let size = egui::vec2(material.width as f32 * zoom, material.height as f32 * zoom);
+    let size = egui::vec2(
+        material.transform.width as f32 * zoom,
+        material.transform.height as f32 * zoom,
+    );
 
     egui::Rect::from_min_size(min, size)
 }
@@ -205,10 +268,10 @@ fn atlas_material_at_position(
                 .unwrap_or(false);
 
             has_preview_texture
-                && atlas_x >= material.x
-                && atlas_x < material.x + material.width
-                && atlas_y >= material.y
-                && atlas_y < material.y + material.height
+                && atlas_x >= material.transform.x
+                && atlas_x < material.transform.x + material.transform.width
+                && atlas_y >= material.transform.y
+                && atlas_y < material.transform.y + material.transform.height
         })
         .map(|material| material.index)
 }
