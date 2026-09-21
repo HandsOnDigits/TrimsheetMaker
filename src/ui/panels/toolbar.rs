@@ -112,9 +112,11 @@ pub fn toolbar(
 
         ui.separator();
 
-        if ui.button("Settings").clicked() {
-            editor_ui.show_settings_window = true;
-        }
+        ui.menu_button("Settings", |ui| {
+            if ui.button("Editor").clicked() {
+                editor_ui.show_editor_settings_window = true;
+            }
+        });
 
         ui.separator();
 

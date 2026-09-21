@@ -1,3 +1,5 @@
+use bevy::{input::ButtonInput, prelude::KeyCode};
+
 use super::atlas_interaction;
 
 use bevy_egui::egui;
@@ -8,7 +10,12 @@ use crate::{
     ui::EditorUi,
 };
 
-pub fn atlas_view(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
+pub fn atlas_view(
+    ui: &mut egui::Ui,
+    editor_ui: &mut EditorUi,
+    atlas: &mut Atlas,
+    keyboard: &ButtonInput<KeyCode>,
+) {
     ui.horizontal(|ui| {
         ui.heading("Atlas");
 
@@ -41,10 +48,36 @@ pub fn atlas_view(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas
     let (viewport_rect, response) =
         ui.allocate_exact_size(available, egui::Sense::click_and_drag());
 
+    // Middle/right mouse button panning
     if response.dragged_by(egui::PointerButton::Middle)
         || response.dragged_by(egui::PointerButton::Secondary)
     {
         editor_ui.atlas_pan += response.drag_delta();
+    }
+
+    // Mouse wheel scrolling / Ctrl + vertical wheel zoom
+    if response.hovered() {
+        let ctrl =
+            keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight);
+
+        let scroll = ui.input(|input| {
+            input
+                .raw
+                .events
+                .iter()
+                .fold(egui::Vec2::ZERO, |scroll, event| match event {
+                    egui::Event::MouseWheel { delta, .. } => scroll + *delta,
+                    _ => scroll,
+                })
+        });
+
+        if ctrl && scroll.y != 0.0 {
+            let zoom_factor = if scroll.y > 0.0 { 1.1 } else { 0.9 };
+
+            editor_ui.atlas_zoom = (editor_ui.atlas_zoom * zoom_factor).clamp(0.1, 10.0);
+        } else {
+            editor_ui.atlas_pan += scroll * editor_ui.mouse_scroll_speed;
+        }
     }
 
     atlas_interaction::handle_material_drag(&response, viewport_rect, editor_ui, atlas);

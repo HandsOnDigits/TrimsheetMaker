@@ -50,9 +50,11 @@ pub struct EditorUi {
 
     pub show_import_multiple_materials_window: bool,
     pub show_import_single_material_window: bool,
-    pub show_settings_window: bool,
+    pub show_editor_settings_window: bool,
 
     pub hotkey_capture: Option<EditorAction>,
+
+    pub mouse_scroll_speed: f32,
 
     pub multiple_materials_root: Option<std::path::PathBuf>,
     pub import_materials: BTreeMap<String, data::MaterialSource>,
@@ -98,9 +100,11 @@ impl Default for EditorUi {
 
             show_import_multiple_materials_window: false,
             show_import_single_material_window: false,
-            show_settings_window: false,
+            show_editor_settings_window: false,
 
             hotkey_capture: None,
+
+            mouse_scroll_speed: 20.0,
 
             texture_naming: default(),
             suffix_inputs: BTreeMap::new(),

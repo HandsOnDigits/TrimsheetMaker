@@ -87,11 +87,11 @@ pub fn editor_ui(
             });
     }
 
-    if editor_ui.show_settings_window {
-        windows::settings::settings_window(ctx, &mut editor_ui, &mut hotkeys, &keyboard);
+    if editor_ui.show_editor_settings_window {
+        windows::editor_settings::settings_window(ctx, &mut editor_ui, &mut hotkeys, &keyboard);
     }
 
-    atlas::atlas_view::atlas_view(&mut root_ui, &mut editor_ui, &mut atlas);
+    atlas::atlas_view::atlas_view(&mut root_ui, &mut editor_ui, &mut atlas, &keyboard);
 
     // Bulk/folder import.
     windows::import_multiple_materials::import_multiple_materials_window(

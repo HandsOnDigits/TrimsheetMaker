@@ -121,7 +121,7 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
             .reclassify_materials(&mut editor_ui.import_materials);
     }
 
-    if ui.button("＋ Add Group").clicked() {
+    if ui.button("+ Add Group").clicked() {
         editor_ui
             .texture_naming
             .groups
@@ -164,7 +164,7 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
     if ui
         .add_sized(
             [ui.available_width(), 32.0],
-            egui::Button::new("＋ Add Material"),
+            egui::Button::new("+ Add Material"),
         )
         .clicked()
     {

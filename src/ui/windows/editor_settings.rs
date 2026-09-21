@@ -11,14 +11,20 @@ pub fn settings_window(
     hotkeys: &mut HotkeyManager,
     keyboard: &ButtonInput<KeyCode>,
 ) {
-    let mut open = editor_ui.show_settings_window;
+    let mut open = editor_ui.show_editor_settings_window;
 
-    egui::Window::new("Settings")
+    egui::Window::new("Editor Settings")
         .open(&mut open)
         .resizable(true)
         .default_width(560.0)
         .show(ctx, |ui| {
-            ui.heading("Settings");
+            ui.horizontal(|ui| {
+                ui.label("Mouse Scroll Speed");
+
+                ui.add(
+                    egui::Slider::new(&mut editor_ui.mouse_scroll_speed, 1.0..=30.0).step_by(0.1),
+                );
+            });
 
             ui.separator();
 
@@ -91,10 +97,11 @@ pub fn settings_window(
             if ui.button("Reset to Defaults").clicked() {
                 hotkeys.set_default_bindings();
                 editor_ui.hotkey_capture = None;
+                editor_ui.mouse_scroll_speed = 20.0;
             }
         });
 
-    editor_ui.show_settings_window = open;
+    editor_ui.show_editor_settings_window = open;
 }
 
 fn all_editable_actions() -> &'static [EditorAction] {
