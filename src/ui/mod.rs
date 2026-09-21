@@ -34,9 +34,14 @@ pub struct EditorUi {
     pub import_materials: BTreeMap<String, data::MaterialSource>,
 
     pub single_material_root: Option<std::path::PathBuf>,
-
     pub single_material_name: String,
     pub single_material_textures: BTreeMap<String, Option<std::path::PathBuf>>,
+
+    pub dragging_material: Option<usize>,
+    pub drag_offset: egui::Vec2,
+
+    pub snap_margin: f32,
+    pub snap_distance: f32,
 
     pub texture_naming: data::TextureNaming,
     pub suffix_inputs: BTreeMap<String, String>,
@@ -62,6 +67,12 @@ impl Default for EditorUi {
 
             single_material_name: String::new(),
             single_material_textures: BTreeMap::new(),
+
+            dragging_material: None,
+            drag_offset: egui::Vec2::ZERO,
+
+            snap_margin: 4.0,
+            snap_distance: 8.0,
 
             show_import_multiple_materials_window: false,
             show_import_single_material_window: false,

@@ -7,8 +7,7 @@ use materials::materials_panel;
 mod inspector;
 use inspector::inspector_panel;
 
-mod atlas_view;
-use atlas_view::atlas_view;
+mod atlas;
 
 mod status_bar;
 use status_bar::status_bar;
@@ -82,7 +81,7 @@ pub fn editor_ui(
             });
     }
 
-    atlas_view(&mut root_ui, &mut editor_ui, &mut atlas);
+    atlas::atlas_view::atlas_view(&mut root_ui, &mut editor_ui, &mut atlas);
 
     // Bulk/folder import.
     windows::import_multiple_materials::import_multiple_materials_window(
