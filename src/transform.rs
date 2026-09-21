@@ -38,8 +38,8 @@ impl Rotation {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Transform {
-    pub x: u32,
-    pub y: u32,
+    pub x: i32,
+    pub y: i32,
 
     // Original/source dimensions. NEVER change these because of rotation.
     pub width: u32,
@@ -70,10 +70,6 @@ impl Transform {
         }
     }
 
-    /// Returns the rotated rectangle using signed coordinates.
-    ///
-    /// Signed coordinates are important because a rotated rectangle
-    /// may temporarily extend beyond the top or left edge of the atlas.
     pub fn signed_atlas_rect(&self) -> (i64, i64, u32, u32) {
         let (center_x, center_y) = self.center();
 
@@ -86,14 +82,15 @@ impl Transform {
         (x, y, width, height)
     }
 
-    /// Returns the atlas rectangle with non-negative coordinates.
-    ///
-    /// Call `Atlas::normalize_bounds()` before using this for rendering
-    /// or placement so that clamping is normally unnecessary.
-    pub fn atlas_rect(&self) -> (u32, u32, u32, u32) {
+    /// Returns a non-negative rectangle for atlas packing operations.
+    pub fn positive_atlas_rect(&self) -> (u32, u32, u32, u32) {
         let (x, y, width, height) = self.signed_atlas_rect();
 
         (x.max(0) as u32, y.max(0) as u32, width, height)
+    }
+
+    pub fn atlas_rect(&self) -> (i64, i64, u32, u32) {
+        self.signed_atlas_rect()
     }
 
     pub fn rotate_cw(&mut self) {

@@ -166,8 +166,8 @@ impl Atlas {
 
         if shift_x != 0 || shift_y != 0 {
             for material in &mut self.materials {
-                material.transform.x = (material.transform.x as i64 + shift_x) as u32;
-                material.transform.y = (material.transform.y as i64 + shift_y) as u32;
+                material.transform.x = (material.transform.x as i64 + shift_x) as i32;
+                material.transform.y = (material.transform.y as i64 + shift_y) as i32;
             }
 
             max_x += shift_x;
@@ -187,11 +187,18 @@ impl Atlas {
         let mut required_height = MIN_SIZE;
 
         for material in &self.materials {
-            let (x, y, width, height) = material.transform.atlas_rect();
+            let (x, y, width, height) = material.transform.signed_atlas_rect();
 
-            required_width = required_width.max(x.saturating_add(width).saturating_add(padding));
+            let right = x + width as i64;
+            let bottom = y + height as i64;
 
-            required_height = required_height.max(y.saturating_add(height).saturating_add(padding));
+            if right > 0 {
+                required_width = required_width.max((right as u32).saturating_add(padding));
+            }
+
+            if bottom > 0 {
+                required_height = required_height.max((bottom as u32).saturating_add(padding));
+            }
         }
 
         self.width = self.width.max(required_width);
@@ -229,7 +236,7 @@ impl Atlas {
 
                     let overlaps = self.materials.iter().any(|material| {
                         let (other_x, other_y, other_width, other_height) =
-                            material.transform.atlas_rect();
+                            material.transform.positive_atlas_rect();
 
                         let other = Rect {
                             x: other_x,
@@ -316,7 +323,7 @@ impl Atlas {
             };
 
             let overlaps = self.materials.iter().any(|material| {
-                let (x, y, width, height) = material.transform.atlas_rect();
+                let (x, y, width, height) = material.transform.positive_atlas_rect();
 
                 candidate.overlaps_with_padding(
                     Rect {
@@ -349,8 +356,8 @@ impl Atlas {
             name: format!("Material {index}"),
             textures: vec![],
             transform: Transform {
-                x,
-                y,
+                x: x as i32,
+                y: y as i32,
                 width: size,
                 height: size,
                 ..Default::default()
@@ -418,8 +425,8 @@ impl Atlas {
 
                     let material = &mut self.materials[material_index];
 
-                    material.transform.x = x;
-                    material.transform.y = y;
+                    material.transform.x = x as i32;
+                    material.transform.y = y as i32;
                     material.transform.width = width;
                     material.transform.height = height;
                 }

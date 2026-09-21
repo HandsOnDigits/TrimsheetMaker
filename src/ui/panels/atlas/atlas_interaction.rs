@@ -140,7 +140,7 @@ fn atlas_material_at_position(
         .map(|material| material.index)
 }
 
-fn material_rect_in_atlas(material: &AtlasMaterial) -> egui::Rect {
+pub fn material_rect_in_atlas(material: &AtlasMaterial) -> egui::Rect {
     let transform = &material.transform;
 
     let center_x = transform.x as f32 + transform.width as f32 * 0.5;
