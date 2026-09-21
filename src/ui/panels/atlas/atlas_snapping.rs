@@ -9,134 +9,246 @@ pub fn move_material_with_snapping(
     index: usize,
     desired_x: f32,
     desired_y: f32,
-    margin: f32,
     snap_distance: f32,
 ) {
     let Some(dragged_index) = atlas.materials.iter().position(|m| m.index == index) else {
         return;
     };
 
+    let padding = atlas.padding as f32;
+
     let dragged = &atlas.materials[dragged_index];
 
     let current_rect = material_rect_in_atlas(dragged);
 
-    // Offset between Transform position and the visible rectangle.
     let offset_x = current_rect.left() - dragged.transform.x as f32;
 
     let offset_y = current_rect.top() - dragged.transform.y as f32;
 
-    // Position the rectangle where the cursor wants it.
-    let rect = egui::Rect::from_min_size(
+    let desired_rect = egui::Rect::from_min_size(
         egui::pos2(desired_x + offset_x, desired_y + offset_y),
         current_rect.size(),
     );
 
-    let mut snapped_left = rect.left();
-    let mut snapped_top = rect.top();
+    let mut final_rect = desired_rect;
 
-    let mut best_x = snap_distance;
-    let mut best_y = snap_distance;
-
-    snap_to_atlas_edges(
-        atlas,
-        &rect,
-        margin,
-        &mut snapped_left,
-        &mut best_x,
-        &mut snapped_top,
-        &mut best_y,
-    );
-
-    snap_to_materials(
+    snap_x(
         atlas,
         dragged_index,
-        &rect,
-        margin,
-        &mut snapped_left,
-        &mut best_x,
-        &mut snapped_top,
-        &mut best_y,
+        &desired_rect,
+        padding,
+        snap_distance,
+        &mut final_rect,
     );
 
-    // Convert the snapped rectangle position back to Transform coordinates.
-    let final_x = snapped_left - offset_x;
-    let final_y = snapped_top - offset_y;
+    snap_y(
+        atlas,
+        dragged_index,
+        &desired_rect,
+        padding,
+        snap_distance,
+        &mut final_rect,
+    );
+
+    let final_x = final_rect.left() - offset_x;
+
+    let final_y = final_rect.top() - offset_y;
 
     let material = &mut atlas.materials[dragged_index];
 
     material.transform.x = final_x.round() as i32;
+
     material.transform.y = final_y.round() as i32;
 }
 
-fn snap_to_atlas_edges(
-    atlas: &Atlas,
-    rect: &egui::Rect,
-    margin: f32,
-    snapped_x: &mut f32,
-    best_x: &mut f32,
-    snapped_y: &mut f32,
-    best_y: &mut f32,
-) {
-    let atlas_width = atlas.width as f32;
-    let atlas_height = atlas.height as f32;
-
-    // Left edge.
-    try_snap(rect.left(), margin, best_x, snapped_x);
-
-    // Right edge.
-    try_snap(rect.right(), atlas_width - margin, best_x, snapped_x);
-
-    // Top edge.
-    try_snap(rect.top(), margin, best_y, snapped_y);
-
-    // Bottom edge.
-    try_snap(rect.bottom(), atlas_height - margin, best_y, snapped_y);
-}
-
-fn snap_to_materials(
+fn snap_x(
     atlas: &Atlas,
     dragged_index: usize,
     rect: &egui::Rect,
-    margin: f32,
-    snapped_x: &mut f32,
-    best_x: &mut f32,
-    snapped_y: &mut f32,
-    best_y: &mut f32,
+    padding: f32,
+    snap_distance: f32,
+    result: &mut egui::Rect,
 ) {
-    for (index, material) in atlas.materials.iter().enumerate() {
-        if index == dragged_index {
+    let mut best: Option<SnapCandidate> = None;
+
+    let atlas_width = atlas.width as f32;
+
+    // -------------------------------------------------
+    // Atlas edges
+    // -------------------------------------------------
+
+    add_candidate(&mut best, rect.left(), padding, snap_distance);
+
+    add_candidate(
+        &mut best,
+        rect.right(),
+        atlas_width - padding,
+        snap_distance,
+    );
+
+    // -------------------------------------------------
+    // Other materials
+    // -------------------------------------------------
+
+    for (material_index, material) in atlas.materials.iter().enumerate() {
+        if material_index == dragged_index {
             continue;
         }
 
         let other = material_rect_in_atlas(material);
 
+        // X snapping only makes sense when the rectangles
+        // overlap vertically.
+        if !ranges_overlap(rect.top(), rect.bottom(), other.top(), other.bottom()) {
+            continue;
+        }
+
+        // Our left edge -> other's right edge + margin.
+        add_candidate(
+            &mut best,
+            rect.left(),
+            other.right() + padding,
+            snap_distance,
+        );
+
+        // Our right edge -> other's left edge - margin.
+        add_candidate(
+            &mut best,
+            rect.right(),
+            other.left() - padding,
+            snap_distance,
+        );
+
         // -------------------------------------------------
-        // Horizontal snapping
+        // Edge alignment
         // -------------------------------------------------
 
-        // Our left edge -> other right edge + margin.
-        try_snap(rect.left(), other.right() + margin, best_x, snapped_x);
+        // Left -> left.
+        add_candidate(&mut best, rect.left(), other.left(), snap_distance);
 
-        // Our right edge -> other left edge - margin.
-        try_snap(rect.right(), other.left() - margin, best_x, snapped_x);
+        // Right -> right.
+        add_candidate(&mut best, rect.right(), other.right(), snap_distance);
 
-        // -------------------------------------------------
-        // Vertical snapping
-        // -------------------------------------------------
+        // Center -> center.
+        add_candidate(&mut best, rect.center().x, other.center().x, snap_distance);
+    }
 
-        // Our top edge -> other bottom edge + margin.
-        try_snap(rect.top(), other.bottom() + margin, best_y, snapped_y);
+    if let Some(candidate) = best {
+        let delta = candidate.target - candidate.current;
 
-        // Our bottom edge -> other top edge - margin.
-        try_snap(rect.bottom(), other.top() - margin, best_y, snapped_y);
+        *result = result.translate(egui::vec2(delta, 0.0));
     }
 }
 
-fn try_snap(current: f32, target: f32, best_distance: &mut f32, snapped: &mut f32) {
+fn snap_y(
+    atlas: &Atlas,
+    dragged_index: usize,
+    rect: &egui::Rect,
+    margin: f32,
+    snap_distance: f32,
+    result: &mut egui::Rect,
+) {
+    let mut best: Option<SnapCandidate> = None;
+
+    let atlas_height = atlas.height as f32;
+
+    // -------------------------------------------------
+    // Atlas edges
+    // -------------------------------------------------
+
+    add_candidate(&mut best, rect.top(), margin, snap_distance);
+
+    add_candidate(
+        &mut best,
+        rect.bottom(),
+        atlas_height - margin,
+        snap_distance,
+    );
+
+    // -------------------------------------------------
+    // Other materials
+    // -------------------------------------------------
+
+    for (material_index, material) in atlas.materials.iter().enumerate() {
+        if material_index == dragged_index {
+            continue;
+        }
+
+        let other = material_rect_in_atlas(material);
+
+        // Y snapping only makes sense when the rectangles
+        // overlap horizontally.
+        if !ranges_overlap(rect.left(), rect.right(), other.left(), other.right()) {
+            continue;
+        }
+
+        // Our top -> other's bottom + margin.
+        add_candidate(
+            &mut best,
+            rect.top(),
+            other.bottom() + margin,
+            snap_distance,
+        );
+
+        // Our bottom -> other's top - margin.
+        add_candidate(
+            &mut best,
+            rect.bottom(),
+            other.top() - margin,
+            snap_distance,
+        );
+
+        // -------------------------------------------------
+        // Edge alignment
+        // -------------------------------------------------
+
+        // Top -> top.
+        add_candidate(&mut best, rect.top(), other.top(), snap_distance);
+
+        // Bottom -> bottom.
+        add_candidate(&mut best, rect.bottom(), other.bottom(), snap_distance);
+
+        // Center -> center.
+        add_candidate(&mut best, rect.center().y, other.center().y, snap_distance);
+    }
+
+    if let Some(candidate) = best {
+        let delta = candidate.target - candidate.current;
+
+        *result = result.translate(egui::vec2(0.0, delta));
+    }
+}
+
+#[derive(Clone, Copy)]
+struct SnapCandidate {
+    current: f32,
+    target: f32,
+    distance: f32,
+}
+
+fn add_candidate(best: &mut Option<SnapCandidate>, current: f32, target: f32, snap_distance: f32) {
     let distance = (current - target).abs();
 
-    if distance <= *best_distance {
-        *best_distance = distance;
-        *snapped = target;
+    if distance > snap_distance {
+        return;
     }
+
+    let candidate = SnapCandidate {
+        current,
+        target,
+        distance,
+    };
+
+    let replace = match best {
+        None => true,
+        Some(previous) => candidate.distance < previous.distance,
+    };
+
+    if replace {
+        *best = Some(candidate);
+    }
+}
+
+fn ranges_overlap(a_min: f32, a_max: f32, b_min: f32, b_max: f32) -> bool {
+    a_min < b_max && a_max > b_min
 }

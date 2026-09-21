@@ -14,7 +14,7 @@ pub fn handle_material_drag(
     let atlas_rect = atlas_screen_rect(viewport, editor_ui, atlas);
 
     if response.drag_started_by(egui::PointerButton::Primary) {
-        start_material_drag(response, viewport, atlas_rect, editor_ui, atlas);
+        start_material_drag(response, atlas_rect, editor_ui, atlas);
     }
 
     if response.dragged_by(egui::PointerButton::Primary) {
@@ -28,7 +28,6 @@ pub fn handle_material_drag(
 
 fn start_material_drag(
     response: &egui::Response,
-    viewport: egui::Rect,
     atlas_rect: egui::Rect,
     editor_ui: &mut EditorUi,
     atlas: &Atlas,
@@ -37,21 +36,28 @@ fn start_material_drag(
         return;
     };
 
-    let Some(index) = atlas_material_at_position(pointer, viewport, editor_ui, atlas) else {
+    let Some(index) = atlas_material_at_position(pointer, atlas_rect, editor_ui, atlas) else {
         return;
     };
 
+    let atlas_position = screen_to_atlas(pointer, atlas_rect, editor_ui.atlas_zoom);
+
+    let Some(material) = atlas.materials.iter().find(|m| m.index == index) else {
+        return;
+    };
+
+    // Remember which material is being dragged.
     editor_ui.selected_material = Some(index);
     editor_ui.dragging_material = Some(index);
 
-    let atlas_position = screen_to_atlas(pointer, atlas_rect, editor_ui.atlas_zoom);
-
-    if let Some(material) = atlas.materials.iter().find(|m| m.index == index) {
-        editor_ui.drag_offset = egui::vec2(
-            atlas_position.x - material.transform.x as f32,
-            atlas_position.y - material.transform.y as f32,
-        );
-    }
+    // Preserve the exact point where the mouse grabbed the material.
+    //
+    // This is critical. It prevents the material from jumping so that
+    // its top-left corner moves underneath the cursor.
+    editor_ui.drag_offset = egui::vec2(
+        atlas_position.x - material.transform.x as f32,
+        atlas_position.y - material.transform.y as f32,
+    );
 }
 
 fn drag_material(
@@ -70,6 +76,10 @@ fn drag_material(
 
     let atlas_position = screen_to_atlas(pointer, atlas_rect, editor_ui.atlas_zoom);
 
+    // Calculate the requested Transform position directly from
+    // the mouse position and the original grab offset.
+    //
+    // This does NOT depend on the material's previous snapped position.
     let desired_x = atlas_position.x - editor_ui.drag_offset.x;
 
     let desired_y = atlas_position.y - editor_ui.drag_offset.y;
@@ -79,7 +89,6 @@ fn drag_material(
         index,
         desired_x,
         desired_y,
-        editor_ui.snap_margin,
         editor_ui.snap_distance,
     );
 }
@@ -102,22 +111,11 @@ fn screen_to_atlas(position: egui::Pos2, atlas_rect: egui::Rect, zoom: f32) -> e
 
 fn atlas_material_at_position(
     position: egui::Pos2,
-    viewport: egui::Rect,
+    atlas_rect: egui::Rect,
     editor_ui: &EditorUi,
     atlas: &Atlas,
 ) -> Option<usize> {
-    let zoom = editor_ui.atlas_zoom;
-
-    let atlas_size = egui::vec2(atlas.width as f32 * zoom, atlas.height as f32 * zoom);
-
-    let center = viewport.center() + editor_ui.atlas_pan;
-
-    let atlas_rect = egui::Rect::from_center_size(center, atlas_size);
-
-    let atlas_position = egui::pos2(
-        (position.x - atlas_rect.left()) / zoom,
-        (position.y - atlas_rect.top()) / zoom,
-    );
+    let atlas_position = screen_to_atlas(position, atlas_rect, editor_ui.atlas_zoom);
 
     atlas
         .materials

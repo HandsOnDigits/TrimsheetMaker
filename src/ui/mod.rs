@@ -40,7 +40,6 @@ pub struct EditorUi {
     pub dragging_material: Option<usize>,
     pub drag_offset: egui::Vec2,
 
-    pub snap_margin: f32,
     pub snap_distance: f32,
 
     pub texture_naming: data::TextureNaming,
@@ -71,7 +70,6 @@ impl Default for EditorUi {
             dragging_material: None,
             drag_offset: egui::Vec2::ZERO,
 
-            snap_margin: 4.0,
             snap_distance: 8.0,
 
             show_import_multiple_materials_window: false,
