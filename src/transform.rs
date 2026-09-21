@@ -41,7 +41,6 @@ pub struct Transform {
     pub x: i32,
     pub y: i32,
 
-    // Original/source dimensions. NEVER change these because of rotation.
     pub width: u32,
     pub height: u32,
 
@@ -49,6 +48,7 @@ pub struct Transform {
 }
 
 impl Transform {
+    /// Center of the original, unrotated source rectangle.
     pub fn center(&self) -> (i64, i64) {
         (
             self.x as i64 + self.width as i64 / 2,
@@ -56,6 +56,7 @@ impl Transform {
         )
     }
 
+    /// Width occupied by the material in the atlas after rotation.
     pub fn rotated_width(&self) -> u32 {
         match self.rotation {
             Rotation::Deg0 | Rotation::Deg180 => self.width,
@@ -63,6 +64,7 @@ impl Transform {
         }
     }
 
+    /// Height occupied by the material in the atlas after rotation.
     pub fn rotated_height(&self) -> u32 {
         match self.rotation {
             Rotation::Deg0 | Rotation::Deg180 => self.height,
@@ -70,7 +72,11 @@ impl Transform {
         }
     }
 
-    pub fn signed_atlas_rect(&self) -> (i64, i64, u32, u32) {
+    /// Rectangle occupied by the material in atlas space.
+    ///
+    /// `width` and `height` remain the original source dimensions.
+    /// Rotation only changes the occupied rectangle around the same center.
+    pub fn atlas_rect(&self) -> (i64, i64, u32, u32) {
         let (center_x, center_y) = self.center();
 
         let width = self.rotated_width();
@@ -82,15 +88,10 @@ impl Transform {
         (x, y, width, height)
     }
 
-    /// Returns a non-negative rectangle for atlas packing operations.
     pub fn positive_atlas_rect(&self) -> (u32, u32, u32, u32) {
-        let (x, y, width, height) = self.signed_atlas_rect();
+        let (x, y, width, height) = self.atlas_rect();
 
         (x.max(0) as u32, y.max(0) as u32, width, height)
-    }
-
-    pub fn atlas_rect(&self) -> (i64, i64, u32, u32) {
-        self.signed_atlas_rect()
     }
 
     pub fn rotate_cw(&mut self) {

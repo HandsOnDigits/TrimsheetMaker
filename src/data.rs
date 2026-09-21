@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::transform::Transform;
+use crate::transform::{Rotation, Transform};
 
 #[derive(Clone)]
 pub struct MaterialTexture {
@@ -139,72 +139,6 @@ pub struct Atlas {
 }
 
 impl Atlas {
-    pub fn normalize_bounds(&mut self) {
-        if self.materials.is_empty() {
-            return;
-        }
-
-        let mut min_x = 0i64;
-        let mut min_y = 0i64;
-        let mut max_x = self.width as i64;
-        let mut max_y = self.height as i64;
-
-        for material in &self.materials {
-            let (x, y, width, height) = material.transform.signed_atlas_rect();
-
-            min_x = min_x.min(x);
-            min_y = min_y.min(y);
-
-            max_x = max_x.max(x + width as i64);
-            max_y = max_y.max(y + height as i64);
-        }
-
-        // If a rotated material extends beyond the top or left edge,
-        // shift all materials to preserve their relative positions.
-        let shift_x = -min_x.min(0);
-        let shift_y = -min_y.min(0);
-
-        if shift_x != 0 || shift_y != 0 {
-            for material in &mut self.materials {
-                material.transform.x = (material.transform.x as i64 + shift_x) as i32;
-                material.transform.y = (material.transform.y as i64 + shift_y) as i32;
-            }
-
-            max_x += shift_x;
-            max_y += shift_y;
-        }
-
-        self.width = self.width.max(max_x as u32);
-        self.height = self.height.max(max_y as u32);
-    }
-
-    pub fn update_dimensions(&mut self) {
-        const MIN_SIZE: u32 = 512;
-
-        let padding = self.padding;
-
-        let mut required_width = MIN_SIZE;
-        let mut required_height = MIN_SIZE;
-
-        for material in &self.materials {
-            let (x, y, width, height) = material.transform.signed_atlas_rect();
-
-            let right = x + width as i64;
-            let bottom = y + height as i64;
-
-            if right > 0 {
-                required_width = required_width.max((right as u32).saturating_add(padding));
-            }
-
-            if bottom > 0 {
-                required_height = required_height.max((bottom as u32).saturating_add(padding));
-            }
-        }
-
-        self.width = self.width.max(required_width);
-        self.height = self.height.max(required_height);
-    }
-
     fn find_free_rect(&mut self, width: u32, height: u32) -> (u32, u32) {
         const MIN_SIZE: u32 = 512;
 
@@ -392,7 +326,9 @@ impl Atlas {
                                 first_size = Some(size);
                             }
 
-                            if preferred_group == Some(texture.id.as_str()) {
+                            if preferred_group
+                                .is_some_and(|group| texture.id.eq_ignore_ascii_case(group))
+                            {
                                 preferred_size = Some(size);
                             }
 
@@ -409,28 +345,31 @@ impl Atlas {
                 }
             }
 
-            let material_size = preferred_size.or(first_size);
+            let Some((width, height)) = preferred_size.or(first_size) else {
+                continue;
+            };
 
-            if let Some((width, height)) = material_size {
-                let needs_placement = {
-                    let material = &self.materials[material_index];
+            let needs_placement = {
+                let material = &self.materials[material_index];
 
-                    material.transform.width == 0 || material.transform.height == 0
-                };
+                material.transform.width == 0 || material.transform.height == 0
+            };
 
-                if needs_placement {
-                    // Use the actual source dimensions.
-                    // Do NOT make the allocation square.
-                    let (x, y) = self.find_free_rect(width, height);
-
-                    let material = &mut self.materials[material_index];
-
-                    material.transform.x = x as i32;
-                    material.transform.y = y as i32;
-                    material.transform.width = width;
-                    material.transform.height = height;
-                }
+            if !needs_placement {
+                continue;
             }
+
+            let (x, y) = self.find_free_rect(width, height);
+
+            let material = &mut self.materials[material_index];
+
+            material.transform = Transform {
+                x: x as i32,
+                y: y as i32,
+                width,
+                height,
+                rotation: Rotation::Deg0,
+            };
         }
     }
 }

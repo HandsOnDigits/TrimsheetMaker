@@ -23,8 +23,6 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
         return;
     };
 
-    let mut dimensions_changed = false;
-
     {
         let Some(material) = atlas.selected_mut(Some(index)) else {
             editor_ui.selected_material = None;
@@ -72,16 +70,16 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
                 ui.horizontal(|ui| {
                     if ui.button("-90").clicked() {
                         material.transform.rotate_ccw();
-                        dimensions_changed = true;
                     }
 
                     ui.label(format!("{}°", material.transform.rotation.degrees()));
 
                     if ui.button("+90").clicked() {
                         material.transform.rotate_cw();
-                        dimensions_changed = true;
                     }
                 });
+
+                ui.end_row();
 
                 ui.end_row();
             });
@@ -146,10 +144,5 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
         if let Some(index) = remove_index {
             material.textures.remove(index);
         }
-    }
-
-    if dimensions_changed {
-        atlas.normalize_bounds();
-        atlas.update_dimensions();
     }
 }

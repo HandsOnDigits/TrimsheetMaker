@@ -13,6 +13,12 @@ pub fn handle_material_drag(
 ) {
     let atlas_rect = atlas_screen_rect(viewport, editor_ui, atlas);
 
+    // Select immediately on a normal click.
+    if response.clicked_by(egui::PointerButton::Primary) {
+        select_material(response, atlas_rect, editor_ui, atlas);
+    }
+
+    // Begin dragging once egui recognizes the pointer movement as a drag.
     if response.drag_started_by(egui::PointerButton::Primary) {
         start_material_drag(response, atlas_rect, editor_ui, atlas);
     }
@@ -24,6 +30,19 @@ pub fn handle_material_drag(
     if response.drag_stopped_by(egui::PointerButton::Primary) {
         editor_ui.dragging_material = None;
     }
+}
+
+fn select_material(
+    response: &egui::Response,
+    atlas_rect: egui::Rect,
+    editor_ui: &mut EditorUi,
+    atlas: &Atlas,
+) {
+    let Some(pointer) = response.interact_pointer_pos() else {
+        return;
+    };
+
+    editor_ui.selected_material = atlas_material_at_position(pointer, atlas_rect, editor_ui, atlas);
 }
 
 fn start_material_drag(

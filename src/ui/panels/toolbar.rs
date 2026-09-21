@@ -2,7 +2,7 @@ use bevy_egui::egui;
 
 use super::EditorUi;
 
-use crate::data::Atlas;
+use crate::data::{Atlas, TextureNaming};
 
 pub fn toolbar(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
     ui.horizontal(|ui| {
@@ -11,6 +11,8 @@ pub fn toolbar(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
         ui.menu_button("File", |ui| {
             if ui.button("New Atlas").clicked() {
                 *atlas = Atlas::default();
+
+                editor_ui.texture_naming = TextureNaming::default();
 
                 editor_ui.selected_material = None;
                 editor_ui.atlas_zoom = 1.0;
