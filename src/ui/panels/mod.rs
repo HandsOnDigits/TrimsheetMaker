@@ -28,7 +28,8 @@ pub fn editor_ui(
     mut editor_ui: ResMut<EditorUi>,
     mut atlas: ResMut<Atlas>,
     mut images: ResMut<Assets<Image>>,
-    hotkeys: Res<HotkeyManager>,
+    mut hotkeys: ResMut<HotkeyManager>,
+    keyboard: Res<ButtonInput<KeyCode>>,
 ) -> Result {
     for material in &mut atlas.materials {
         for texture in &mut material.textures {
@@ -84,6 +85,10 @@ pub fn editor_ui(
             .show(&mut root_ui, |ui| {
                 inspector_panel(ui, &mut editor_ui, &mut atlas);
             });
+    }
+
+    if editor_ui.show_settings_window {
+        windows::settings::settings_window(ctx, &mut editor_ui, &mut hotkeys, &keyboard);
     }
 
     atlas::atlas_view::atlas_view(&mut root_ui, &mut editor_ui, &mut atlas);

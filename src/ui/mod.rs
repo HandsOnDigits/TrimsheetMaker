@@ -5,7 +5,7 @@ use bevy_egui::{EguiPrimaryContextPass, egui};
 
 use crate::{
     data,
-    hotkeys::{self, EditorActionMessage},
+    hotkeys::{self, EditorAction, EditorActionMessage},
 };
 
 mod panels;
@@ -50,6 +50,9 @@ pub struct EditorUi {
 
     pub show_import_multiple_materials_window: bool,
     pub show_import_single_material_window: bool,
+    pub show_settings_window: bool,
+
+    pub hotkey_capture: Option<EditorAction>,
 
     pub multiple_materials_root: Option<std::path::PathBuf>,
     pub import_materials: BTreeMap<String, data::MaterialSource>,
@@ -95,6 +98,9 @@ impl Default for EditorUi {
 
             show_import_multiple_materials_window: false,
             show_import_single_material_window: false,
+            show_settings_window: false,
+
+            hotkey_capture: None,
 
             texture_naming: default(),
             suffix_inputs: BTreeMap::new(),

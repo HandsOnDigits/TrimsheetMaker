@@ -3,7 +3,7 @@ mod manager;
 
 pub use actions::{EditorAction, EditorActionMessage, execute_action};
 
-pub use manager::{Hotkey, HotkeyConflict, HotkeyManager, hotkey_system};
+pub use manager::{CaptureResult, Hotkey, HotkeyConflict, HotkeyManager, hotkey_system};
 
 use bevy::prelude::*;
 use bevy_egui::EguiPrimaryContextPass;

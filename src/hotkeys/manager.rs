@@ -176,6 +176,104 @@ impl HotkeyManager {
     pub fn display_name(&self, action: EditorAction) -> Option<String> {
         self.binding(action).map(|hotkey| hotkey.display_name())
     }
+
+    pub fn capture_hotkey(
+        &mut self,
+        action: EditorAction,
+        keyboard: &ButtonInput<KeyCode>,
+    ) -> CaptureResult {
+        let Some(key) = pressed_non_modifier_key(keyboard) else {
+            return CaptureResult::None;
+        };
+
+        if key == KeyCode::Escape {
+            return CaptureResult::Cancelled;
+        }
+
+        let hotkey = Hotkey::new(
+            key,
+            keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight),
+            keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight),
+            keyboard.pressed(KeyCode::AltLeft) || keyboard.pressed(KeyCode::AltRight),
+            keyboard.pressed(KeyCode::SuperLeft) || keyboard.pressed(KeyCode::SuperRight),
+        );
+
+        match self.set_binding(action, hotkey) {
+            Ok(()) => CaptureResult::Assigned(hotkey),
+            Err(conflict) => CaptureResult::Conflict(conflict),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum CaptureResult {
+    None,
+    Cancelled,
+    Assigned(Hotkey),
+    Conflict(HotkeyConflict),
+}
+
+fn pressed_non_modifier_key(keyboard: &ButtonInput<KeyCode>) -> Option<KeyCode> {
+    for &key in all_capture_keys() {
+        if keyboard.just_pressed(key) {
+            return Some(key);
+        }
+    }
+
+    None
+}
+
+fn all_capture_keys() -> &'static [KeyCode] {
+    &[
+        KeyCode::Escape,
+        KeyCode::Space,
+        KeyCode::Enter,
+        KeyCode::Tab,
+        KeyCode::Backspace,
+        KeyCode::Delete,
+        KeyCode::ArrowUp,
+        KeyCode::ArrowDown,
+        KeyCode::ArrowLeft,
+        KeyCode::ArrowRight,
+        KeyCode::KeyA,
+        KeyCode::KeyB,
+        KeyCode::KeyC,
+        KeyCode::KeyD,
+        KeyCode::KeyE,
+        KeyCode::KeyF,
+        KeyCode::KeyG,
+        KeyCode::KeyH,
+        KeyCode::KeyI,
+        KeyCode::KeyJ,
+        KeyCode::KeyK,
+        KeyCode::KeyL,
+        KeyCode::KeyM,
+        KeyCode::KeyN,
+        KeyCode::KeyO,
+        KeyCode::KeyP,
+        KeyCode::KeyQ,
+        KeyCode::KeyR,
+        KeyCode::KeyS,
+        KeyCode::KeyT,
+        KeyCode::KeyU,
+        KeyCode::KeyV,
+        KeyCode::KeyW,
+        KeyCode::KeyX,
+        KeyCode::KeyY,
+        KeyCode::KeyZ,
+        KeyCode::F1,
+        KeyCode::F2,
+        KeyCode::F3,
+        KeyCode::F4,
+        KeyCode::F5,
+        KeyCode::F6,
+        KeyCode::F7,
+        KeyCode::F8,
+        KeyCode::F9,
+        KeyCode::F10,
+        KeyCode::F11,
+        KeyCode::F12,
+    ]
 }
 
 #[derive(Debug, Clone, Copy)]

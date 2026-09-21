@@ -112,6 +112,12 @@ pub fn toolbar(
 
         ui.separator();
 
+        if ui.button("Settings").clicked() {
+            editor_ui.show_settings_window = true;
+        }
+
+        ui.separator();
+
         ui.label(format!("Atlas: {} × {}", atlas.width, atlas.height));
     });
 }
