@@ -1,0 +1,282 @@
+use std::collections::HashMap;
+
+use bevy::prelude::*;
+use bevy_egui::EguiContexts;
+
+use super::actions::{EditorAction, EditorActionMessage};
+
+/// A keyboard shortcut consisting of a key and optional modifiers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Hotkey {
+    pub key: KeyCode,
+    pub ctrl: bool,
+    pub shift: bool,
+    pub alt: bool,
+    pub super_key: bool,
+}
+
+impl Hotkey {
+    pub const fn new(key: KeyCode, ctrl: bool, shift: bool, alt: bool, super_key: bool) -> Self {
+        Self {
+            key,
+            ctrl,
+            shift,
+            alt,
+            super_key,
+        }
+    }
+
+    pub const fn plain(key: KeyCode) -> Self {
+        Self::new(key, false, false, false, false)
+    }
+
+    pub const fn ctrl(key: KeyCode) -> Self {
+        Self::new(key, true, false, false, false)
+    }
+
+    pub const fn ctrl_shift(key: KeyCode) -> Self {
+        Self::new(key, true, true, false, false)
+    }
+
+    pub const fn shift(key: KeyCode) -> Self {
+        Self::new(key, false, true, false, false)
+    }
+
+    /// Returns a readable representation of the shortcut.
+    pub fn display_name(&self) -> String {
+        let mut parts = Vec::new();
+
+        if self.ctrl {
+            parts.push("Ctrl");
+        }
+
+        if self.shift {
+            parts.push("Shift");
+        }
+
+        if self.alt {
+            parts.push("Alt");
+        }
+
+        if self.super_key {
+            parts.push("Super");
+        }
+
+        parts.push(key_display_name(self.key));
+
+        parts.join("+")
+    }
+}
+
+/// Stores the keyboard bindings for editor actions.
+#[derive(Resource)]
+pub struct HotkeyManager {
+    bindings: HashMap<EditorAction, Hotkey>,
+}
+
+impl Default for HotkeyManager {
+    fn default() -> Self {
+        let mut manager = Self {
+            bindings: HashMap::new(),
+        };
+
+        manager.set_default_bindings();
+
+        manager
+    }
+}
+
+impl HotkeyManager {
+    pub fn set_default_bindings(&mut self) {
+        self.bindings.clear();
+
+        // File
+        self.bindings
+            .insert(EditorAction::NewAtlas, Hotkey::ctrl(KeyCode::KeyN));
+
+        self.bindings
+            .insert(EditorAction::OpenProject, Hotkey::ctrl(KeyCode::KeyO));
+
+        self.bindings
+            .insert(EditorAction::SaveProject, Hotkey::ctrl(KeyCode::KeyS));
+
+        self.bindings
+            .insert(EditorAction::ExportAtlas, Hotkey::ctrl_shift(KeyCode::KeyE));
+
+        // Edit
+        self.bindings
+            .insert(EditorAction::Undo, Hotkey::ctrl(KeyCode::KeyZ));
+
+        self.bindings
+            .insert(EditorAction::Redo, Hotkey::ctrl_shift(KeyCode::KeyZ));
+
+        // Materials
+        self.bindings.insert(
+            EditorAction::RemoveSelectedMaterial,
+            Hotkey::plain(KeyCode::Delete),
+        );
+
+        // Atlas
+        self.bindings
+            .insert(EditorAction::PackAtlas, Hotkey::plain(KeyCode::KeyP));
+
+        // View
+        self.bindings
+            .insert(EditorAction::ResetAtlasView, Hotkey::plain(KeyCode::KeyF));
+    }
+
+    pub fn binding(&self, action: EditorAction) -> Option<Hotkey> {
+        self.bindings.get(&action).copied()
+    }
+
+    pub fn bindings(&self) -> &HashMap<EditorAction, Hotkey> {
+        &self.bindings
+    }
+
+    /// Assigns a hotkey to an action.
+    ///
+    /// Returns an error if another action already uses
+    /// the requested shortcut.
+    pub fn set_binding(
+        &mut self,
+        action: EditorAction,
+        hotkey: Hotkey,
+    ) -> Result<(), HotkeyConflict> {
+        if let Some(conflicting_action) =
+            self.bindings
+                .iter()
+                .find_map(|(existing_action, existing_hotkey)| {
+                    (*existing_action != action && *existing_hotkey == hotkey)
+                        .then_some(*existing_action)
+                })
+        {
+            return Err(HotkeyConflict {
+                action,
+                conflicting_action,
+                hotkey,
+            });
+        }
+
+        self.bindings.insert(action, hotkey);
+
+        Ok(())
+    }
+
+    pub fn remove_binding(&mut self, action: EditorAction) {
+        self.bindings.remove(&action);
+    }
+
+    /// Finds the action assigned to a specific shortcut.
+    pub fn action_for_hotkey(&self, hotkey: Hotkey) -> Option<EditorAction> {
+        self.bindings
+            .iter()
+            .find_map(|(action, existing_hotkey)| (*existing_hotkey == hotkey).then_some(*action))
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct HotkeyConflict {
+    pub action: EditorAction,
+    pub conflicting_action: EditorAction,
+    pub hotkey: Hotkey,
+}
+
+/// Detects keyboard shortcuts and emits editor action messages.
+///
+/// Keyboard shortcuts are ignored while egui wants keyboard input,
+/// such as when the user is typing into a text field.
+pub fn hotkey_system(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    hotkeys: Res<HotkeyManager>,
+    mut action_writer: MessageWriter<EditorActionMessage>,
+    mut contexts: EguiContexts,
+) {
+    let Ok(ctx) = contexts.ctx_mut() else {
+        return;
+    };
+
+    if ctx.egui_wants_keyboard_input() {
+        return;
+    }
+
+    let ctrl = keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight);
+
+    let shift = keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
+
+    let alt = keyboard.pressed(KeyCode::AltLeft) || keyboard.pressed(KeyCode::AltRight);
+
+    let super_key = keyboard.pressed(KeyCode::SuperLeft) || keyboard.pressed(KeyCode::SuperRight);
+
+    let modifiers = (ctrl, shift, alt, super_key);
+
+    for (&action, &hotkey) in hotkeys.bindings() {
+        if !keyboard.just_pressed(hotkey.key) {
+            continue;
+        }
+
+        let expected_modifiers = (hotkey.ctrl, hotkey.shift, hotkey.alt, hotkey.super_key);
+
+        if modifiers == expected_modifiers {
+            action_writer.write(EditorActionMessage::new(action));
+        }
+    }
+}
+
+/// Converts a key code to a readable label.
+fn key_display_name(key: KeyCode) -> &'static str {
+    match key {
+        KeyCode::Space => "Space",
+        KeyCode::Enter => "Enter",
+        KeyCode::Escape => "Escape",
+        KeyCode::Tab => "Tab",
+        KeyCode::Backspace => "Backspace",
+        KeyCode::Delete => "Delete",
+
+        KeyCode::ArrowUp => "Up",
+        KeyCode::ArrowDown => "Down",
+        KeyCode::ArrowLeft => "Left",
+        KeyCode::ArrowRight => "Right",
+
+        KeyCode::KeyA => "A",
+        KeyCode::KeyB => "B",
+        KeyCode::KeyC => "C",
+        KeyCode::KeyD => "D",
+        KeyCode::KeyE => "E",
+        KeyCode::KeyF => "F",
+        KeyCode::KeyG => "G",
+        KeyCode::KeyH => "H",
+        KeyCode::KeyI => "I",
+        KeyCode::KeyJ => "J",
+        KeyCode::KeyK => "K",
+        KeyCode::KeyL => "L",
+        KeyCode::KeyM => "M",
+        KeyCode::KeyN => "N",
+        KeyCode::KeyO => "O",
+        KeyCode::KeyP => "P",
+        KeyCode::KeyQ => "Q",
+        KeyCode::KeyR => "R",
+        KeyCode::KeyS => "S",
+        KeyCode::KeyT => "T",
+        KeyCode::KeyU => "U",
+        KeyCode::KeyV => "V",
+        KeyCode::KeyW => "W",
+        KeyCode::KeyX => "X",
+        KeyCode::KeyY => "Y",
+        KeyCode::KeyZ => "Z",
+
+        KeyCode::F1 => "F1",
+        KeyCode::F2 => "F2",
+        KeyCode::F3 => "F3",
+        KeyCode::F4 => "F4",
+        KeyCode::F5 => "F5",
+        KeyCode::F6 => "F6",
+        KeyCode::F7 => "F7",
+        KeyCode::F8 => "F8",
+        KeyCode::F9 => "F9",
+        KeyCode::F10 => "F10",
+        KeyCode::F11 => "F11",
+        KeyCode::F12 => "F12",
+
+        _ => "Unknown",
+    }
+}

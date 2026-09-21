@@ -2,7 +2,10 @@ use bevy_egui::egui;
 
 use super::EditorUi;
 
-use crate::data::{Atlas, TextureNaming};
+use crate::{
+    data::Atlas,
+    hotkeys::{EditorAction, execute_action},
+};
 
 pub fn toolbar(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
     ui.horizontal(|ui| {
@@ -10,71 +13,67 @@ pub fn toolbar(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
 
         ui.menu_button("File", |ui| {
             if ui.button("New Atlas").clicked() {
-                *atlas = Atlas::default();
-
-                editor_ui.texture_naming = TextureNaming::default();
-
-                editor_ui.selected_material = None;
-                editor_ui.atlas_zoom = 1.0;
-                editor_ui.atlas_pan = egui::Vec2::ZERO;
+                execute_action(EditorAction::NewAtlas, editor_ui, atlas);
 
                 ui.close();
             }
 
             if ui.button("Open Project…").clicked() {
-                todo!(/*Open project implementation goes here.*/);
+                execute_action(EditorAction::OpenProject, editor_ui, atlas);
+
+                ui.close();
             }
 
             if ui.button("Save Project").clicked() {
-                todo!(/*Save implementation goes here.*/);
+                execute_action(EditorAction::SaveProject, editor_ui, atlas);
+
+                ui.close();
             }
 
             ui.separator();
 
             if ui.button("Import multiple Materials…").clicked() {
-                editor_ui.show_import_multiple_materials_window = true;
+                execute_action(EditorAction::ImportMultipleMaterials, editor_ui, atlas);
+
                 ui.close();
             }
 
             if ui.button("Import single Material…").clicked() {
-                editor_ui.show_import_single_material_window = true;
+                execute_action(EditorAction::ImportSingleMaterial, editor_ui, atlas);
+
                 ui.close();
             }
 
             ui.separator();
 
             if ui.button("Export Atlas…").clicked() {
-                todo!(/*Atlas export implementation goes here.*/);
+                execute_action(EditorAction::ExportAtlas, editor_ui, atlas);
+
+                ui.close();
             }
         });
 
         ui.separator();
 
         if ui.button("Remove Selected").clicked() {
-            if let Some(index) = editor_ui.selected_material {
-                atlas.remove(index);
-                editor_ui.selected_material = None;
-            }
+            execute_action(EditorAction::RemoveSelectedMaterial, editor_ui, atlas);
         }
 
         if ui.button("Pack Atlas").clicked() {
-            todo!(/*Real atlas packing goes here.*/);
+            execute_action(EditorAction::PackAtlas, editor_ui, atlas);
         }
 
         ui.separator();
 
         ui.menu_button("View", |ui| {
             ui.checkbox(&mut editor_ui.show_materials, "Materials");
-
             ui.checkbox(&mut editor_ui.show_inspector, "Inspector");
-
             ui.checkbox(&mut editor_ui.show_status, "Status Bar");
 
             ui.separator();
 
             if ui.button("Reset Atlas View").clicked() {
-                editor_ui.atlas_zoom = 1.0;
-                editor_ui.atlas_pan = egui::Vec2::ZERO;
+                execute_action(EditorAction::ResetAtlasView, editor_ui, atlas);
 
                 ui.close();
             }

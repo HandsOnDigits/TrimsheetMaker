@@ -3,7 +3,10 @@ use std::collections::BTreeMap;
 use bevy::prelude::*;
 use bevy_egui::{EguiPrimaryContextPass, egui};
 
-use crate::data;
+use crate::{
+    data,
+    hotkeys::{self, EditorActionMessage},
+};
 
 mod panels;
 mod windows;
@@ -15,12 +18,30 @@ impl Plugin for EditorUiPlugin {
         app.init_resource::<EditorUi>()
             .init_resource::<data::Atlas>()
             .add_systems(Startup, setup)
+            .add_systems(
+                EguiPrimaryContextPass,
+                apply_editor_actions.after(hotkeys::hotkey_system),
+            )
             .add_systems(EguiPrimaryContextPass, panels::editor_ui);
     }
 }
 
 fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
+}
+
+/// Applies actions emitted by the hotkey manager.
+///
+/// The toolbar can execute actions directly, while keyboard shortcuts
+/// send messages that are handled here.
+fn apply_editor_actions(
+    mut messages: MessageReader<EditorActionMessage>,
+    mut editor_ui: ResMut<EditorUi>,
+    mut atlas: ResMut<data::Atlas>,
+) {
+    for message in messages.read() {
+        hotkeys::execute_action(message.action, &mut editor_ui, &mut atlas);
+    }
 }
 
 #[derive(Resource)]

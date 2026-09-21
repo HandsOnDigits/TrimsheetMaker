@@ -6,6 +6,10 @@ use ui::EditorUiPlugin;
 
 mod assets;
 mod data;
+
+mod hotkeys;
+use hotkeys::HotkeyPlugin;
+
 mod importer;
 mod transform;
 
@@ -21,6 +25,7 @@ fn main() {
             ..default()
         }))
         .add_plugins(EguiPlugin::default())
+        .add_plugins(HotkeyPlugin)
         .add_plugins(EditorUiPlugin)
         .run();
 }
