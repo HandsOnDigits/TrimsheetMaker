@@ -128,37 +128,98 @@ impl Default for TextureNaming {
     }
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct Atlas {
     pub width: u32,
     pub height: u32,
+
+    pub padding: u32,
+
     pub materials: Vec<AtlasMaterial>,
 }
 
 impl Atlas {
-    fn find_free_rect(&mut self, width: u32, height: u32) -> (u32, u32) {
-        const MARGIN: u32 = 16;
+    pub fn normalize_bounds(&mut self) {
+        if self.materials.is_empty() {
+            return;
+        }
+
+        let mut min_x = 0i64;
+        let mut min_y = 0i64;
+        let mut max_x = self.width as i64;
+        let mut max_y = self.height as i64;
+
+        for material in &self.materials {
+            let (x, y, width, height) = material.transform.signed_atlas_rect();
+
+            min_x = min_x.min(x);
+            min_y = min_y.min(y);
+
+            max_x = max_x.max(x + width as i64);
+            max_y = max_y.max(y + height as i64);
+        }
+
+        // If a rotated material extends beyond the top or left edge,
+        // shift all materials to preserve their relative positions.
+        let shift_x = -min_x.min(0);
+        let shift_y = -min_y.min(0);
+
+        if shift_x != 0 || shift_y != 0 {
+            for material in &mut self.materials {
+                material.transform.x = (material.transform.x as i64 + shift_x) as u32;
+                material.transform.y = (material.transform.y as i64 + shift_y) as u32;
+            }
+
+            max_x += shift_x;
+            max_y += shift_y;
+        }
+
+        self.width = self.width.max(max_x as u32);
+        self.height = self.height.max(max_y as u32);
+    }
+
+    pub fn update_dimensions(&mut self) {
         const MIN_SIZE: u32 = 512;
 
-        // Make sure the atlas can contain the requested rectangle at all.
-        let required_width = width.saturating_add(MARGIN * 2);
-        let required_height = height.saturating_add(MARGIN * 2);
+        let padding = self.padding;
 
-        if self.width < required_width {
-            self.width = self.width.max(MIN_SIZE).max(required_width);
+        let mut required_width = MIN_SIZE;
+        let mut required_height = MIN_SIZE;
+
+        for material in &self.materials {
+            let (x, y, width, height) = material.transform.atlas_rect();
+
+            required_width = required_width.max(x.saturating_add(width).saturating_add(padding));
+
+            required_height = required_height.max(y.saturating_add(height).saturating_add(padding));
         }
 
-        if self.height < required_height {
-            self.height = self.height.max(MIN_SIZE).max(required_height);
-        }
+        self.width = self.width.max(required_width);
+        self.height = self.height.max(required_height);
+    }
+
+    fn find_free_rect(&mut self, width: u32, height: u32) -> (u32, u32) {
+        const MIN_SIZE: u32 = 512;
+
+        let padding = self.padding;
+
+        self.width = self
+            .width
+            .max(MIN_SIZE)
+            .max(width.saturating_add(padding * 2));
+
+        self.height = self
+            .height
+            .max(MIN_SIZE)
+            .max(height.saturating_add(padding * 2));
 
         loop {
-            let mut y = MARGIN;
+            let mut y = padding;
 
-            while y.saturating_add(height) <= self.height {
-                let mut x = MARGIN;
+            while y.saturating_add(height).saturating_add(padding) <= self.height {
+                let mut x = padding;
 
-                while x.saturating_add(width) <= self.width {
+                while x.saturating_add(width).saturating_add(padding) <= self.width {
                     let candidate = Rect {
                         x,
                         y,
@@ -167,32 +228,32 @@ impl Atlas {
                     };
 
                     let overlaps = self.materials.iter().any(|material| {
-                        if material.transform.width == 0 || material.transform.height == 0 {
-                            return false;
-                        }
+                        let (other_x, other_y, other_width, other_height) =
+                            material.transform.atlas_rect();
 
-                        candidate.overlaps(Rect {
-                            x: material.transform.x,
-                            y: material.transform.y,
-                            width: material.transform.width,
-                            height: material.transform.height,
-                        })
+                        let other = Rect {
+                            x: other_x,
+                            y: other_y,
+                            width: other_width,
+                            height: other_height,
+                        };
+
+                        // Require exactly `padding` pixels between rectangles.
+                        candidate.expanded(padding).overlaps(other)
                     });
 
                     if !overlaps {
                         return (x, y);
                     }
 
-                    x = x.saturating_add(width + MARGIN);
+                    x = x.saturating_add(1);
                 }
 
-                y = y.saturating_add(height + MARGIN);
+                y = y.saturating_add(1);
             }
 
-            // No room: grow vertically and try again.
             self.height = self.height.saturating_add(MIN_SIZE);
 
-            // Prevent an impossible/infinite search if u32 is exhausted.
             if self.height == u32::MAX {
                 panic!("atlas is too large to place a material");
             }
@@ -255,12 +316,17 @@ impl Atlas {
             };
 
             let overlaps = self.materials.iter().any(|material| {
-                candidate.overlaps(Rect {
-                    x: material.transform.x,
-                    y: material.transform.y,
-                    width: material.transform.width,
-                    height: material.transform.height,
-                })
+                let (x, y, width, height) = material.transform.atlas_rect();
+
+                candidate.overlaps_with_padding(
+                    Rect {
+                        x,
+                        y,
+                        width,
+                        height,
+                    },
+                    self.padding,
+                )
             });
 
             if !overlaps && x + size <= self.width && y + size <= self.height {
@@ -346,6 +412,8 @@ impl Atlas {
                 };
 
                 if needs_placement {
+                    // Use the actual source dimensions.
+                    // Do NOT make the allocation square.
                     let (x, y) = self.find_free_rect(width, height);
 
                     let material = &mut self.materials[material_index];
@@ -356,6 +424,17 @@ impl Atlas {
                     material.transform.height = height;
                 }
             }
+        }
+    }
+}
+
+impl Default for Atlas {
+    fn default() -> Self {
+        Self {
+            width: 512,
+            height: 512,
+            padding: 16,
+            materials: Vec::new(),
         }
     }
 }
@@ -378,10 +457,26 @@ struct Rect {
 }
 
 impl Rect {
+    fn expanded(self, amount: u32) -> Self {
+        Self {
+            x: self.x.saturating_sub(amount),
+            y: self.y.saturating_sub(amount),
+            width: self.width.saturating_add(amount),
+            height: self.height.saturating_add(amount),
+        }
+    }
+
     fn overlaps(self, other: Self) -> bool {
-        self.x < other.x + other.width
-            && self.x + self.width > other.x
-            && self.y < other.y + other.height
-            && self.y + self.height > other.y
+        self.x < other.x.saturating_add(other.width)
+            && self.x.saturating_add(self.width) > other.x
+            && self.y < other.y.saturating_add(other.height)
+            && self.y.saturating_add(self.height) > other.y
+    }
+
+    fn overlaps_with_padding(self, other: Self, padding: u32) -> bool {
+        self.x < other.x.saturating_add(other.width).saturating_add(padding)
+            && self.x.saturating_add(self.width).saturating_add(padding) > other.x
+            && self.y < other.y.saturating_add(other.height).saturating_add(padding)
+            && self.y.saturating_add(self.height).saturating_add(padding) > other.y
     }
 }

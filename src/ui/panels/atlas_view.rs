@@ -156,49 +156,111 @@ fn draw_rotated_texture(
     let min = rect.min;
     let max = rect.max;
 
-    let uv = match rotation {
-        Rotation::Deg0 => [
-            egui::pos2(0.0, 0.0),
-            egui::pos2(1.0, 0.0),
-            egui::pos2(1.0, 1.0),
-            egui::pos2(0.0, 1.0),
-        ],
+    let top_left = egui::pos2(min.x, min.y);
+    let top_right = egui::pos2(max.x, min.y);
+    let bottom_right = egui::pos2(max.x, max.y);
+    let bottom_left = egui::pos2(min.x, max.y);
 
-        Rotation::Deg90 => [
-            egui::pos2(0.0, 1.0),
-            egui::pos2(0.0, 0.0),
-            egui::pos2(1.0, 0.0),
-            egui::pos2(1.0, 1.0),
-        ],
+    match rotation {
+        Rotation::Deg0 => {
+            mesh.vertices.extend([
+                egui::epaint::Vertex {
+                    pos: top_left,
+                    uv: egui::pos2(0.0, 0.0),
+                    color: egui::Color32::WHITE,
+                },
+                egui::epaint::Vertex {
+                    pos: top_right,
+                    uv: egui::pos2(1.0, 0.0),
+                    color: egui::Color32::WHITE,
+                },
+                egui::epaint::Vertex {
+                    pos: bottom_right,
+                    uv: egui::pos2(1.0, 1.0),
+                    color: egui::Color32::WHITE,
+                },
+                egui::epaint::Vertex {
+                    pos: bottom_left,
+                    uv: egui::pos2(0.0, 1.0),
+                    color: egui::Color32::WHITE,
+                },
+            ]);
+        }
 
-        Rotation::Deg180 => [
-            egui::pos2(1.0, 1.0),
-            egui::pos2(0.0, 1.0),
-            egui::pos2(0.0, 0.0),
-            egui::pos2(1.0, 0.0),
-        ],
+        Rotation::Deg90 => {
+            mesh.vertices.extend([
+                egui::epaint::Vertex {
+                    pos: top_left,
+                    uv: egui::pos2(0.0, 1.0),
+                    color: egui::Color32::WHITE,
+                },
+                egui::epaint::Vertex {
+                    pos: top_right,
+                    uv: egui::pos2(0.0, 0.0),
+                    color: egui::Color32::WHITE,
+                },
+                egui::epaint::Vertex {
+                    pos: bottom_right,
+                    uv: egui::pos2(1.0, 0.0),
+                    color: egui::Color32::WHITE,
+                },
+                egui::epaint::Vertex {
+                    pos: bottom_left,
+                    uv: egui::pos2(1.0, 1.0),
+                    color: egui::Color32::WHITE,
+                },
+            ]);
+        }
 
-        Rotation::Deg270 => [
-            egui::pos2(1.0, 0.0),
-            egui::pos2(1.0, 1.0),
-            egui::pos2(0.0, 1.0),
-            egui::pos2(0.0, 0.0),
-        ],
-    };
+        Rotation::Deg180 => {
+            mesh.vertices.extend([
+                egui::epaint::Vertex {
+                    pos: top_left,
+                    uv: egui::pos2(1.0, 1.0),
+                    color: egui::Color32::WHITE,
+                },
+                egui::epaint::Vertex {
+                    pos: top_right,
+                    uv: egui::pos2(0.0, 1.0),
+                    color: egui::Color32::WHITE,
+                },
+                egui::epaint::Vertex {
+                    pos: bottom_right,
+                    uv: egui::pos2(0.0, 0.0),
+                    color: egui::Color32::WHITE,
+                },
+                egui::epaint::Vertex {
+                    pos: bottom_left,
+                    uv: egui::pos2(1.0, 0.0),
+                    color: egui::Color32::WHITE,
+                },
+            ]);
+        }
 
-    let vertices = [
-        (min, uv[0]),
-        (egui::pos2(max.x, min.y), uv[1]),
-        (max, uv[2]),
-        (egui::pos2(min.x, max.y), uv[3]),
-    ];
-
-    for (position, uv) in vertices {
-        mesh.vertices.push(egui::epaint::Vertex {
-            pos: position,
-            uv,
-            color: egui::Color32::WHITE,
-        });
+        Rotation::Deg270 => {
+            mesh.vertices.extend([
+                egui::epaint::Vertex {
+                    pos: top_left,
+                    uv: egui::pos2(1.0, 0.0),
+                    color: egui::Color32::WHITE,
+                },
+                egui::epaint::Vertex {
+                    pos: top_right,
+                    uv: egui::pos2(1.0, 1.0),
+                    color: egui::Color32::WHITE,
+                },
+                egui::epaint::Vertex {
+                    pos: bottom_right,
+                    uv: egui::pos2(0.0, 1.0),
+                    color: egui::Color32::WHITE,
+                },
+                egui::epaint::Vertex {
+                    pos: bottom_left,
+                    uv: egui::pos2(0.0, 0.0),
+                    color: egui::Color32::WHITE,
+                },
+            ]);
+        }
     }
 
     mesh.add_triangle(0, 1, 2);
@@ -208,17 +270,23 @@ fn draw_rotated_texture(
 }
 
 fn atlas_material_rect(material: &AtlasMaterial, atlas_rect: egui::Rect, zoom: f32) -> egui::Rect {
-    let min = egui::pos2(
-        atlas_rect.left() + material.transform.x as f32 * zoom,
-        atlas_rect.top() + material.transform.y as f32 * zoom,
-    );
+    let (x, y, width, height) = material.transform.atlas_rect();
 
-    let size = egui::vec2(
-        material.transform.width as f32 * zoom,
-        material.transform.height as f32 * zoom,
-    );
+    let min = atlas_rect.min + egui::vec2(x as f32 * zoom, y as f32 * zoom);
 
-    egui::Rect::from_min_size(min, size)
+    egui::Rect::from_min_size(min, egui::vec2(width as f32 * zoom, height as f32 * zoom))
+}
+
+fn material_rect_in_atlas(material: &AtlasMaterial) -> egui::Rect {
+    let transform = &material.transform;
+
+    let center_x = transform.x as f32 + transform.width as f32 * 0.5;
+    let center_y = transform.y as f32 + transform.height as f32 * 0.5;
+
+    let width = transform.rotated_width() as f32;
+    let height = transform.rotated_height() as f32;
+
+    egui::Rect::from_center_size(egui::pos2(center_x, center_y), egui::vec2(width, height))
 }
 
 fn atlas_material_at_position(
@@ -235,9 +303,10 @@ fn atlas_material_at_position(
 
     let atlas_rect = egui::Rect::from_center_size(center, atlas_size);
 
-    let atlas_x = ((position.x - atlas_rect.left()) / zoom) as u32;
-
-    let atlas_y = ((position.y - atlas_rect.top()) / zoom) as u32;
+    let atlas_position = egui::pos2(
+        (position.x - atlas_rect.left()) / zoom,
+        (position.y - atlas_rect.top()) / zoom,
+    );
 
     atlas
         .materials
@@ -255,11 +324,7 @@ fn atlas_material_at_position(
                 })
                 .unwrap_or(false);
 
-            has_preview_texture
-                && atlas_x >= material.transform.x
-                && atlas_x < material.transform.x + material.transform.width
-                && atlas_y >= material.transform.y
-                && atlas_y < material.transform.y + material.transform.height
+            has_preview_texture && material_rect_in_atlas(material).contains(atlas_position)
         })
         .map(|material| material.index)
 }
