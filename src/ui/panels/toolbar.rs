@@ -1,30 +1,35 @@
 use bevy_egui::egui;
 
-use super::EditorUi;
+use super::{EditorUi, menu_action_button};
 
 use crate::{
     data::Atlas,
-    hotkeys::{EditorAction, execute_action},
+    hotkeys::{EditorAction, HotkeyManager, execute_action},
 };
 
-pub fn toolbar(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
+pub fn toolbar(
+    ui: &mut egui::Ui,
+    editor_ui: &mut EditorUi,
+    atlas: &mut Atlas,
+    hotkeys: &HotkeyManager,
+) {
     ui.horizontal(|ui| {
         ui.add_space(8.0);
 
         ui.menu_button("File", |ui| {
-            if ui.button("New Atlas").clicked() {
+            if menu_action_button(ui, hotkeys, EditorAction::NewAtlas, "New Atlas") {
                 execute_action(EditorAction::NewAtlas, editor_ui, atlas);
 
                 ui.close();
             }
 
-            if ui.button("Open Project…").clicked() {
+            if menu_action_button(ui, hotkeys, EditorAction::OpenProject, "Open Project…") {
                 execute_action(EditorAction::OpenProject, editor_ui, atlas);
 
                 ui.close();
             }
 
-            if ui.button("Save Project").clicked() {
+            if menu_action_button(ui, hotkeys, EditorAction::SaveProject, "Save Project") {
                 execute_action(EditorAction::SaveProject, editor_ui, atlas);
 
                 ui.close();
@@ -32,13 +37,23 @@ pub fn toolbar(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
 
             ui.separator();
 
-            if ui.button("Import multiple Materials…").clicked() {
+            if menu_action_button(
+                ui,
+                hotkeys,
+                EditorAction::ImportMultipleMaterials,
+                "Import multiple Materials…",
+            ) {
                 execute_action(EditorAction::ImportMultipleMaterials, editor_ui, atlas);
 
                 ui.close();
             }
 
-            if ui.button("Import single Material…").clicked() {
+            if menu_action_button(
+                ui,
+                hotkeys,
+                EditorAction::ImportSingleMaterial,
+                "Import single Material…",
+            ) {
                 execute_action(EditorAction::ImportSingleMaterial, editor_ui, atlas);
 
                 ui.close();
@@ -46,7 +61,7 @@ pub fn toolbar(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
 
             ui.separator();
 
-            if ui.button("Export Atlas…").clicked() {
+            if menu_action_button(ui, hotkeys, EditorAction::ExportAtlas, "Export Atlas…") {
                 execute_action(EditorAction::ExportAtlas, editor_ui, atlas);
 
                 ui.close();
@@ -55,13 +70,24 @@ pub fn toolbar(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
 
         ui.separator();
 
-        if ui.button("Remove Selected").clicked() {
-            execute_action(EditorAction::RemoveSelectedMaterial, editor_ui, atlas);
-        }
+        ui.menu_button("Edit", |ui| {
+            if menu_action_button(
+                ui,
+                hotkeys,
+                EditorAction::RemoveSelectedMaterial,
+                "Remove Selected",
+            ) {
+                execute_action(EditorAction::RemoveSelectedMaterial, editor_ui, atlas);
 
-        if ui.button("Pack Atlas").clicked() {
-            execute_action(EditorAction::PackAtlas, editor_ui, atlas);
-        }
+                ui.close();
+            }
+
+            if menu_action_button(ui, hotkeys, EditorAction::PackAtlas, "Pack Atlas") {
+                execute_action(EditorAction::PackAtlas, editor_ui, atlas);
+
+                ui.close();
+            }
+        });
 
         ui.separator();
 
@@ -72,7 +98,12 @@ pub fn toolbar(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
 
             ui.separator();
 
-            if ui.button("Reset Atlas View").clicked() {
+            if menu_action_button(
+                ui,
+                hotkeys,
+                EditorAction::ResetAtlasView,
+                "Reset Atlas View",
+            ) {
                 execute_action(EditorAction::ResetAtlasView, editor_ui, atlas);
 
                 ui.close();

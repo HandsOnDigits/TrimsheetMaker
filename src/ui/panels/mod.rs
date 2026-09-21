@@ -17,13 +17,18 @@ use bevy_egui::{EguiContexts, EguiTextureHandle, egui};
 
 use super::EditorUi;
 
-use crate::{data::Atlas, ui::windows};
+use crate::{
+    data::Atlas,
+    hotkeys::{EditorAction, HotkeyManager},
+    ui::windows,
+};
 
 pub fn editor_ui(
     mut contexts: EguiContexts,
     mut editor_ui: ResMut<EditorUi>,
     mut atlas: ResMut<Atlas>,
     mut images: ResMut<Assets<Image>>,
+    hotkeys: Res<HotkeyManager>,
 ) -> Result {
     for material in &mut atlas.materials {
         for texture in &mut material.textures {
@@ -50,7 +55,7 @@ pub fn editor_ui(
     egui::Panel::top("toolbar")
         .exact_size(44.0)
         .show(&mut root_ui, |ui| {
-            toolbar(ui, &mut editor_ui, &mut atlas);
+            toolbar(ui, &mut editor_ui, &mut atlas, &hotkeys);
         });
 
     if editor_ui.show_status {
@@ -100,4 +105,19 @@ pub fn editor_ui(
     );
 
     Ok(())
+}
+
+fn menu_action_button(
+    ui: &mut egui::Ui,
+    hotkeys: &HotkeyManager,
+    action: EditorAction,
+    label: &str,
+) -> bool {
+    let mut button = egui::Button::new(label);
+
+    if let Some(shortcut) = hotkeys.display_name(action) {
+        button = button.shortcut_text(shortcut);
+    }
+
+    ui.add(button).clicked()
 }

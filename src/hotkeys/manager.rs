@@ -172,6 +172,10 @@ impl HotkeyManager {
             .iter()
             .find_map(|(action, existing_hotkey)| (*existing_hotkey == hotkey).then_some(*action))
     }
+
+    pub fn display_name(&self, action: EditorAction) -> Option<String> {
+        self.binding(action).map(|hotkey| hotkey.display_name())
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
