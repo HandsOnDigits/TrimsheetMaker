@@ -6,7 +6,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    data::{Atlas, MaterialTexture},
+    data::{Atlas, AtlasMaterial, MaterialTexture},
     project_settings::ProjectSettings,
     transform::Transform,
 };
@@ -72,6 +72,50 @@ impl ProjectFile {
 
         Ok(())
     }
+
+    pub fn load(
+        path: impl AsRef<Path>,
+    ) -> Result<(Atlas, ProjectSettings), Box<dyn std::error::Error>> {
+        let contents = fs::read_to_string(path)?;
+
+        let project: Self = ron::from_str(&contents)?;
+
+        if project.format_version != PROJECT_FORMAT_VERSION {
+            return Err(format!(
+                "Unsupported project format version: {}",
+                project.format_version
+            )
+            .into());
+        }
+
+        let mut atlas = Atlas::default();
+
+        atlas.width = project.settings.atlas_width;
+        atlas.height = project.settings.atlas_height;
+        atlas.padding = project.settings.padding;
+
+        atlas.materials = project
+            .materials
+            .into_iter()
+            .map(|material| AtlasMaterial {
+                index: material.index,
+                name: material.name,
+                textures: material
+                    .textures
+                    .into_iter()
+                    .map(|texture| MaterialTexture {
+                        id: texture.id,
+                        path: texture.path,
+                        image: None,
+                        egui_texture: None,
+                    })
+                    .collect(),
+                transform: material.transform,
+            })
+            .collect();
+
+        Ok((atlas, project.settings))
+    }
 }
 
 impl ProjectTexture {
@@ -100,6 +144,17 @@ pub fn save_project_as_dialog(
     }
 
     ProjectFile::save(&path, atlas, settings)?;
+
+    Ok(Some(path))
+}
+
+pub fn open_project_dialog() -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
+    let Some(path) = rfd::FileDialog::new()
+        .add_filter("Trimsheet Project", &[PROJECT_EXTENSION])
+        .pick_file()
+    else {
+        return Ok(None);
+    };
 
     Ok(Some(path))
 }

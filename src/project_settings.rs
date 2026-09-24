@@ -26,3 +26,17 @@ impl Default for ProjectSettings {
         }
     }
 }
+
+impl ProjectSettings {
+    pub fn apply_to_atlas(&self, atlas: &mut crate::data::Atlas) {
+        atlas.width = self.atlas_width;
+        atlas.height = self.atlas_height;
+        atlas.padding = self.padding;
+    }
+
+    pub fn sync_from_atlas(&mut self, atlas: &crate::data::Atlas) {
+        self.atlas_width = atlas.width;
+        self.atlas_height = atlas.height;
+        self.padding = atlas.padding;
+    }
+}

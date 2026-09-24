@@ -256,6 +256,8 @@ fn import_material(editor_ui: &mut EditorUi, atlas: &mut Atlas, images: &mut Ass
         editor_ui.project_settings.preview_texture_group.as_deref(),
     );
 
+    editor_ui.project_settings.sync_from_atlas(atlas);
+
     editor_ui.selected_material = Some(index);
 }
 

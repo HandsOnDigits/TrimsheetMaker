@@ -184,6 +184,8 @@ pub fn import_multiple_materials_window(
                         editor_ui.project_settings.preview_texture_group.as_deref(),
                     );
 
+                    editor_ui.project_settings.sync_from_atlas(atlas);
+
                     editor_ui.multiple_materials_root = None;
                     close_window = true;
                 }

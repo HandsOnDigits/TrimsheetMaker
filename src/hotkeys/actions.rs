@@ -45,7 +45,12 @@ impl EditorActionMessage {
 /// Executes an editor action against the current editor state.
 ///
 /// This is shared by toolbar buttons and keyboard shortcuts.
-pub fn execute_action(action: EditorAction, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
+pub fn execute_action(
+    action: EditorAction,
+    editor_ui: &mut EditorUi,
+    atlas: &mut Atlas,
+    images: &mut Assets<Image>,
+) {
     match action {
         EditorAction::NewAtlas => {
             *atlas = Atlas::default();
@@ -56,13 +61,45 @@ pub fn execute_action(action: EditorAction, editor_ui: &mut EditorUi, atlas: &mu
             editor_ui.atlas_pan = egui::Vec2::ZERO;
         }
 
-        EditorAction::OpenProject => {
-            // TODO: Open project implementation.
-        }
+        EditorAction::OpenProject => match crate::project::open_project_dialog() {
+            Ok(Some(path)) => match crate::project::ProjectFile::load(&path) {
+                Ok((mut loaded_atlas, project_settings)) => {
+                    loaded_atlas.load_textures(images, None);
+
+                    *atlas = loaded_atlas;
+                    editor_ui.project_settings = project_settings;
+                    editor_ui.project_path = Some(path);
+
+                    editor_ui.selected_material = None;
+                    editor_ui.dragging_material = None;
+                    editor_ui.drag_offset = egui::Vec2::ZERO;
+
+                    editor_ui.atlas_zoom = 1.0;
+                    editor_ui.atlas_pan = egui::Vec2::ZERO;
+
+                    info!(
+                        "Project opened: {}",
+                        editor_ui.project_path.as_deref().unwrap().display()
+                    );
+                }
+
+                Err(error) => {
+                    error!("Failed to open project '{}': {error}", path.display());
+                }
+            },
+
+            Ok(None) => {
+                info!("Open Project cancelled");
+            }
+
+            Err(error) => {
+                error!("Failed to open project: {error}");
+            }
+        },
 
         EditorAction::SaveProject => {
             if let Some(path) = editor_ui.project_path.as_deref() {
-                match project::save_project(path, atlas, &editor_ui.project_settings) {
+                match crate::project::save_project(path, atlas, &editor_ui.project_settings) {
                     Ok(()) => {
                         info!("Project saved: {}", path.display());
                     }
@@ -71,7 +108,7 @@ pub fn execute_action(action: EditorAction, editor_ui: &mut EditorUi, atlas: &mu
                     }
                 }
             } else {
-                match project::save_project_as_dialog(atlas, &editor_ui.project_settings) {
+                match crate::project::save_project_as_dialog(atlas, &editor_ui.project_settings) {
                     Ok(Some(path)) => {
                         info!("Project saved: {}", path.display());
                         editor_ui.project_path = Some(path);

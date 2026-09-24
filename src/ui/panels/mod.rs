@@ -56,7 +56,7 @@ pub fn editor_ui(
     egui::Panel::top("toolbar")
         .exact_size(44.0)
         .show(&mut root_ui, |ui| {
-            toolbar(ui, &mut editor_ui, &mut atlas, &hotkeys);
+            toolbar(ui, &mut editor_ui, &mut atlas, &mut images, &hotkeys);
         });
 
     if editor_ui.show_status {

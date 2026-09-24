@@ -1,3 +1,4 @@
+use bevy::prelude::*;
 use bevy_egui::egui;
 
 use super::{EditorUi, menu_action_button};
@@ -11,6 +12,7 @@ pub fn toolbar(
     ui: &mut egui::Ui,
     editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
+    images: &mut Assets<Image>,
     hotkeys: &HotkeyManager,
 ) {
     ui.horizontal(|ui| {
@@ -18,22 +20,22 @@ pub fn toolbar(
 
         ui.menu_button("File", |ui| {
             if menu_action_button(ui, hotkeys, EditorAction::NewAtlas, "New Atlas") {
-                execute_action(EditorAction::NewAtlas, editor_ui, atlas);
+                execute_action(EditorAction::NewAtlas, editor_ui, atlas, images);
                 ui.close();
             }
 
             if menu_action_button(ui, hotkeys, EditorAction::OpenProject, "Open Project…") {
-                execute_action(EditorAction::OpenProject, editor_ui, atlas);
+                execute_action(EditorAction::OpenProject, editor_ui, atlas, images);
                 ui.close();
             }
 
             if menu_action_button(ui, hotkeys, EditorAction::SaveProject, "Save Project") {
-                execute_action(EditorAction::SaveProject, editor_ui, atlas);
+                execute_action(EditorAction::SaveProject, editor_ui, atlas, images);
                 ui.close();
             }
 
             if menu_action_button(ui, hotkeys, EditorAction::SaveProjectAs, "Save Project As…") {
-                execute_action(EditorAction::SaveProjectAs, editor_ui, atlas);
+                execute_action(EditorAction::SaveProjectAs, editor_ui, atlas, images);
                 ui.close();
             }
 
@@ -45,7 +47,12 @@ pub fn toolbar(
                 EditorAction::ImportMultipleMaterials,
                 "Import multiple Materials…",
             ) {
-                execute_action(EditorAction::ImportMultipleMaterials, editor_ui, atlas);
+                execute_action(
+                    EditorAction::ImportMultipleMaterials,
+                    editor_ui,
+                    atlas,
+                    images,
+                );
                 ui.close();
             }
 
@@ -55,14 +62,14 @@ pub fn toolbar(
                 EditorAction::ImportSingleMaterial,
                 "Import single Material…",
             ) {
-                execute_action(EditorAction::ImportSingleMaterial, editor_ui, atlas);
+                execute_action(EditorAction::ImportSingleMaterial, editor_ui, atlas, images);
                 ui.close();
             }
 
             ui.separator();
 
             if menu_action_button(ui, hotkeys, EditorAction::ExportAtlas, "Export Atlas…") {
-                execute_action(EditorAction::ExportAtlas, editor_ui, atlas);
+                execute_action(EditorAction::ExportAtlas, editor_ui, atlas, images);
                 ui.close();
             }
         });
@@ -76,12 +83,17 @@ pub fn toolbar(
                 EditorAction::RemoveSelectedMaterial,
                 "Remove Selected",
             ) {
-                execute_action(EditorAction::RemoveSelectedMaterial, editor_ui, atlas);
+                execute_action(
+                    EditorAction::RemoveSelectedMaterial,
+                    editor_ui,
+                    atlas,
+                    images,
+                );
                 ui.close();
             }
 
             if menu_action_button(ui, hotkeys, EditorAction::PackAtlas, "Pack Atlas") {
-                execute_action(EditorAction::PackAtlas, editor_ui, atlas);
+                execute_action(EditorAction::PackAtlas, editor_ui, atlas, images);
                 ui.close();
             }
         });
@@ -101,7 +113,7 @@ pub fn toolbar(
                 EditorAction::ResetAtlasView,
                 "Reset Atlas View",
             ) {
-                execute_action(EditorAction::ResetAtlasView, editor_ui, atlas);
+                execute_action(EditorAction::ResetAtlasView, editor_ui, atlas, images);
                 ui.close();
             }
         });
@@ -118,6 +130,7 @@ pub fn toolbar(
                     ui.set_width(220.0);
 
                     ui.label("Atlas");
+
                     ui.separator();
 
                     egui::Grid::new("project_atlas_settings")
@@ -126,57 +139,40 @@ pub fn toolbar(
                         .show(ui, |ui| {
                             ui.label("Width");
 
-                            if ui
-                                .add_sized(
-                                    [100.0, 20.0],
-                                    egui::DragValue::new(
-                                        &mut editor_ui.project_settings.atlas_width,
-                                    )
+                            ui.add_sized(
+                                [100.0, 20.0],
+                                egui::DragValue::new(&mut editor_ui.project_settings.atlas_width)
                                     .range(1..=16384)
                                     .speed(1.0),
-                                )
-                                .changed()
-                            {
-                                atlas.width = editor_ui.project_settings.atlas_width;
-                            }
+                            );
 
                             ui.end_row();
 
                             ui.label("Height");
 
-                            if ui
-                                .add_sized(
-                                    [100.0, 20.0],
-                                    egui::DragValue::new(
-                                        &mut editor_ui.project_settings.atlas_height,
-                                    )
+                            ui.add_sized(
+                                [100.0, 20.0],
+                                egui::DragValue::new(&mut editor_ui.project_settings.atlas_height)
                                     .range(1..=16384)
                                     .speed(1.0),
-                                )
-                                .changed()
-                            {
-                                atlas.height = editor_ui.project_settings.atlas_height;
-                            }
+                            );
 
                             ui.end_row();
 
                             ui.label("Padding");
 
-                            if ui
-                                .add_sized(
-                                    [100.0, 20.0],
-                                    egui::DragValue::new(&mut editor_ui.project_settings.padding)
-                                        .range(0..=4096)
-                                        .speed(1.0),
-                                )
-                                .changed()
-                            {
-                                atlas.padding = editor_ui.project_settings.padding;
-                            }
+                            ui.add_sized(
+                                [100.0, 20.0],
+                                egui::DragValue::new(&mut editor_ui.project_settings.padding)
+                                    .range(0..=4096)
+                                    .speed(1.0),
+                            );
 
                             ui.end_row();
                         });
                 });
+
+                editor_ui.project_settings.apply_to_atlas(atlas);
             });
 
         ui.separator();

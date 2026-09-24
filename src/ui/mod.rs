@@ -44,9 +44,10 @@ fn apply_editor_actions(
     mut messages: MessageReader<EditorActionMessage>,
     mut editor_ui: ResMut<EditorUi>,
     mut atlas: ResMut<data::Atlas>,
+    mut images: ResMut<Assets<Image>>,
 ) {
     for message in messages.read() {
-        hotkeys::execute_action(message.action, &mut editor_ui, &mut atlas);
+        hotkeys::execute_action(message.action, &mut editor_ui, &mut atlas, &mut images);
     }
 }
 
