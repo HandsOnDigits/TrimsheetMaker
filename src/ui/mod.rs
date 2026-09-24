@@ -57,7 +57,6 @@ pub struct EditorUi {
     pub show_import_multiple_materials_window: bool,
     pub show_import_single_material_window: bool,
     pub show_editor_settings_window: bool,
-    pub show_project_settings_window: bool,
 
     pub hotkey_capture: Option<EditorAction>,
 
@@ -105,7 +104,6 @@ impl Default for EditorUi {
             show_import_multiple_materials_window: false,
             show_import_single_material_window: false,
             show_editor_settings_window: false,
-            show_project_settings_window: false,
 
             hotkey_capture: None,
 

@@ -96,10 +96,6 @@ pub fn editor_ui(
         );
     }
 
-    if editor_ui.show_project_settings_window {
-        windows::project_settings::project_settings_window(ctx, &mut editor_ui, &mut atlas);
-    }
-
     atlas::atlas_view::atlas_view(&mut root_ui, &mut editor_ui, &mut atlas, &keyboard);
 
     // Bulk/folder import.
