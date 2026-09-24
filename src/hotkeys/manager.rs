@@ -9,6 +9,7 @@ use crate::editor_settings::SavedHotkey;
 
 /// A keyboard shortcut consisting of a key and optional modifiers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+
 pub struct Hotkey {
     pub key: KeyCode,
     pub ctrl: bool,
@@ -17,6 +18,7 @@ pub struct Hotkey {
     pub super_key: bool,
 }
 
+#[allow(unused)]
 impl Hotkey {
     pub const fn new(key: KeyCode, ctrl: bool, shift: bool, alt: bool, super_key: bool) -> Self {
         Self {
@@ -186,11 +188,13 @@ impl HotkeyManager {
         Ok(())
     }
 
+    #[allow(unused)]
     pub fn remove_binding(&mut self, action: EditorAction) {
         self.bindings.remove(&action);
     }
 
     /// Finds the action assigned to a specific shortcut.
+    #[allow(unused)]
     pub fn action_for_hotkey(&self, hotkey: Hotkey) -> Option<EditorAction> {
         self.bindings
             .iter()
@@ -253,6 +257,7 @@ impl HotkeyManager {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[allow(unused)]
 pub enum CaptureResult {
     None,
     Cancelled,
@@ -324,6 +329,7 @@ fn all_capture_keys() -> &'static [KeyCode] {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[allow(unused)]
 pub struct HotkeyConflict {
     pub action: EditorAction,
     pub conflicting_action: EditorAction,

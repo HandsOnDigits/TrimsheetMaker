@@ -3,6 +3,7 @@ mod manager;
 
 pub use actions::{EditorAction, EditorActionMessage, execute_action};
 
+#[allow(unused)]
 pub use manager::{CaptureResult, Hotkey, HotkeyConflict, HotkeyManager, hotkey_system};
 
 use bevy::prelude::*;

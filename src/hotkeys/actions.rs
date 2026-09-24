@@ -4,16 +4,15 @@ use bevy::prelude::*;
 
 use bevy_egui::egui;
 
-use crate::{
-    data::{Atlas, TextureNaming},
-    ui::EditorUi,
-};
+use crate::{data::Atlas, project, project_settings::ProjectSettings, ui::EditorUi};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EditorAction {
     NewAtlas,
     OpenProject,
     SaveProject,
+    SaveProjectAs,
+
     ExportAtlas,
 
     ImportMultipleMaterials,
@@ -50,9 +49,8 @@ pub fn execute_action(action: EditorAction, editor_ui: &mut EditorUi, atlas: &mu
     match action {
         EditorAction::NewAtlas => {
             *atlas = Atlas::default();
-
-            editor_ui.project_settings.texture_naming = TextureNaming::default();
-
+            editor_ui.project_settings = ProjectSettings::default();
+            editor_ui.project_path = None;
             editor_ui.selected_material = None;
             editor_ui.atlas_zoom = 1.0;
             editor_ui.atlas_pan = egui::Vec2::ZERO;
@@ -63,7 +61,44 @@ pub fn execute_action(action: EditorAction, editor_ui: &mut EditorUi, atlas: &mu
         }
 
         EditorAction::SaveProject => {
-            // TODO: Save project implementation.
+            if let Some(path) = editor_ui.project_path.as_deref() {
+                match project::save_project(path, atlas, &editor_ui.project_settings) {
+                    Ok(()) => {
+                        info!("Project saved: {}", path.display());
+                    }
+                    Err(error) => {
+                        error!("Failed to save project '{}': {error}", path.display());
+                    }
+                }
+            } else {
+                match project::save_project_as_dialog(atlas, &editor_ui.project_settings) {
+                    Ok(Some(path)) => {
+                        info!("Project saved: {}", path.display());
+                        editor_ui.project_path = Some(path);
+                    }
+                    Ok(None) => {
+                        info!("Save Project cancelled");
+                    }
+                    Err(error) => {
+                        error!("Failed to save project: {error}");
+                    }
+                }
+            }
+        }
+
+        EditorAction::SaveProjectAs => {
+            match project::save_project_as_dialog(atlas, &editor_ui.project_settings) {
+                Ok(Some(path)) => {
+                    info!("Project saved: {}", path.display());
+                    editor_ui.project_path = Some(path);
+                }
+                Ok(None) => {
+                    info!("Save Project As cancelled");
+                }
+                Err(error) => {
+                    error!("Failed to save project: {error}");
+                }
+            }
         }
 
         EditorAction::ExportAtlas => {

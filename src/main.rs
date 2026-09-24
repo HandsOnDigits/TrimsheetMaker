@@ -12,6 +12,7 @@ use hotkeys::HotkeyPlugin;
 
 mod editor_settings;
 mod importer;
+mod project;
 mod project_settings;
 mod transform;
 

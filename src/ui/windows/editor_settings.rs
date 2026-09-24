@@ -141,6 +141,7 @@ fn action_display_name(action: EditorAction) -> &'static str {
         EditorAction::NewAtlas => "New Atlas",
         EditorAction::OpenProject => "Open Project",
         EditorAction::SaveProject => "Save Project",
+        EditorAction::SaveProjectAs => "Save Project As",
         EditorAction::ExportAtlas => "Export Atlas",
 
         EditorAction::ImportMultipleMaterials => "Import Multiple Materials",

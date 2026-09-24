@@ -32,6 +32,11 @@ pub fn toolbar(
                 ui.close();
             }
 
+            if menu_action_button(ui, hotkeys, EditorAction::SaveProjectAs, "Save Project As…") {
+                execute_action(EditorAction::SaveProjectAs, editor_ui, atlas);
+                ui.close();
+            }
+
             ui.separator();
 
             if menu_action_button(

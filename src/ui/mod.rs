@@ -52,6 +52,8 @@ fn apply_editor_actions(
 
 #[derive(Resource)]
 pub struct EditorUi {
+    pub project_path: Option<std::path::PathBuf>,
+
     pub selected_material: Option<usize>,
 
     pub show_import_multiple_materials_window: bool,
@@ -88,6 +90,8 @@ pub struct EditorUi {
 impl Default for EditorUi {
     fn default() -> Self {
         Self {
+            project_path: None,
+
             multiple_materials_root: None,
             import_materials: BTreeMap::new(),
 
