@@ -5,7 +5,9 @@ use bevy_egui::{EguiPrimaryContextPass, egui};
 
 use crate::{
     data,
+    editor_settings::EditorSettings,
     hotkeys::{self, EditorAction, EditorActionMessage},
+    project_settings::ProjectSettings,
 };
 
 mod panels;
@@ -17,13 +19,17 @@ impl Plugin for EditorUiPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<EditorUi>()
             .init_resource::<data::Atlas>()
-            .add_systems(Startup, setup)
+            .add_systems(Startup, (setup, load_editor_settings))
             .add_systems(
                 EguiPrimaryContextPass,
                 apply_editor_actions.after(hotkeys::hotkey_system),
             )
             .add_systems(EguiPrimaryContextPass, panels::editor_ui);
     }
+}
+
+fn load_editor_settings(editor_ui: Res<EditorUi>, mut hotkeys: ResMut<hotkeys::HotkeyManager>) {
+    hotkeys.load_from_settings(&editor_ui.editor_settings);
 }
 
 fn setup(mut commands: Commands) {
@@ -51,10 +57,12 @@ pub struct EditorUi {
     pub show_import_multiple_materials_window: bool,
     pub show_import_single_material_window: bool,
     pub show_editor_settings_window: bool,
+    pub show_project_settings_window: bool,
 
     pub hotkey_capture: Option<EditorAction>,
 
-    pub mouse_scroll_speed: f32,
+    pub editor_settings: EditorSettings,
+    pub project_settings: ProjectSettings,
 
     pub multiple_materials_root: Option<std::path::PathBuf>,
     pub import_materials: BTreeMap<String, data::MaterialSource>,
@@ -68,11 +76,7 @@ pub struct EditorUi {
 
     pub snap_distance: f32,
 
-    pub texture_naming: data::TextureNaming,
     pub suffix_inputs: BTreeMap<String, String>,
-
-    // Texture group currently displayed in the atlas.
-    pub preview_texture_group: Option<String>,
 
     pub atlas_zoom: f32,
     pub atlas_pan: egui::Vec2,
@@ -101,17 +105,16 @@ impl Default for EditorUi {
             show_import_multiple_materials_window: false,
             show_import_single_material_window: false,
             show_editor_settings_window: false,
+            show_project_settings_window: false,
 
             hotkey_capture: None,
 
-            mouse_scroll_speed: 20.0,
+            editor_settings: EditorSettings::load(),
+            project_settings: ProjectSettings::default(),
 
-            texture_naming: default(),
             suffix_inputs: BTreeMap::new(),
 
             selected_material: None,
-
-            preview_texture_group: None,
 
             atlas_zoom: 1.0,
             atlas_pan: egui::Vec2::ZERO,

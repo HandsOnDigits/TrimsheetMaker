@@ -56,12 +56,17 @@ pub fn import_single_material_window(
                                 editor_ui.single_material_root = Some(path);
                                 editor_ui.single_material_name = scan.name;
 
-                                editor_ui.texture_naming.merge_detected(scan.naming);
+                                editor_ui
+                                    .project_settings
+                                    .texture_naming
+                                    .merge_detected(scan.naming);
 
                                 editor_ui.single_material_textures.clear();
 
-                                let textures =
-                                    classify_textures(scan.textures, &editor_ui.texture_naming);
+                                let textures = classify_textures(
+                                    scan.textures,
+                                    &editor_ui.project_settings.texture_naming,
+                                );
 
                                 for texture in textures {
                                     editor_ui
@@ -117,6 +122,7 @@ pub fn import_single_material_window(
                 );
             } else {
                 let texture_groups: Vec<(String, String)> = editor_ui
+                    .project_settings
                     .texture_naming
                     .groups
                     .iter()
@@ -224,6 +230,7 @@ fn import_material(editor_ui: &mut EditorUi, atlas: &mut Atlas, images: &mut Ass
     }
 
     let textures = editor_ui
+        .project_settings
         .texture_naming
         .groups
         .iter()
@@ -244,7 +251,10 @@ fn import_material(editor_ui: &mut EditorUi, atlas: &mut Atlas, images: &mut Ass
 
     let index = atlas.add_material(source);
 
-    atlas.load_textures(images, editor_ui.preview_texture_group.as_deref());
+    atlas.load_textures(
+        images,
+        editor_ui.project_settings.preview_texture_group.as_deref(),
+    );
 
     editor_ui.selected_material = Some(index);
 }

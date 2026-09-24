@@ -109,6 +109,7 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
             ui.group(|ui| {
                 ui.horizontal(|ui| {
                     let display_name = editor_ui
+                        .project_settings
                         .texture_naming
                         .groups
                         .iter()

@@ -16,10 +16,12 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
     ui.label("Preview Map");
 
     let selected_group_name = editor_ui
+        .project_settings
         .preview_texture_group
         .as_deref()
         .and_then(|id| {
             editor_ui
+                .project_settings
                 .texture_naming
                 .groups
                 .iter()
@@ -32,9 +34,9 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
     egui::ComboBox::from_id_salt("preview_texture_group_editor")
         .selected_text(selected_group_name)
         .show_ui(ui, |ui| {
-            for group in &editor_ui.texture_naming.groups {
+            for group in &editor_ui.project_settings.texture_naming.groups {
                 ui.selectable_value(
-                    &mut editor_ui.preview_texture_group,
+                    &mut editor_ui.project_settings.preview_texture_group,
                     Some(group.id.clone()),
                     &group.name,
                 );
@@ -48,7 +50,13 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
     let mut remove_group = None;
     let mut naming_changed = false;
 
-    for (index, group) in editor_ui.texture_naming.groups.iter_mut().enumerate() {
+    for (index, group) in editor_ui
+        .project_settings
+        .texture_naming
+        .groups
+        .iter_mut()
+        .enumerate()
+    {
         egui::Frame::group(ui.style()).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label("Name");
@@ -98,31 +106,47 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
 
     if naming_changed {
         editor_ui
+            .project_settings
             .texture_naming
             .reclassify_materials(&mut editor_ui.import_materials);
 
-        editor_ui.texture_naming.reclassify_atlas(atlas);
+        editor_ui
+            .project_settings
+            .texture_naming
+            .reclassify_atlas(atlas);
     }
 
     if let Some(index) = remove_group {
-        let removed_id = editor_ui.texture_naming.groups[index].id.clone();
-
-        editor_ui.texture_naming.groups.remove(index);
-        editor_ui.suffix_inputs.remove(&removed_id);
-
-        if editor_ui.preview_texture_group.as_deref() == Some(removed_id.as_str()) {
-            editor_ui.preview_texture_group = None;
-        }
-
-        editor_ui.texture_naming.reclassify_atlas(atlas);
+        let removed_id = editor_ui.project_settings.texture_naming.groups[index]
+            .id
+            .clone();
 
         editor_ui
+            .project_settings
+            .texture_naming
+            .groups
+            .remove(index);
+        editor_ui.suffix_inputs.remove(&removed_id);
+
+        if editor_ui.project_settings.preview_texture_group.as_deref() == Some(removed_id.as_str())
+        {
+            editor_ui.project_settings.preview_texture_group = None;
+        }
+
+        editor_ui
+            .project_settings
+            .texture_naming
+            .reclassify_atlas(atlas);
+
+        editor_ui
+            .project_settings
             .texture_naming
             .reclassify_materials(&mut editor_ui.import_materials);
     }
 
     if ui.button("+ Add Group").clicked() {
         editor_ui
+            .project_settings
             .texture_naming
             .groups
             .push(crate::data::TextureGroup {
@@ -146,7 +170,7 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
                     ui,
                     material,
                     selected,
-                    editor_ui.preview_texture_group.as_deref(),
+                    editor_ui.project_settings.preview_texture_group.as_deref(),
                 )
                 .clicked()
                 {

@@ -76,7 +76,7 @@ pub fn atlas_view(
 
             editor_ui.atlas_zoom = (editor_ui.atlas_zoom * zoom_factor).clamp(0.1, 10.0);
         } else {
-            editor_ui.atlas_pan += scroll * editor_ui.mouse_scroll_speed;
+            editor_ui.atlas_pan += scroll * editor_ui.editor_settings.mouse_scroll_speed;
         }
     }
 
@@ -105,7 +105,7 @@ fn draw_atlas(painter: &egui::Painter, viewport: egui::Rect, editor_ui: &EditorU
         egui::StrokeKind::Outside,
     );
 
-    let preview_group = editor_ui.preview_texture_group.as_deref();
+    let preview_group = editor_ui.project_settings.preview_texture_group.as_deref();
 
     for material in &atlas.materials {
         let rect = atlas_material_rect(material, atlas_rect, zoom);

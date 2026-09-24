@@ -115,6 +115,12 @@ pub fn toolbar(
         ui.menu_button("Settings", |ui| {
             if ui.button("Editor").clicked() {
                 editor_ui.show_editor_settings_window = true;
+                ui.close();
+            }
+
+            if ui.button("Project").clicked() {
+                editor_ui.show_project_settings_window = true;
+                ui.close();
             }
         });
 

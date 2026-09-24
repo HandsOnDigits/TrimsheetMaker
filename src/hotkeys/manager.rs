@@ -5,6 +5,8 @@ use bevy_egui::EguiContexts;
 
 use super::actions::{EditorAction, EditorActionMessage};
 
+use crate::editor_settings::SavedHotkey;
+
 /// A keyboard shortcut consisting of a key and optional modifiers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Hotkey {
@@ -65,6 +67,28 @@ impl Hotkey {
         parts.push(key_display_name(self.key));
 
         parts.join("+")
+    }
+
+    pub fn to_saved(&self) -> SavedHotkey {
+        SavedHotkey {
+            key: format!("{:?}", self.key),
+            ctrl: self.ctrl,
+            shift: self.shift,
+            alt: self.alt,
+            super_key: self.super_key,
+        }
+    }
+
+    pub fn from_saved(saved: &SavedHotkey) -> Option<Self> {
+        let key = parse_key_code(&saved.key)?;
+
+        Some(Self::new(
+            key,
+            saved.ctrl,
+            saved.shift,
+            saved.alt,
+            saved.super_key,
+        ))
     }
 }
 
@@ -182,13 +206,13 @@ impl HotkeyManager {
         action: EditorAction,
         keyboard: &ButtonInput<KeyCode>,
     ) -> CaptureResult {
+        if keyboard.just_pressed(KeyCode::Escape) {
+            return CaptureResult::Cancelled;
+        }
+
         let Some(key) = pressed_non_modifier_key(keyboard) else {
             return CaptureResult::None;
         };
-
-        if key == KeyCode::Escape {
-            return CaptureResult::Cancelled;
-        }
 
         let hotkey = Hotkey::new(
             key,
@@ -202,6 +226,29 @@ impl HotkeyManager {
             Ok(()) => CaptureResult::Assigned(hotkey),
             Err(conflict) => CaptureResult::Conflict(conflict),
         }
+    }
+
+    pub fn load_from_settings(&mut self, settings: &crate::editor_settings::EditorSettings) {
+        self.bindings.clear();
+
+        for (&action, saved) in &settings.hotkeys {
+            if let Some(hotkey) = Hotkey::from_saved(saved) {
+                self.bindings.insert(action, hotkey);
+            }
+        }
+
+        // If no bindings were saved, use defaults.
+        if self.bindings.is_empty() {
+            self.set_default_bindings();
+        }
+    }
+
+    pub fn save_to_settings(&self, settings: &mut crate::editor_settings::EditorSettings) {
+        settings.hotkeys = self
+            .bindings
+            .iter()
+            .map(|(&action, &hotkey)| (action, hotkey.to_saved()))
+            .collect();
     }
 }
 
@@ -381,4 +428,62 @@ fn key_display_name(key: KeyCode) -> &'static str {
 
         _ => "Unknown",
     }
+}
+
+fn parse_key_code(value: &str) -> Option<KeyCode> {
+    Some(match value {
+        "Space" => KeyCode::Space,
+        "Enter" => KeyCode::Enter,
+        "Escape" => KeyCode::Escape,
+        "Tab" => KeyCode::Tab,
+        "Backspace" => KeyCode::Backspace,
+        "Delete" => KeyCode::Delete,
+
+        "ArrowUp" => KeyCode::ArrowUp,
+        "ArrowDown" => KeyCode::ArrowDown,
+        "ArrowLeft" => KeyCode::ArrowLeft,
+        "ArrowRight" => KeyCode::ArrowRight,
+
+        "KeyA" => KeyCode::KeyA,
+        "KeyB" => KeyCode::KeyB,
+        "KeyC" => KeyCode::KeyC,
+        "KeyD" => KeyCode::KeyD,
+        "KeyE" => KeyCode::KeyE,
+        "KeyF" => KeyCode::KeyF,
+        "KeyG" => KeyCode::KeyG,
+        "KeyH" => KeyCode::KeyH,
+        "KeyI" => KeyCode::KeyI,
+        "KeyJ" => KeyCode::KeyJ,
+        "KeyK" => KeyCode::KeyK,
+        "KeyL" => KeyCode::KeyL,
+        "KeyM" => KeyCode::KeyM,
+        "KeyN" => KeyCode::KeyN,
+        "KeyO" => KeyCode::KeyO,
+        "KeyP" => KeyCode::KeyP,
+        "KeyQ" => KeyCode::KeyQ,
+        "KeyR" => KeyCode::KeyR,
+        "KeyS" => KeyCode::KeyS,
+        "KeyT" => KeyCode::KeyT,
+        "KeyU" => KeyCode::KeyU,
+        "KeyV" => KeyCode::KeyV,
+        "KeyW" => KeyCode::KeyW,
+        "KeyX" => KeyCode::KeyX,
+        "KeyY" => KeyCode::KeyY,
+        "KeyZ" => KeyCode::KeyZ,
+
+        "F1" => KeyCode::F1,
+        "F2" => KeyCode::F2,
+        "F3" => KeyCode::F3,
+        "F4" => KeyCode::F4,
+        "F5" => KeyCode::F5,
+        "F6" => KeyCode::F6,
+        "F7" => KeyCode::F7,
+        "F8" => KeyCode::F8,
+        "F9" => KeyCode::F9,
+        "F10" => KeyCode::F10,
+        "F11" => KeyCode::F11,
+        "F12" => KeyCode::F12,
+
+        _ => return None,
+    })
 }

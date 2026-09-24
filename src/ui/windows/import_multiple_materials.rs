@@ -47,14 +47,18 @@ pub fn import_multiple_materials_window(
                             Ok(scan) => {
                                 editor_ui.multiple_materials_root = Some(path);
                                 editor_ui.import_materials = scan.materials;
-                                editor_ui.texture_naming.merge_detected(scan.naming);
+                                editor_ui
+                                    .project_settings
+                                    .texture_naming
+                                    .merge_detected(scan.naming);
                             }
                             Err(error) => {
                                 eprintln!("Failed to scan material folder: {error}");
 
                                 editor_ui.multiple_materials_root = None;
                                 editor_ui.import_materials.clear();
-                                editor_ui.texture_naming = crate::data::TextureNaming::default();
+                                editor_ui.project_settings.texture_naming =
+                                    crate::data::TextureNaming::default();
                             }
                         }
                     }
@@ -75,7 +79,7 @@ pub fn import_multiple_materials_window(
 
                 ui.add_space(4.0);
 
-                for group in &editor_ui.texture_naming.groups {
+                for group in &editor_ui.project_settings.texture_naming.groups {
                     ui.horizontal(|ui| {
                         ui.label(egui::RichText::new(&group.name).strong());
 
@@ -109,7 +113,7 @@ pub fn import_multiple_materials_window(
                     textures.sort_by(|a, b| a.0.cmp(&b.0));
                 }
 
-                if editor_ui.preview_texture_group.is_none() {
+                if editor_ui.project_settings.preview_texture_group.is_none() {
                     ui.add_space(8.0);
 
                     ui.label("Default Preview Map");
@@ -117,6 +121,7 @@ pub fn import_multiple_materials_window(
                     ui.add_space(4.0);
 
                     let available_groups: Vec<_> = editor_ui
+                        .project_settings
                         .texture_naming
                         .groups
                         .iter()
@@ -133,7 +138,7 @@ pub fn import_multiple_materials_window(
                             .show_ui(ui, |ui| {
                                 for group in available_groups {
                                     ui.selectable_value(
-                                        &mut editor_ui.preview_texture_group,
+                                        &mut editor_ui.project_settings.preview_texture_group,
                                         Some(group.id.clone()),
                                         &group.name,
                                     );
@@ -174,7 +179,10 @@ pub fn import_multiple_materials_window(
                         atlas.add_material(source);
                     }
 
-                    atlas.load_textures(images, editor_ui.preview_texture_group.as_deref());
+                    atlas.load_textures(
+                        images,
+                        editor_ui.project_settings.preview_texture_group.as_deref(),
+                    );
 
                     editor_ui.multiple_materials_root = None;
                     close_window = true;

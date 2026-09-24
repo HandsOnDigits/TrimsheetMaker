@@ -5722,6 +5722,7 @@ dependencies = [
  "exr",
  "rayon",
  "rfd",
+ "ron",
  "serde",
  "serde_json",
  "uuid",

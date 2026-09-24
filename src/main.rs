@@ -10,7 +10,9 @@ mod data;
 mod hotkeys;
 use hotkeys::HotkeyPlugin;
 
+mod editor_settings;
 mod importer;
+mod project_settings;
 mod transform;
 
 fn main() {

@@ -142,6 +142,7 @@ fn atlas_material_at_position(
         .rev()
         .find(|material| {
             let has_preview_texture = editor_ui
+                .project_settings
                 .preview_texture_group
                 .as_deref()
                 .map(|group| {

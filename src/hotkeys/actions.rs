@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use bevy::prelude::*;
 
 use bevy_egui::egui;
@@ -7,7 +9,7 @@ use crate::{
     ui::EditorUi,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EditorAction {
     NewAtlas,
     OpenProject,
@@ -49,7 +51,7 @@ pub fn execute_action(action: EditorAction, editor_ui: &mut EditorUi, atlas: &mu
         EditorAction::NewAtlas => {
             *atlas = Atlas::default();
 
-            editor_ui.texture_naming = TextureNaming::default();
+            editor_ui.project_settings.texture_naming = TextureNaming::default();
 
             editor_ui.selected_material = None;
             editor_ui.atlas_zoom = 1.0;

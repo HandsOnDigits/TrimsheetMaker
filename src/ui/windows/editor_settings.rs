@@ -3,9 +3,9 @@ use bevy_egui::egui;
 
 use crate::hotkeys::{CaptureResult, EditorAction, HotkeyManager};
 
-use super::super::EditorUi;
+use super::super::{EditorSettings, EditorUi};
 
-pub fn settings_window(
+pub fn editor_settings_window(
     ctx: &egui::Context,
     editor_ui: &mut EditorUi,
     hotkeys: &mut HotkeyManager,
@@ -21,9 +21,17 @@ pub fn settings_window(
             ui.horizontal(|ui| {
                 ui.label("Mouse Scroll Speed");
 
-                ui.add(
-                    egui::Slider::new(&mut editor_ui.mouse_scroll_speed, 1.0..=30.0).step_by(0.1),
+                let response = ui.add(
+                    egui::Slider::new(
+                        &mut editor_ui.editor_settings.mouse_scroll_speed,
+                        1.0..=100.0,
+                    )
+                    .step_by(0.1),
                 );
+
+                if response.changed() {
+                    editor_ui.editor_settings.save();
+                }
             });
 
             ui.separator();
@@ -57,6 +65,9 @@ pub fn settings_window(
                             } else {
                                 match hotkeys.capture_hotkey(action, keyboard) {
                                     CaptureResult::Assigned(_) => {
+                                        hotkeys.save_to_settings(&mut editor_ui.editor_settings);
+                                        editor_ui.editor_settings.save();
+
                                         editor_ui.hotkey_capture = None;
                                     }
 
@@ -65,8 +76,7 @@ pub fn settings_window(
                                     }
 
                                     CaptureResult::Conflict(_) => {
-                                        // Keep capturing so the user
-                                        // can choose another shortcut.
+                                        // Keep capture active.
                                     }
 
                                     CaptureResult::None => {}
@@ -95,9 +105,14 @@ pub fn settings_window(
             ui.separator();
 
             if ui.button("Reset to Defaults").clicked() {
+                editor_ui.editor_settings = EditorSettings::default();
+
                 hotkeys.set_default_bindings();
+                hotkeys.save_to_settings(&mut editor_ui.editor_settings);
+
+                editor_ui.editor_settings.save();
+
                 editor_ui.hotkey_capture = None;
-                editor_ui.mouse_scroll_speed = 20.0;
             }
         });
 

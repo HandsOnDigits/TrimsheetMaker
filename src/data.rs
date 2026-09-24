@@ -26,14 +26,14 @@ pub struct MaterialSource {
     pub textures: Vec<MaterialTexture>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TextureGroup {
     pub id: String,
     pub name: String,
     pub suffixes: Vec<String>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TextureNaming {
     pub groups: Vec<TextureGroup>,
 }
