@@ -35,6 +35,8 @@ pub fn atlas_view(
             editor_ui.atlas_zoom = (editor_ui.atlas_zoom * 1.1).min(10.0);
         }
 
+        ui.separator();
+
         if ui.button("Reset").clicked() {
             editor_ui.atlas_zoom = 1.0;
             editor_ui.atlas_pan = egui::Vec2::ZERO;

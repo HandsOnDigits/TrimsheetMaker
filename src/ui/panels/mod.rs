@@ -137,20 +137,16 @@ pub fn editor_ui(
         available.max,
     );
 
-    // Synchronize native Bevy viewport.
-    mesh_viewport.x = mesh_rect.left();
-    mesh_viewport.y = mesh_rect.top();
-    mesh_viewport.width = mesh_rect.width();
-    mesh_viewport.height = mesh_rect.height();
-
-    mesh::mesh_panel(
-        ctx,
-        mesh_rect,
-        &mut mesh_preview,
-        &mut mesh_light,
-        &mut mesh_input,
-        &hotkeys,
-    );
+    root_ui.scope_builder(egui::UiBuilder::new().max_rect(mesh_rect), |ui| {
+        mesh::mesh_panel(
+            ui,
+            &mut mesh_preview,
+            &mut mesh_light,
+            &mut mesh_input,
+            &hotkeys,
+            &mut mesh_viewport,
+        );
+    });
 
     // Draggable divider.
     let divider_response = root_ui.interact(
