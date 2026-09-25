@@ -72,18 +72,6 @@ pub fn toolbar(
 
             ui.separator();
 
-            if menu_action_button(ui, hotkeys, EditorAction::ResetViewport, "Reset Viewports") {
-                execute_action(
-                    EditorAction::ResetViewport,
-                    editor_ui,
-                    atlas,
-                    images,
-                    mesh_preview,
-                    mesh_light,
-                );
-                ui.close();
-            }
-
             if menu_action_button(
                 ui,
                 hotkeys,
