@@ -3,7 +3,10 @@ use bevy::{
     prelude::*,
 };
 
-use super::{MeshLight, MeshPreview, MeshPreviewCamera, MeshPreviewLight, MeshViewportLayout};
+use super::{
+    MeshLight, MeshLightPreset, MeshPreview, MeshPreviewCamera, MeshPreviewLight,
+    MeshViewportInput, MeshViewportLayout,
+};
 
 use crate::ui::EditorUi;
 
@@ -56,46 +59,42 @@ pub fn update_mesh_light(
         return;
     };
 
-    match *mesh_light {
-        MeshLight::Studio => {
+    match mesh_light.preset {
+        MeshLightPreset::Studio => {
             light.illuminance = 10_000.0;
             light.color = Color::srgb(1.0, 1.0, 1.0);
-
-            *transform = Transform::from_xyz(2.0, 4.0, 2.0).looking_at(Vec3::ZERO, Vec3::Y);
         }
 
-        MeshLight::Neutral => {
+        MeshLightPreset::Neutral => {
             light.illuminance = 7_000.0;
             light.color = Color::srgb(1.0, 1.0, 1.0);
-
-            *transform = Transform::from_xyz(-2.0, 3.0, 4.0).looking_at(Vec3::ZERO, Vec3::Y);
         }
 
-        MeshLight::Warm => {
+        MeshLightPreset::Warm => {
             light.illuminance = 8_000.0;
             light.color = Color::srgb(1.0, 0.78, 0.58);
-
-            *transform = Transform::from_xyz(3.0, 4.0, 1.0).looking_at(Vec3::ZERO, Vec3::Y);
         }
 
-        MeshLight::Cool => {
+        MeshLightPreset::Cool => {
             light.illuminance = 8_000.0;
             light.color = Color::srgb(0.65, 0.8, 1.0);
-
-            *transform = Transform::from_xyz(-3.0, 4.0, 1.0).looking_at(Vec3::ZERO, Vec3::Y);
         }
 
-        MeshLight::Flat => {
+        MeshLightPreset::Flat => {
             light.illuminance = 3_000.0;
             light.color = Color::srgb(1.0, 1.0, 1.0);
-
-            *transform = Transform::from_xyz(0.0, 5.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y);
         }
 
-        MeshLight::None => {
+        MeshLightPreset::None => {
             light.illuminance = 0.0;
         }
     }
+
+    let rotation = Quat::from_euler(EulerRot::YXZ, mesh_light.yaw, mesh_light.pitch, 0.0);
+
+    let direction = rotation * Vec3::NEG_Z;
+
+    *transform = Transform::from_translation(-direction * 5.0).looking_at(Vec3::ZERO, Vec3::Y);
 }
 
 pub fn orbit_camera(
@@ -105,6 +104,7 @@ pub fn orbit_camera(
     keyboard: Res<ButtonInput<KeyCode>>,
     windows: Query<&Window>,
     mesh_viewport: Res<MeshViewportLayout>,
+    mesh_input: Res<MeshViewportInput>,
     editor_ui: Res<EditorUi>,
     time: Res<Time>,
     mut mesh_preview: ResMut<MeshPreview>,
@@ -120,8 +120,12 @@ pub fn orbit_camera(
         .cursor_position()
         .is_some_and(|position| mesh_viewport.contains(position));
 
-    // Start orbit only when the mouse is inside the 3D viewport.
-    if mouse_buttons.just_pressed(MouseButton::Left) && cursor_inside {
+    if mesh_input.pointer_over_ui {
+        mesh_preview.orbiting = false;
+    }
+
+    if mouse_buttons.just_pressed(MouseButton::Left) && cursor_inside && !mesh_input.pointer_over_ui
+    {
         mesh_preview.orbiting = true;
     }
 
@@ -129,7 +133,6 @@ pub fn orbit_camera(
         mesh_preview.orbiting = false;
     }
 
-    // Orbit.
     if mesh_preview.orbiting {
         let mut delta = Vec2::ZERO;
 
@@ -141,13 +144,11 @@ pub fn orbit_camera(
 
         mesh_preview.yaw -= delta.x * sensitivity;
         mesh_preview.pitch -= delta.y * sensitivity;
-
         mesh_preview.pitch = mesh_preview.pitch.clamp(-1.5, 1.5);
     } else {
         mouse_motion.clear();
     }
 
-    // Ctrl + mouse wheel = zoom.
     let ctrl_pressed =
         keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight);
 
@@ -158,7 +159,7 @@ pub fn orbit_camera(
             scroll += event.y;
         }
 
-        if scroll != 0.0 && ctrl_pressed {
+        if scroll != 0.0 && ctrl_pressed && !mesh_input.pointer_over_ui {
             let zoom_speed = editor_ui.editor_settings.mouse_scroll_speed;
 
             mesh_preview.target_distance *= (-scroll * zoom_speed * 0.01).exp();
@@ -169,7 +170,6 @@ pub fn orbit_camera(
         mouse_wheel.clear();
     }
 
-    // Smoothly approach the target zoom.
     let smoothing = 12.0;
 
     let interpolation = 1.0 - (-smoothing * time.delta_secs()).exp();
@@ -178,14 +178,12 @@ pub fn orbit_camera(
         .distance
         .lerp(mesh_preview.target_distance, interpolation);
 
-    // Update camera transform.
     let rotation = Quat::from_euler(EulerRot::YXZ, mesh_preview.yaw, mesh_preview.pitch, 0.0);
 
     let offset = rotation * Vec3::new(0.0, 0.0, mesh_preview.distance);
 
     for mut transform in &mut cameras {
         transform.translation = mesh_preview.target + offset;
-
         transform.look_at(mesh_preview.target, Vec3::Y);
     }
 }

@@ -9,8 +9,30 @@ pub struct MeshPreviewCamera;
 #[derive(Component)]
 pub struct MeshPreviewLight;
 
-#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MeshLight {
+#[derive(Resource, Default)]
+pub struct MeshViewportInput {
+    pub pointer_over_ui: bool,
+}
+
+#[derive(Resource, Debug, Clone, Copy, PartialEq)]
+pub struct MeshLight {
+    pub preset: MeshLightPreset,
+    pub yaw: f32,
+    pub pitch: f32,
+}
+
+impl Default for MeshLight {
+    fn default() -> Self {
+        Self {
+            preset: MeshLightPreset::Studio,
+            yaw: 45.0_f32.to_radians(),
+            pitch: 45.0_f32.to_radians(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MeshLightPreset {
     Studio,
     Neutral,
     Warm,
@@ -19,13 +41,7 @@ pub enum MeshLight {
     None,
 }
 
-impl Default for MeshLight {
-    fn default() -> Self {
-        Self::Studio
-    }
-}
-
-impl MeshLight {
+impl MeshLightPreset {
     pub const ALL: [Self; 6] = [
         Self::Studio,
         Self::Neutral,
@@ -81,6 +97,7 @@ impl Plugin for MeshPreviewPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<MeshViewportLayout>()
             .init_resource::<MeshLight>()
+            .init_resource::<MeshViewportInput>()
             .add_systems(
                 Startup,
                 (setup_mesh_preview, viewport::spawn_mesh_viewport).chain(),

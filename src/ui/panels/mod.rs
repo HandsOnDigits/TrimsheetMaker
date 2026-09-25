@@ -22,7 +22,7 @@ use super::EditorUi;
 use crate::{
     data::Atlas,
     hotkeys::{EditorAction, HotkeyManager},
-    mesh::{MeshLight, MeshPreview, MeshViewportLayout},
+    mesh::{MeshLight, MeshPreview, MeshViewportInput, MeshViewportLayout},
     ui::windows,
 };
 
@@ -36,7 +36,10 @@ pub fn editor_ui(
     mut mesh_viewport: ResMut<MeshViewportLayout>,
     mut mesh_preview: ResMut<MeshPreview>,
     mut mesh_light: ResMut<MeshLight>,
+    mut mesh_input: ResMut<MeshViewportInput>,
 ) -> Result {
+    mesh_input.pointer_over_ui = false;
+
     for material in &mut atlas.materials {
         for texture in &mut material.textures {
             if texture.egui_texture.is_none() {
@@ -139,7 +142,13 @@ pub fn editor_ui(
     mesh_viewport.width = mesh_rect.width();
     mesh_viewport.height = mesh_rect.height();
 
-    mesh::mesh_panel(ctx, mesh_rect, &mut mesh_preview, &mut mesh_light);
+    mesh::mesh_panel(
+        ctx,
+        mesh_rect,
+        &mut mesh_preview,
+        &mut mesh_light,
+        &mut mesh_input,
+    );
 
     // Draggable divider.
     let divider_response = root_ui.interact(
