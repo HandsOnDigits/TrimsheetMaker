@@ -175,8 +175,7 @@ pub fn execute_action(
             editor_ui.atlas_pan = egui::Vec2::ZERO;
 
             mesh_preview.distance = 4.0;
-            mesh_preview.yaw = 0.0;
-            mesh_preview.pitch = 0.25;
+            mesh_preview.rotation = Quat::from_rotation_x(-0.25);
             mesh_preview.target = Vec3::ZERO;
         }
 

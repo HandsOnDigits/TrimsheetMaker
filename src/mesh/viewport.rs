@@ -90,9 +90,7 @@ pub fn update_mesh_light(
         }
     }
 
-    let rotation = Quat::from_euler(EulerRot::YXZ, mesh_light.yaw, mesh_light.pitch, 0.0);
-
-    let direction = rotation * Vec3::NEG_Z;
+    let direction = mesh_light.rotation * Vec3::NEG_Z;
 
     *transform = Transform::from_translation(-direction * 5.0).looking_at(Vec3::ZERO, Vec3::Y);
 }
@@ -142,9 +140,11 @@ pub fn orbit_camera(
 
         let sensitivity = 0.01;
 
-        mesh_preview.yaw -= delta.x * sensitivity;
-        mesh_preview.pitch -= delta.y * sensitivity;
-        mesh_preview.pitch = mesh_preview.pitch.clamp(-1.5, 1.5);
+        let yaw = Quat::from_rotation_y(-delta.x * sensitivity);
+        let pitch = Quat::from_rotation_x(-delta.y * sensitivity);
+
+        mesh_preview.rotation = yaw * mesh_preview.rotation;
+        mesh_preview.rotation = mesh_preview.rotation * pitch;
     } else {
         mouse_motion.clear();
     }
@@ -178,9 +178,7 @@ pub fn orbit_camera(
         .distance
         .lerp(mesh_preview.target_distance, interpolation);
 
-    let rotation = Quat::from_euler(EulerRot::YXZ, mesh_preview.yaw, mesh_preview.pitch, 0.0);
-
-    let offset = rotation * Vec3::new(0.0, 0.0, mesh_preview.distance);
+    let offset = mesh_preview.rotation * Vec3::new(0.0, 0.0, mesh_preview.distance);
 
     for mut transform in &mut cameras {
         transform.translation = mesh_preview.target + offset;

@@ -17,16 +17,19 @@ pub struct MeshViewportInput {
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
 pub struct MeshLight {
     pub preset: MeshLightPreset,
-    pub yaw: f32,
-    pub pitch: f32,
+    pub rotation: Quat,
 }
 
 impl Default for MeshLight {
     fn default() -> Self {
         Self {
             preset: MeshLightPreset::Studio,
-            yaw: 45.0_f32.to_radians(),
-            pitch: 45.0_f32.to_radians(),
+            rotation: Quat::from_euler(
+                EulerRot::YXZ,
+                45.0_f32.to_radians(),
+                45.0_f32.to_radians(),
+                0.0,
+            ),
         }
     }
 }
@@ -69,8 +72,7 @@ pub struct MeshPreview {
     pub target: Vec3,
     pub distance: f32,
     pub target_distance: f32,
-    pub yaw: f32,
-    pub pitch: f32,
+    pub rotation: Quat,
     pub orbiting: bool,
 }
 
@@ -141,8 +143,7 @@ fn setup_mesh_preview(
         target: Vec3::ZERO,
         distance: 4.0,
         target_distance: 4.0,
-        yaw: 0.0,
-        pitch: 0.25,
+        rotation: Quat::from_rotation_x(-0.25),
         orbiting: false,
     });
 

@@ -3,7 +3,7 @@ use bevy_egui::egui;
 
 use crate::mesh::{MeshLight, MeshLightPreset, MeshPreview, MeshViewportInput};
 
-pub fn mesh_toolbar(
+pub fn mesh_panel(
     ctx: &egui::Context,
     rect: egui::Rect,
     mesh_preview: &mut MeshPreview,
@@ -39,12 +39,15 @@ pub fn mesh_toolbar(
                             mesh_preview.target = Vec3::ZERO;
                             mesh_preview.distance = 4.0;
                             mesh_preview.target_distance = 4.0;
-                            mesh_preview.yaw = 0.0;
-                            mesh_preview.pitch = 0.25;
+                            mesh_preview.rotation = Quat::from_rotation_x(-0.25);
                             mesh_preview.orbiting = false;
 
-                            mesh_light.yaw = 45.0_f32.to_radians();
-                            mesh_light.pitch = 45.0_f32.to_radians();
+                            mesh_light.rotation = Quat::from_euler(
+                                EulerRot::YXZ,
+                                45.0_f32.to_radians(),
+                                45.0_f32.to_radians(),
+                                0.0,
+                            );
                         }
 
                         ui.separator();
@@ -62,13 +65,15 @@ pub fn mesh_toolbar(
                                     );
                                 }
                             });
+
+                        ui.separator();
+
+                        egui::ComboBox::from_id_salt("light_direction_dropdown")
+                            .selected_text("Light Direction")
+                            .show_ui(ui, |ui| {
+                                light_joystick(ui, mesh_light, mesh_input);
+                            });
                     });
-
-                    ui.separator();
-
-                    ui.label("Light direction");
-
-                    light_joystick(ui, mesh_light, mesh_input);
                 });
 
             if frame_response.response.hovered() || frame_response.response.contains_pointer() {
@@ -114,40 +119,52 @@ fn light_joystick(
         egui::Stroke::new(1.0, ui.visuals().weak_text_color()),
     );
 
-    let yaw = mesh_light.yaw;
-    let pitch = mesh_light.pitch;
+    let mut handle_offset = egui::Vec2::ZERO;
 
-    let x = yaw.sin();
-    let y = -pitch.sin();
-
-    let mut handle = center + egui::vec2(x, y) * radius;
-
+    // Read the actual current mouse position.
     if response.dragged() {
-        let pointer = response.interact_pointer_pos().unwrap_or(center);
+        if let Some(pointer_pos) = ui.input(|i| i.pointer.interact_pos()) {
+            let offset = pointer_pos - center;
 
-        let mut offset = pointer - center;
+            handle_offset = if offset.length_sq() > radius * radius {
+                offset.normalized() * radius
+            } else {
+                offset
+            };
 
-        if offset.length() > radius {
-            offset = offset.normalized() * radius;
+            let horizontal = handle_offset.x / radius;
+            let vertical = -handle_offset.y / radius;
+
+            let yaw = horizontal * std::f32::consts::PI;
+            let pitch = vertical * (std::f32::consts::FRAC_PI_2);
+
+            let rotation = Quat::from_rotation_y(yaw) * Quat::from_rotation_x(pitch);
+
+            mesh_light.rotation = rotation;
+
+            mesh_input.pointer_over_ui = true;
         }
-
-        handle = center + offset;
-
-        let normalized = offset / radius;
-
-        mesh_light.yaw = normalized
-            .x
-            .asin()
-            .clamp(-std::f32::consts::FRAC_PI_2, std::f32::consts::FRAC_PI_2);
-
-        mesh_light.pitch = (-normalized.y)
-            .asin()
-            .clamp(-std::f32::consts::FRAC_PI_2, std::f32::consts::FRAC_PI_2);
     }
 
     if response.hovered() || response.dragged() {
         mesh_input.pointer_over_ui = true;
     }
+
+    // Calculate the handle position from the actual light direction
+    // when we aren't actively dragging.
+    if !response.dragged() {
+        let direction = mesh_light.rotation * Vec3::NEG_Z;
+
+        handle_offset = egui::vec2(direction.x, -direction.y);
+
+        if handle_offset.length_sq() > 1.0 {
+            handle_offset = handle_offset.normalized();
+        }
+
+        handle_offset *= radius;
+    }
+
+    let handle = center + handle_offset;
 
     painter.circle_filled(handle, 8.0, ui.visuals().widgets.active.bg_fill);
 
