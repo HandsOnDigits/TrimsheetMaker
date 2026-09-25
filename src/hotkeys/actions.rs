@@ -4,7 +4,9 @@ use bevy::prelude::*;
 
 use bevy_egui::egui;
 
-use crate::{data::Atlas, project, project_settings::ProjectSettings, ui::EditorUi};
+use crate::{
+    data::Atlas, mesh::MeshLight, project, project_settings::ProjectSettings, ui::EditorUi,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EditorAction {
@@ -29,6 +31,7 @@ pub enum EditorAction {
     ToggleMaterialsPanel,
     ToggleInspectorPanel,
     ToggleStatusBar,
+    ToggleMeshLightFollowMouse,
 }
 
 #[derive(Message, Debug, Clone, Copy)]
@@ -51,6 +54,7 @@ pub fn execute_action(
     atlas: &mut Atlas,
     images: &mut Assets<Image>,
     mesh_preview: &mut crate::mesh::MeshPreview,
+    mesh_light: &mut MeshLight,
 ) {
     match action {
         EditorAction::NewAtlas => {
@@ -189,6 +193,10 @@ pub fn execute_action(
 
         EditorAction::ToggleStatusBar => {
             editor_ui.show_status = !editor_ui.show_status;
+        }
+
+        EditorAction::ToggleMeshLightFollowMouse => {
+            mesh_light.follow_mouse = !mesh_light.follow_mouse;
         }
     }
 }

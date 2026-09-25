@@ -5,11 +5,10 @@ use bevy_egui::EguiContexts;
 
 use super::actions::{EditorAction, EditorActionMessage};
 
-use crate::editor_settings::SavedHotkey;
+use crate::editor_settings::{EditorSettings, SavedHotkey};
 
 /// A keyboard shortcut consisting of a key and optional modifiers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-
 pub struct Hotkey {
     pub key: KeyCode,
     pub ctrl: bool,
@@ -149,6 +148,11 @@ impl HotkeyManager {
         // View
         self.bindings
             .insert(EditorAction::ResetViewport, Hotkey::plain(KeyCode::KeyF));
+
+        self.bindings.insert(
+            EditorAction::ToggleMeshLightFollowMouse,
+            Hotkey::shift(KeyCode::KeyL),
+        );
     }
 
     pub fn binding(&self, action: EditorAction) -> Option<Hotkey> {
@@ -232,18 +236,15 @@ impl HotkeyManager {
         }
     }
 
-    pub fn load_from_settings(&mut self, settings: &crate::editor_settings::EditorSettings) {
-        self.bindings.clear();
+    pub fn load_from_settings(&mut self, settings: &EditorSettings) {
+        // Start with all current defaults.
+        self.set_default_bindings();
 
+        // Override defaults with the user's saved bindings.
         for (&action, saved) in &settings.hotkeys {
             if let Some(hotkey) = Hotkey::from_saved(saved) {
                 self.bindings.insert(action, hotkey);
             }
-        }
-
-        // If no bindings were saved, use defaults.
-        if self.bindings.is_empty() {
-            self.set_default_bindings();
         }
     }
 

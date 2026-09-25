@@ -133,6 +133,7 @@ fn all_editable_actions() -> &'static [EditorAction] {
         EditorAction::ToggleMaterialsPanel,
         EditorAction::ToggleInspectorPanel,
         EditorAction::ToggleStatusBar,
+        EditorAction::ToggleMeshLightFollowMouse,
     ]
 }
 
@@ -157,9 +158,8 @@ fn action_display_name(action: EditorAction) -> &'static str {
         EditorAction::Redo => "Redo",
 
         EditorAction::ToggleMaterialsPanel => "Toggle Materials Panel",
-
         EditorAction::ToggleInspectorPanel => "Toggle Inspector Panel",
-
         EditorAction::ToggleStatusBar => "Toggle Status Bar",
+        EditorAction::ToggleMeshLightFollowMouse => "Toggle Mesh Light Follow Mouse",
     }
 }

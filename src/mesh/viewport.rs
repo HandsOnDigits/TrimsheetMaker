@@ -49,6 +49,7 @@ pub fn update_mesh_viewport(
 
 pub fn update_mesh_light(
     mesh_light: Res<MeshLight>,
+    mesh_preview: Res<MeshPreview>,
     mut lights: Query<(&mut DirectionalLight, &mut Transform), With<MeshPreviewLight>>,
 ) {
     if !mesh_light.is_changed() {
@@ -90,9 +91,8 @@ pub fn update_mesh_light(
         }
     }
 
-    let direction = mesh_light.rotation * Vec3::NEG_Z;
-
-    *transform = Transform::from_translation(-direction * 5.0).looking_at(Vec3::ZERO, Vec3::Y);
+    *transform =
+        Transform::from_translation(mesh_light.position).looking_at(mesh_preview.target, Vec3::Y);
 }
 
 pub fn orbit_camera(
@@ -106,7 +106,9 @@ pub fn orbit_camera(
     editor_ui: Res<EditorUi>,
     time: Res<Time>,
     mut mesh_preview: ResMut<MeshPreview>,
-    mut cameras: Query<&mut Transform, With<MeshPreviewCamera>>,
+    mut mesh_light: ResMut<MeshLight>,
+    cameras: Query<(&Camera, &GlobalTransform), With<MeshPreviewCamera>>,
+    mut camera_transforms: Query<&mut Transform, With<MeshPreviewCamera>>,
 ) {
     let Ok(window) = windows.single() else {
         mouse_motion.clear();
@@ -114,9 +116,58 @@ pub fn orbit_camera(
         return;
     };
 
-    let cursor_inside = window
-        .cursor_position()
-        .is_some_and(|position| mesh_viewport.contains(position));
+    let cursor_position = window.cursor_position();
+
+    let cursor_inside = cursor_position.is_some_and(|position| mesh_viewport.contains(position));
+
+    // -------------------------------------------------------------
+    // Light target
+    // -------------------------------------------------------------
+
+    if mesh_light.follow_mouse && cursor_inside && !mesh_input.pointer_over_ui {
+        if let Some(cursor) = cursor_position {
+            let Ok((camera, camera_global)) = cameras.single() else {
+                return;
+            };
+
+            if let Ok(ray) = camera.viewport_to_world(camera_global, cursor) {
+                /*
+                 * Create a plane through the mesh target.
+                 *
+                 * The plane faces the camera, so the mouse cursor
+                 * always corresponds to a point on the mesh's
+                 * screen-facing plane.
+                 */
+                let plane_origin = mesh_preview.target;
+                let plane_normal = *camera_global.forward();
+
+                let denominator = ray.direction.dot(plane_normal);
+
+                if denominator.abs() > 0.0001 {
+                    let distance = (plane_origin - ray.origin).dot(plane_normal) / denominator;
+
+                    if distance >= 0.0 {
+                        let target = ray.origin + ray.direction * distance;
+
+                        /*
+                         * Move the light to the position represented
+                         * by the cursor while keeping it at a fixed
+                         * distance from the mesh.
+                         */
+                        let offset = target - mesh_preview.target;
+
+                        if offset.length_squared() > 0.0001 {
+                            mesh_light.position = offset.normalize() * 5.0;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // -------------------------------------------------------------
+    // Camera orbit
+    // -------------------------------------------------------------
 
     if mesh_input.pointer_over_ui {
         mesh_preview.orbiting = false;
@@ -149,6 +200,10 @@ pub fn orbit_camera(
         mouse_motion.clear();
     }
 
+    // -------------------------------------------------------------
+    // Zoom
+    // -------------------------------------------------------------
+
     let ctrl_pressed =
         keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight);
 
@@ -170,6 +225,10 @@ pub fn orbit_camera(
         mouse_wheel.clear();
     }
 
+    // -------------------------------------------------------------
+    // Camera smoothing
+    // -------------------------------------------------------------
+
     let smoothing = 12.0;
 
     let interpolation = 1.0 - (-smoothing * time.delta_secs()).exp();
@@ -180,8 +239,9 @@ pub fn orbit_camera(
 
     let offset = mesh_preview.rotation * Vec3::new(0.0, 0.0, mesh_preview.distance);
 
-    for mut transform in &mut cameras {
+    for mut transform in &mut camera_transforms {
         transform.translation = mesh_preview.target + offset;
+
         transform.look_at(mesh_preview.target, Vec3::Y);
     }
 }

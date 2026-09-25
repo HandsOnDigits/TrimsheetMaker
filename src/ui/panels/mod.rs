@@ -72,6 +72,7 @@ pub fn editor_ui(
                 &mut images,
                 &hotkeys,
                 &mut mesh_preview,
+                &mut mesh_light,
             );
         });
 
@@ -148,6 +149,7 @@ pub fn editor_ui(
         &mut mesh_preview,
         &mut mesh_light,
         &mut mesh_input,
+        &hotkeys,
     );
 
     // Draggable divider.

@@ -3,6 +3,8 @@ use std::collections::BTreeMap;
 use bevy::prelude::*;
 use bevy_egui::{EguiGlobalSettings, EguiPrimaryContextPass, PrimaryEguiContext, egui};
 
+use crate::mesh::MeshLight;
+
 use crate::{
     data,
     editor_settings::EditorSettings,
@@ -48,6 +50,7 @@ fn apply_editor_actions(
     mut atlas: ResMut<data::Atlas>,
     mut images: ResMut<Assets<Image>>,
     mut mesh_preview: ResMut<crate::mesh::MeshPreview>,
+    mut mesh_light: ResMut<MeshLight>,
 ) {
     for message in messages.read() {
         hotkeys::execute_action(
@@ -56,6 +59,7 @@ fn apply_editor_actions(
             &mut atlas,
             &mut images,
             &mut mesh_preview,
+            &mut mesh_light,
         );
     }
 }

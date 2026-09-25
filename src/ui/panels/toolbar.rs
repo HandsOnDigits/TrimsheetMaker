@@ -6,7 +6,7 @@ use super::{EditorUi, menu_action_button};
 use crate::{
     data::Atlas,
     hotkeys::{EditorAction, HotkeyManager, execute_action},
-    mesh::MeshPreview,
+    mesh::{MeshLight, MeshPreview},
 };
 
 pub fn toolbar(
@@ -16,6 +16,7 @@ pub fn toolbar(
     images: &mut Assets<Image>,
     hotkeys: &HotkeyManager,
     mesh_preview: &mut MeshPreview,
+    mesh_light: &mut MeshLight,
 ) {
     ui.horizontal(|ui| {
         ui.add_space(8.0);
@@ -28,6 +29,7 @@ pub fn toolbar(
                     atlas,
                     images,
                     mesh_preview,
+                    mesh_light,
                 );
                 ui.close();
             }
@@ -39,6 +41,7 @@ pub fn toolbar(
                     atlas,
                     images,
                     mesh_preview,
+                    mesh_light,
                 );
                 ui.close();
             }
@@ -50,6 +53,7 @@ pub fn toolbar(
                     atlas,
                     images,
                     mesh_preview,
+                    mesh_light,
                 );
                 ui.close();
             }
@@ -61,6 +65,7 @@ pub fn toolbar(
                     atlas,
                     images,
                     mesh_preview,
+                    mesh_light,
                 );
                 ui.close();
             }
@@ -74,6 +79,7 @@ pub fn toolbar(
                     atlas,
                     images,
                     mesh_preview,
+                    mesh_light,
                 );
                 ui.close();
             }
@@ -90,6 +96,7 @@ pub fn toolbar(
                     atlas,
                     images,
                     mesh_preview,
+                    mesh_light,
                 );
                 ui.close();
             }
@@ -103,6 +110,7 @@ pub fn toolbar(
                     atlas,
                     images,
                     mesh_preview,
+                    mesh_light,
                 );
                 ui.close();
             }
@@ -123,6 +131,7 @@ pub fn toolbar(
                     atlas,
                     images,
                     mesh_preview,
+                    mesh_light,
                 );
                 ui.close();
             }
@@ -134,6 +143,7 @@ pub fn toolbar(
                     atlas,
                     images,
                     mesh_preview,
+                    mesh_light,
                 );
                 ui.close();
             }
@@ -155,6 +165,7 @@ pub fn toolbar(
                     atlas,
                     images,
                     mesh_preview,
+                    mesh_light,
                 );
                 ui.close();
             }

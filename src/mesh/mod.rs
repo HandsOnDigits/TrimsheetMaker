@@ -17,19 +17,16 @@ pub struct MeshViewportInput {
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
 pub struct MeshLight {
     pub preset: MeshLightPreset,
-    pub rotation: Quat,
+    pub position: Vec3,
+    pub follow_mouse: bool,
 }
 
 impl Default for MeshLight {
     fn default() -> Self {
         Self {
             preset: MeshLightPreset::Studio,
-            rotation: Quat::from_euler(
-                EulerRot::YXZ,
-                45.0_f32.to_radians(),
-                45.0_f32.to_radians(),
-                0.0,
-            ),
+            position: Vec3::new(3.0, 3.0, 4.0),
+            follow_mouse: true,
         }
     }
 }
