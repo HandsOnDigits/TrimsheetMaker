@@ -70,10 +70,6 @@ pub struct EditorUi {
     pub show_import_single_material_window: bool,
     pub show_editor_settings_window: bool,
 
-    pub show_mesh_preview: bool,
-    pub mesh_preview_zoom: f32,
-    pub mesh_preview_pan: egui::Vec2,
-
     pub mesh_view_split: f32,
 
     pub hotkey_capture: Option<EditorAction>,
@@ -126,10 +122,6 @@ impl Default for EditorUi {
             show_editor_settings_window: false,
 
             mesh_view_split: 0.5,
-
-            show_mesh_preview: false,
-            mesh_preview_zoom: 1.0,
-            mesh_preview_pan: egui::Vec2::ZERO,
 
             hotkey_capture: None,
 

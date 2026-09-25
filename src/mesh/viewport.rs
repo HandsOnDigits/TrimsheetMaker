@@ -3,7 +3,7 @@ use bevy::{
     prelude::*,
 };
 
-use super::{MeshPreview, MeshPreviewCamera, MeshViewportLayout};
+use super::{MeshLight, MeshPreview, MeshPreviewCamera, MeshPreviewLight, MeshViewportLayout};
 
 use crate::ui::EditorUi;
 
@@ -41,6 +41,60 @@ pub fn update_mesh_viewport(
         node.top = Val::Px(layout.y);
         node.width = Val::Px(layout.width);
         node.height = Val::Px(layout.height);
+    }
+}
+
+pub fn update_mesh_light(
+    mesh_light: Res<MeshLight>,
+    mut lights: Query<(&mut DirectionalLight, &mut Transform), With<MeshPreviewLight>>,
+) {
+    if !mesh_light.is_changed() {
+        return;
+    }
+
+    let Ok((mut light, mut transform)) = lights.single_mut() else {
+        return;
+    };
+
+    match *mesh_light {
+        MeshLight::Studio => {
+            light.illuminance = 10_000.0;
+            light.color = Color::srgb(1.0, 1.0, 1.0);
+
+            *transform = Transform::from_xyz(2.0, 4.0, 2.0).looking_at(Vec3::ZERO, Vec3::Y);
+        }
+
+        MeshLight::Neutral => {
+            light.illuminance = 7_000.0;
+            light.color = Color::srgb(1.0, 1.0, 1.0);
+
+            *transform = Transform::from_xyz(-2.0, 3.0, 4.0).looking_at(Vec3::ZERO, Vec3::Y);
+        }
+
+        MeshLight::Warm => {
+            light.illuminance = 8_000.0;
+            light.color = Color::srgb(1.0, 0.78, 0.58);
+
+            *transform = Transform::from_xyz(3.0, 4.0, 1.0).looking_at(Vec3::ZERO, Vec3::Y);
+        }
+
+        MeshLight::Cool => {
+            light.illuminance = 8_000.0;
+            light.color = Color::srgb(0.65, 0.8, 1.0);
+
+            *transform = Transform::from_xyz(-3.0, 4.0, 1.0).looking_at(Vec3::ZERO, Vec3::Y);
+        }
+
+        MeshLight::Flat => {
+            light.illuminance = 3_000.0;
+            light.color = Color::srgb(1.0, 1.0, 1.0);
+
+            *transform = Transform::from_xyz(0.0, 5.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y);
+        }
+
+        MeshLight::None => {
+            light.illuminance = 0.0;
+        }
     }
 }
 

@@ -3,10 +3,49 @@ use bevy_egui::EguiPrimaryContextPass;
 
 mod viewport;
 
-pub struct MeshPreviewPlugin;
-
 #[derive(Component)]
 pub struct MeshPreviewCamera;
+
+#[derive(Component)]
+pub struct MeshPreviewLight;
+
+#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MeshLight {
+    Studio,
+    Neutral,
+    Warm,
+    Cool,
+    Flat,
+    None,
+}
+
+impl Default for MeshLight {
+    fn default() -> Self {
+        Self::Studio
+    }
+}
+
+impl MeshLight {
+    pub const ALL: [Self; 6] = [
+        Self::Studio,
+        Self::Neutral,
+        Self::Warm,
+        Self::Cool,
+        Self::Flat,
+        Self::None,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Studio => "Studio",
+            Self::Neutral => "Neutral",
+            Self::Warm => "Warm",
+            Self::Cool => "Cool",
+            Self::Flat => "Flat",
+            Self::None => "None",
+        }
+    }
+}
 
 #[derive(Resource)]
 pub struct MeshPreview {
@@ -19,15 +58,41 @@ pub struct MeshPreview {
     pub orbiting: bool,
 }
 
+#[derive(Resource, Default)]
+pub struct MeshViewportLayout {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+impl MeshViewportLayout {
+    pub fn contains(&self, position: Vec2) -> bool {
+        position.x >= self.x
+            && position.x <= self.x + self.width
+            && position.y >= self.y
+            && position.y <= self.y + self.height
+    }
+}
+
+pub struct MeshPreviewPlugin;
+
 impl Plugin for MeshPreviewPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<MeshViewportLayout>()
+            .init_resource::<MeshLight>()
             .add_systems(
                 Startup,
                 (setup_mesh_preview, viewport::spawn_mesh_viewport).chain(),
             )
-            .add_systems(EguiPrimaryContextPass, viewport::update_mesh_viewport)
-            .add_systems(Update, viewport::orbit_camera);
+            .add_systems(
+                EguiPrimaryContextPass,
+                (
+                    viewport::update_mesh_viewport,
+                    viewport::orbit_camera,
+                    viewport::update_mesh_light,
+                ),
+            );
     }
 }
 
@@ -70,6 +135,7 @@ fn setup_mesh_preview(
             ..default()
         },
         Transform::from_xyz(2.0, 4.0, 2.0).looking_at(Vec3::ZERO, Vec3::Y),
+        MeshPreviewLight,
     ));
 
     commands.spawn((
@@ -81,21 +147,4 @@ fn setup_mesh_preview(
         })),
         Transform::from_xyz(0.0, 0.0, 0.0),
     ));
-}
-
-#[derive(Resource, Default)]
-pub struct MeshViewportLayout {
-    pub x: f32,
-    pub y: f32,
-    pub width: f32,
-    pub height: f32,
-}
-
-impl MeshViewportLayout {
-    pub fn contains(&self, position: Vec2) -> bool {
-        position.x >= self.x
-            && position.x <= self.x + self.width
-            && position.y >= self.y
-            && position.y <= self.y + self.height
-    }
 }

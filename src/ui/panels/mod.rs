@@ -15,12 +15,14 @@ use status_bar::status_bar;
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, EguiTextureHandle, egui};
 
+mod mesh;
+
 use super::EditorUi;
 
 use crate::{
     data::Atlas,
     hotkeys::{EditorAction, HotkeyManager},
-    mesh::{MeshPreview, MeshViewportLayout},
+    mesh::{MeshLight, MeshPreview, MeshViewportLayout},
     ui::windows,
 };
 
@@ -33,6 +35,7 @@ pub fn editor_ui(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut mesh_viewport: ResMut<MeshViewportLayout>,
     mut mesh_preview: ResMut<MeshPreview>,
+    mut mesh_light: ResMut<MeshLight>,
 ) -> Result {
     for material in &mut atlas.materials {
         for texture in &mut material.textures {
@@ -135,6 +138,8 @@ pub fn editor_ui(
     mesh_viewport.y = mesh_rect.top();
     mesh_viewport.width = mesh_rect.width();
     mesh_viewport.height = mesh_rect.height();
+
+    mesh::mesh_panel(ctx, mesh_rect, &mut mesh_preview, &mut mesh_light);
 
     // Draggable divider.
     let divider_response = root_ui.interact(
