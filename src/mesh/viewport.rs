@@ -1,6 +1,11 @@
-use bevy::{input::mouse::MouseMotion, prelude::*};
+use bevy::{
+    input::mouse::{MouseMotion, MouseWheel},
+    prelude::*,
+};
 
 use super::{MeshPreview, MeshPreviewCamera, MeshViewportLayout};
+
+use crate::ui::EditorUi;
 
 #[derive(Component)]
 pub struct MeshViewportSection;
@@ -41,14 +46,19 @@ pub fn update_mesh_viewport(
 
 pub fn orbit_camera(
     mut mouse_motion: MessageReader<MouseMotion>,
+    mut mouse_wheel: MessageReader<MouseWheel>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
+    keyboard: Res<ButtonInput<KeyCode>>,
     windows: Query<&Window>,
     mesh_viewport: Res<MeshViewportLayout>,
+    editor_ui: Res<EditorUi>,
+    time: Res<Time>,
     mut mesh_preview: ResMut<MeshPreview>,
     mut cameras: Query<&mut Transform, With<MeshPreviewCamera>>,
 ) {
     let Ok(window) = windows.single() else {
         mouse_motion.clear();
+        mouse_wheel.clear();
         return;
     };
 
@@ -56,6 +66,7 @@ pub fn orbit_camera(
         .cursor_position()
         .is_some_and(|position| mesh_viewport.contains(position));
 
+    // Start orbit only when the mouse is inside the 3D viewport.
     if mouse_buttons.just_pressed(MouseButton::Left) && cursor_inside {
         mesh_preview.orbiting = true;
     }
@@ -64,28 +75,56 @@ pub fn orbit_camera(
         mesh_preview.orbiting = false;
     }
 
-    if !mesh_preview.orbiting {
+    // Orbit.
+    if mesh_preview.orbiting {
+        let mut delta = Vec2::ZERO;
+
+        for event in mouse_motion.read() {
+            delta += event.delta;
+        }
+
+        let sensitivity = 0.01;
+
+        mesh_preview.yaw -= delta.x * sensitivity;
+        mesh_preview.pitch -= delta.y * sensitivity;
+
+        mesh_preview.pitch = mesh_preview.pitch.clamp(-1.5, 1.5);
+    } else {
         mouse_motion.clear();
-        return;
     }
 
-    let mut delta = Vec2::ZERO;
+    // Ctrl + mouse wheel = zoom.
+    let ctrl_pressed =
+        keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight);
 
-    for event in mouse_motion.read() {
-        delta += event.delta;
+    if cursor_inside {
+        let mut scroll = 0.0;
+
+        for event in mouse_wheel.read() {
+            scroll += event.y;
+        }
+
+        if scroll != 0.0 && ctrl_pressed {
+            let zoom_speed = editor_ui.editor_settings.mouse_scroll_speed;
+
+            mesh_preview.target_distance *= (-scroll * zoom_speed * 0.01).exp();
+
+            mesh_preview.target_distance = mesh_preview.target_distance.clamp(0.25, 100.0);
+        }
+    } else {
+        mouse_wheel.clear();
     }
 
-    if delta == Vec2::ZERO {
-        return;
-    }
+    // Smoothly approach the target zoom.
+    let smoothing = 12.0;
 
-    let sensitivity = 0.01;
+    let interpolation = 1.0 - (-smoothing * time.delta_secs()).exp();
 
-    mesh_preview.yaw -= delta.x * sensitivity;
-    mesh_preview.pitch -= delta.y * sensitivity;
+    mesh_preview.distance = mesh_preview
+        .distance
+        .lerp(mesh_preview.target_distance, interpolation);
 
-    mesh_preview.pitch = mesh_preview.pitch.clamp(-1.5, 1.5);
-
+    // Update camera transform.
     let rotation = Quat::from_euler(EulerRot::YXZ, mesh_preview.yaw, mesh_preview.pitch, 0.0);
 
     let offset = rotation * Vec3::new(0.0, 0.0, mesh_preview.distance);

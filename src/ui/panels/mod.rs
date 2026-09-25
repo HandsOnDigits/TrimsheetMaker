@@ -20,7 +20,7 @@ use super::EditorUi;
 use crate::{
     data::Atlas,
     hotkeys::{EditorAction, HotkeyManager},
-    mesh::MeshViewportLayout,
+    mesh::{MeshPreview, MeshViewportLayout},
     ui::windows,
 };
 
@@ -32,6 +32,7 @@ pub fn editor_ui(
     mut hotkeys: ResMut<HotkeyManager>,
     keyboard: Res<ButtonInput<KeyCode>>,
     mut mesh_viewport: ResMut<MeshViewportLayout>,
+    mut mesh_preview: ResMut<MeshPreview>,
 ) -> Result {
     for material in &mut atlas.materials {
         for texture in &mut material.textures {
@@ -58,7 +59,14 @@ pub fn editor_ui(
     egui::Panel::top("toolbar")
         .exact_size(44.0)
         .show(&mut root_ui, |ui| {
-            toolbar(ui, &mut editor_ui, &mut atlas, &mut images, &hotkeys);
+            toolbar(
+                ui,
+                &mut editor_ui,
+                &mut atlas,
+                &mut images,
+                &hotkeys,
+                &mut mesh_preview,
+            );
         });
 
     if editor_ui.show_status {

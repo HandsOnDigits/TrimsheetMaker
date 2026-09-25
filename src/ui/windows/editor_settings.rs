@@ -129,7 +129,7 @@ fn all_editable_actions() -> &'static [EditorAction] {
         EditorAction::ImportSingleMaterial,
         EditorAction::RemoveSelectedMaterial,
         EditorAction::PackAtlas,
-        EditorAction::ResetAtlasView,
+        EditorAction::ResetViewport,
         EditorAction::ToggleMaterialsPanel,
         EditorAction::ToggleInspectorPanel,
         EditorAction::ToggleStatusBar,
@@ -151,7 +151,7 @@ fn action_display_name(action: EditorAction) -> &'static str {
         EditorAction::RemoveSelectedMaterial => "Remove Selected Material",
 
         EditorAction::PackAtlas => "Pack Atlas",
-        EditorAction::ResetAtlasView => "Reset Atlas View",
+        EditorAction::ResetViewport => "Reset Atlas View",
 
         EditorAction::Undo => "Undo",
         EditorAction::Redo => "Redo",

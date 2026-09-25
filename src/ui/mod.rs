@@ -47,9 +47,16 @@ fn apply_editor_actions(
     mut editor_ui: ResMut<EditorUi>,
     mut atlas: ResMut<data::Atlas>,
     mut images: ResMut<Assets<Image>>,
+    mut mesh_preview: ResMut<crate::mesh::MeshPreview>,
 ) {
     for message in messages.read() {
-        hotkeys::execute_action(message.action, &mut editor_ui, &mut atlas, &mut images);
+        hotkeys::execute_action(
+            message.action,
+            &mut editor_ui,
+            &mut atlas,
+            &mut images,
+            &mut mesh_preview,
+        );
     }
 }
 

@@ -1,10 +1,12 @@
+use bevy::prelude::Resource;
+
 use std::{collections::HashMap, fs, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use crate::hotkeys::EditorAction;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Resource, Clone, Debug, Serialize, Deserialize)]
 pub struct EditorSettings {
     pub mouse_scroll_speed: f32,
 

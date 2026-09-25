@@ -6,6 +6,7 @@ use super::{EditorUi, menu_action_button};
 use crate::{
     data::Atlas,
     hotkeys::{EditorAction, HotkeyManager, execute_action},
+    mesh::MeshPreview,
 };
 
 pub fn toolbar(
@@ -14,44 +15,65 @@ pub fn toolbar(
     atlas: &mut Atlas,
     images: &mut Assets<Image>,
     hotkeys: &HotkeyManager,
+    mesh_preview: &mut MeshPreview,
 ) {
     ui.horizontal(|ui| {
         ui.add_space(8.0);
 
         ui.menu_button("File", |ui| {
             if menu_action_button(ui, hotkeys, EditorAction::NewAtlas, "New Atlas") {
-                execute_action(EditorAction::NewAtlas, editor_ui, atlas, images);
+                execute_action(
+                    EditorAction::NewAtlas,
+                    editor_ui,
+                    atlas,
+                    images,
+                    mesh_preview,
+                );
                 ui.close();
             }
 
             if menu_action_button(ui, hotkeys, EditorAction::OpenProject, "Open Project…") {
-                execute_action(EditorAction::OpenProject, editor_ui, atlas, images);
+                execute_action(
+                    EditorAction::OpenProject,
+                    editor_ui,
+                    atlas,
+                    images,
+                    mesh_preview,
+                );
                 ui.close();
             }
 
             if menu_action_button(ui, hotkeys, EditorAction::SaveProject, "Save Project") {
-                execute_action(EditorAction::SaveProject, editor_ui, atlas, images);
+                execute_action(
+                    EditorAction::SaveProject,
+                    editor_ui,
+                    atlas,
+                    images,
+                    mesh_preview,
+                );
                 ui.close();
             }
 
             if menu_action_button(ui, hotkeys, EditorAction::SaveProjectAs, "Save Project As…") {
-                execute_action(EditorAction::SaveProjectAs, editor_ui, atlas, images);
+                execute_action(
+                    EditorAction::SaveProjectAs,
+                    editor_ui,
+                    atlas,
+                    images,
+                    mesh_preview,
+                );
                 ui.close();
             }
 
             ui.separator();
 
-            if menu_action_button(
-                ui,
-                hotkeys,
-                EditorAction::ImportMultipleMaterials,
-                "Import multiple Materials…",
-            ) {
+            if menu_action_button(ui, hotkeys, EditorAction::ResetViewport, "Reset Viewports") {
                 execute_action(
-                    EditorAction::ImportMultipleMaterials,
+                    EditorAction::ResetViewport,
                     editor_ui,
                     atlas,
                     images,
+                    mesh_preview,
                 );
                 ui.close();
             }
@@ -62,14 +84,26 @@ pub fn toolbar(
                 EditorAction::ImportSingleMaterial,
                 "Import single Material…",
             ) {
-                execute_action(EditorAction::ImportSingleMaterial, editor_ui, atlas, images);
+                execute_action(
+                    EditorAction::ImportSingleMaterial,
+                    editor_ui,
+                    atlas,
+                    images,
+                    mesh_preview,
+                );
                 ui.close();
             }
 
             ui.separator();
 
             if menu_action_button(ui, hotkeys, EditorAction::ExportAtlas, "Export Atlas…") {
-                execute_action(EditorAction::ExportAtlas, editor_ui, atlas, images);
+                execute_action(
+                    EditorAction::ExportAtlas,
+                    editor_ui,
+                    atlas,
+                    images,
+                    mesh_preview,
+                );
                 ui.close();
             }
         });
@@ -88,12 +122,19 @@ pub fn toolbar(
                     editor_ui,
                     atlas,
                     images,
+                    mesh_preview,
                 );
                 ui.close();
             }
 
-            if menu_action_button(ui, hotkeys, EditorAction::PackAtlas, "Pack Atlas") {
-                execute_action(EditorAction::PackAtlas, editor_ui, atlas, images);
+            if menu_action_button(ui, hotkeys, EditorAction::ResetViewport, "Reset Viewports") {
+                execute_action(
+                    EditorAction::ResetViewport,
+                    editor_ui,
+                    atlas,
+                    images,
+                    mesh_preview,
+                );
                 ui.close();
             }
         });
@@ -107,13 +148,14 @@ pub fn toolbar(
 
             ui.separator();
 
-            if menu_action_button(
-                ui,
-                hotkeys,
-                EditorAction::ResetAtlasView,
-                "Reset Atlas View",
-            ) {
-                execute_action(EditorAction::ResetAtlasView, editor_ui, atlas, images);
+            if menu_action_button(ui, hotkeys, EditorAction::ResetViewport, "Reset Viewports") {
+                execute_action(
+                    EditorAction::ResetViewport,
+                    editor_ui,
+                    atlas,
+                    images,
+                    mesh_preview,
+                );
                 ui.close();
             }
         });

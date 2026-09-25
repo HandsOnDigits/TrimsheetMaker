@@ -24,7 +24,7 @@ pub enum EditorAction {
     RemoveSelectedMaterial,
     PackAtlas,
 
-    ResetAtlasView,
+    ResetViewport,
 
     ToggleMaterialsPanel,
     ToggleInspectorPanel,
@@ -50,6 +50,7 @@ pub fn execute_action(
     editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
     images: &mut Assets<Image>,
+    mesh_preview: &mut crate::mesh::MeshPreview,
 ) {
     match action {
         EditorAction::NewAtlas => {
@@ -169,9 +170,14 @@ pub fn execute_action(
             // TODO: Real atlas packing implementation.
         }
 
-        EditorAction::ResetAtlasView => {
+        EditorAction::ResetViewport => {
             editor_ui.atlas_zoom = 1.0;
             editor_ui.atlas_pan = egui::Vec2::ZERO;
+
+            mesh_preview.distance = 4.0;
+            mesh_preview.yaw = 0.0;
+            mesh_preview.pitch = 0.25;
+            mesh_preview.target = Vec3::ZERO;
         }
 
         EditorAction::ToggleMaterialsPanel => {

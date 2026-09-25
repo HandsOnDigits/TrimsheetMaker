@@ -148,7 +148,7 @@ impl HotkeyManager {
 
         // View
         self.bindings
-            .insert(EditorAction::ResetAtlasView, Hotkey::plain(KeyCode::KeyF));
+            .insert(EditorAction::ResetViewport, Hotkey::plain(KeyCode::KeyF));
     }
 
     pub fn binding(&self, action: EditorAction) -> Option<Hotkey> {
