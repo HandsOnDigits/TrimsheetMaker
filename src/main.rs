@@ -6,6 +6,7 @@ use ui::EditorUiPlugin;
 
 mod assets;
 mod data;
+mod mesh;
 
 mod hotkeys;
 use hotkeys::HotkeyPlugin;
@@ -29,6 +30,7 @@ fn main() {
         }))
         .add_plugins(EguiPlugin::default())
         .add_plugins(HotkeyPlugin)
+        .add_plugins(mesh::MeshPreviewPlugin)
         .add_plugins(EditorUiPlugin)
         .run();
 }

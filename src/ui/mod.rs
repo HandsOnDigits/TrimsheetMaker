@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use bevy::prelude::*;
-use bevy_egui::{EguiPrimaryContextPass, egui};
+use bevy_egui::{EguiGlobalSettings, EguiPrimaryContextPass, PrimaryEguiContext, egui};
 
 use crate::{
     data,
@@ -10,7 +10,7 @@ use crate::{
     project_settings::ProjectSettings,
 };
 
-mod panels;
+pub mod panels;
 mod windows;
 
 pub struct EditorUiPlugin;
@@ -32,8 +32,10 @@ fn load_editor_settings(editor_ui: Res<EditorUi>, mut hotkeys: ResMut<hotkeys::H
     hotkeys.load_from_settings(&editor_ui.editor_settings);
 }
 
-fn setup(mut commands: Commands) {
-    commands.spawn(Camera2d);
+fn setup(mut commands: Commands, mut egui_settings: ResMut<EguiGlobalSettings>) {
+    egui_settings.auto_create_primary_context = false;
+
+    commands.spawn((PrimaryEguiContext, Camera2d));
 }
 
 /// Applies actions emitted by the hotkey manager.
@@ -60,6 +62,12 @@ pub struct EditorUi {
     pub show_import_multiple_materials_window: bool,
     pub show_import_single_material_window: bool,
     pub show_editor_settings_window: bool,
+
+    pub show_mesh_preview: bool,
+    pub mesh_preview_zoom: f32,
+    pub mesh_preview_pan: egui::Vec2,
+
+    pub mesh_view_split: f32,
 
     pub hotkey_capture: Option<EditorAction>,
 
@@ -109,6 +117,12 @@ impl Default for EditorUi {
             show_import_multiple_materials_window: false,
             show_import_single_material_window: false,
             show_editor_settings_window: false,
+
+            mesh_view_split: 0.5,
+
+            show_mesh_preview: false,
+            mesh_preview_zoom: 1.0,
+            mesh_preview_pan: egui::Vec2::ZERO,
 
             hotkey_capture: None,
 

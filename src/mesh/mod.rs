@@ -1,0 +1,77 @@
+use bevy::{camera::RenderTarget, prelude::*, render::render_resource::TextureFormat};
+use bevy_egui::EguiPrimaryContextPass;
+
+mod viewport;
+
+pub struct MeshPreviewPlugin;
+
+#[derive(Component)]
+pub struct MeshPreviewCamera;
+
+#[derive(Resource)]
+pub struct MeshPreview {
+    pub camera: Entity,
+}
+
+impl Plugin for MeshPreviewPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<MeshViewportLayout>()
+            .add_systems(
+                Startup,
+                (setup_mesh_preview, viewport::spawn_mesh_viewport).chain(),
+            )
+            .add_systems(EguiPrimaryContextPass, viewport::update_mesh_viewport);
+    }
+}
+
+fn setup_mesh_preview(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let image = Image::new_target_texture(1, 1, TextureFormat::Rgba8UnormSrgb, None);
+
+    let image_handle = images.add(image);
+
+    let camera = commands
+        .spawn((
+            Camera3d::default(),
+            Camera {
+                order: -1,
+                ..default()
+            },
+            RenderTarget::Image(image_handle.into()),
+            Transform::from_xyz(0.0, 1.5, 4.0).looking_at(Vec3::ZERO, Vec3::Y),
+            MeshPreviewCamera,
+        ))
+        .id();
+
+    commands.insert_resource(MeshPreview { camera });
+
+    commands.spawn((
+        DirectionalLight {
+            illuminance: 10_000.0,
+            ..default()
+        },
+        Transform::from_xyz(2.0, 4.0, 2.0).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
+
+    commands.spawn((
+        Mesh3d(meshes.add(Cuboid::new(1.5, 1.5, 1.5))),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color: Color::srgb(0.7, 0.7, 0.7),
+            perceptual_roughness: 0.7,
+            ..default()
+        })),
+        Transform::from_xyz(0.0, 0.0, 0.0),
+    ));
+}
+
+#[derive(Resource, Default)]
+pub struct MeshViewportLayout {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}

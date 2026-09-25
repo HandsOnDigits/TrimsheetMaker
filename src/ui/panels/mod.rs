@@ -20,6 +20,7 @@ use super::EditorUi;
 use crate::{
     data::Atlas,
     hotkeys::{EditorAction, HotkeyManager},
+    mesh::MeshViewportLayout,
     ui::windows,
 };
 
@@ -30,6 +31,7 @@ pub fn editor_ui(
     mut images: ResMut<Assets<Image>>,
     mut hotkeys: ResMut<HotkeyManager>,
     keyboard: Res<ButtonInput<KeyCode>>,
+    mut mesh_viewport: ResMut<MeshViewportLayout>,
 ) -> Result {
     for material in &mut atlas.materials {
         for texture in &mut material.textures {
@@ -96,7 +98,62 @@ pub fn editor_ui(
         );
     }
 
-    atlas::atlas_view::atlas_view(&mut root_ui, &mut editor_ui, &mut atlas, &keyboard);
+    let available = root_ui.available_rect_before_wrap();
+
+    let divider_height = 5.0;
+
+    let split_y = available.top() + available.height() * editor_ui.mesh_view_split;
+
+    let mesh_rect = egui::Rect::from_min_max(
+        available.min,
+        egui::pos2(available.right(), split_y - divider_height * 0.5),
+    );
+
+    let divider_rect = egui::Rect::from_min_max(
+        egui::pos2(available.left(), split_y - divider_height * 0.5),
+        egui::pos2(available.right(), split_y + divider_height * 0.5),
+    );
+
+    let atlas_rect = egui::Rect::from_min_max(
+        egui::pos2(available.left(), split_y + divider_height * 0.5),
+        available.max,
+    );
+
+    // Synchronize the native Bevy 3D viewport with the upper area.
+    mesh_viewport.x = mesh_rect.left();
+    mesh_viewport.y = mesh_rect.top();
+    mesh_viewport.width = mesh_rect.width();
+    mesh_viewport.height = mesh_rect.height();
+
+    // Draggable divider.
+    let divider_response = root_ui.interact(
+        divider_rect,
+        root_ui.make_persistent_id("mesh_atlas_split"),
+        egui::Sense::drag(),
+    );
+
+    if divider_response.dragged() {
+        editor_ui.mesh_view_split = (editor_ui.mesh_view_split
+            + divider_response.drag_delta().y / available.height())
+        .clamp(0.2, 0.8);
+    }
+
+    if divider_response.hovered() || divider_response.dragged() {
+        root_ui
+            .ctx()
+            .set_cursor_icon(egui::CursorIcon::ResizeVertical);
+    }
+
+    root_ui.painter().rect_filled(
+        divider_rect,
+        0.0,
+        root_ui.visuals().widgets.noninteractive.bg_fill,
+    );
+
+    // The existing atlas occupies the lower area.
+    root_ui.scope_builder(egui::UiBuilder::new().max_rect(atlas_rect), |ui| {
+        atlas::atlas_view::atlas_view(ui, &mut editor_ui, &mut atlas, &keyboard);
+    });
 
     // Bulk/folder import.
     windows::import_multiple_materials::import_multiple_materials_window(
