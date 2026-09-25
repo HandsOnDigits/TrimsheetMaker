@@ -11,6 +11,11 @@ pub struct MeshPreviewCamera;
 #[derive(Resource)]
 pub struct MeshPreview {
     pub camera: Entity,
+    pub target: Vec3,
+    pub distance: f32,
+    pub yaw: f32,
+    pub pitch: f32,
+    pub orbiting: bool,
 }
 
 impl Plugin for MeshPreviewPlugin {
@@ -20,7 +25,8 @@ impl Plugin for MeshPreviewPlugin {
                 Startup,
                 (setup_mesh_preview, viewport::spawn_mesh_viewport).chain(),
             )
-            .add_systems(EguiPrimaryContextPass, viewport::update_mesh_viewport);
+            .add_systems(EguiPrimaryContextPass, viewport::update_mesh_viewport)
+            .add_systems(Update, viewport::orbit_camera);
     }
 }
 
@@ -47,7 +53,14 @@ fn setup_mesh_preview(
         ))
         .id();
 
-    commands.insert_resource(MeshPreview { camera });
+    commands.insert_resource(MeshPreview {
+        camera,
+        target: Vec3::ZERO,
+        distance: 4.0,
+        yaw: 0.0,
+        pitch: 0.25,
+        orbiting: false,
+    });
 
     commands.spawn((
         DirectionalLight {
@@ -74,4 +87,13 @@ pub struct MeshViewportLayout {
     pub y: f32,
     pub width: f32,
     pub height: f32,
+}
+
+impl MeshViewportLayout {
+    pub fn contains(&self, position: Vec2) -> bool {
+        position.x >= self.x
+            && position.x <= self.x + self.width
+            && position.y >= self.y
+            && position.y <= self.y + self.height
+    }
 }

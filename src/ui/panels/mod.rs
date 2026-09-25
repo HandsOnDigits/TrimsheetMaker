@@ -100,26 +100,29 @@ pub fn editor_ui(
 
     let available = root_ui.available_rect_before_wrap();
 
-    let divider_height = 5.0;
+    let divider_width = 5.0;
 
-    let split_y = available.top() + available.height() * editor_ui.mesh_view_split;
+    let split_x = available.left() + available.width() * editor_ui.mesh_view_split;
 
+    // Left: 3D mesh viewport.
     let mesh_rect = egui::Rect::from_min_max(
         available.min,
-        egui::pos2(available.right(), split_y - divider_height * 0.5),
+        egui::pos2(split_x - divider_width * 0.5, available.bottom()),
     );
 
+    // Vertical divider.
     let divider_rect = egui::Rect::from_min_max(
-        egui::pos2(available.left(), split_y - divider_height * 0.5),
-        egui::pos2(available.right(), split_y + divider_height * 0.5),
+        egui::pos2(split_x - divider_width * 0.5, available.top()),
+        egui::pos2(split_x + divider_width * 0.5, available.bottom()),
     );
 
+    // Right: 2D atlas.
     let atlas_rect = egui::Rect::from_min_max(
-        egui::pos2(available.left(), split_y + divider_height * 0.5),
+        egui::pos2(split_x + divider_width * 0.5, available.top()),
         available.max,
     );
 
-    // Synchronize the native Bevy 3D viewport with the upper area.
+    // Synchronize native Bevy viewport.
     mesh_viewport.x = mesh_rect.left();
     mesh_viewport.y = mesh_rect.top();
     mesh_viewport.width = mesh_rect.width();
@@ -134,14 +137,14 @@ pub fn editor_ui(
 
     if divider_response.dragged() {
         editor_ui.mesh_view_split = (editor_ui.mesh_view_split
-            + divider_response.drag_delta().y / available.height())
+            + divider_response.drag_delta().x / available.width())
         .clamp(0.2, 0.8);
     }
 
     if divider_response.hovered() || divider_response.dragged() {
         root_ui
             .ctx()
-            .set_cursor_icon(egui::CursorIcon::ResizeVertical);
+            .set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
     }
 
     root_ui.painter().rect_filled(
@@ -150,7 +153,7 @@ pub fn editor_ui(
         root_ui.visuals().widgets.noninteractive.bg_fill,
     );
 
-    // The existing atlas occupies the lower area.
+    // Atlas occupies the right side.
     root_ui.scope_builder(egui::UiBuilder::new().max_rect(atlas_rect), |ui| {
         atlas::atlas_view::atlas_view(ui, &mut editor_ui, &mut atlas, &keyboard);
     });
