@@ -125,6 +125,11 @@ impl HotkeyManager {
         self.bindings
             .insert(EditorAction::SaveProject, Hotkey::ctrl(KeyCode::KeyS));
 
+        self.bindings.insert(
+            EditorAction::SaveProjectAs,
+            Hotkey::ctrl_shift(KeyCode::KeyS),
+        );
+
         self.bindings
             .insert(EditorAction::ExportAtlas, Hotkey::ctrl_shift(KeyCode::KeyE));
 
