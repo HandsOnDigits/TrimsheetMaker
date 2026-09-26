@@ -1,7 +1,6 @@
 pub mod import;
 
 mod regions;
-pub use regions::*;
 
 pub mod viewport;
 
@@ -22,6 +21,8 @@ pub struct MeshViewportInput {
 #[derive(Resource, Default)]
 pub struct MeshSceneState {
     pub root: Option<Entity>,
+    pub bounds_center: Vec3,
+    pub bounds_radius: f32,
 }
 
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
@@ -36,7 +37,7 @@ impl Default for MeshLight {
         Self {
             preset: MeshLightPreset::Studio,
             position: Vec3::new(3.0, 3.0, 4.0),
-            follow_mouse: true,
+            follow_mouse: false,
         }
     }
 }
@@ -126,7 +127,6 @@ impl Plugin for MeshPreviewPlugin {
 fn setup_mesh_preview(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
-    mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let image = Image::new_target_texture(1, 1, TextureFormat::Rgba8UnormSrgb, None);
@@ -165,7 +165,6 @@ fn setup_mesh_preview(
     ));
 
     commands.spawn((
-        Mesh3d(meshes.add(Cuboid::new(1.5, 1.5, 1.5))),
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::srgb(0.7, 0.7, 0.7),
             perceptual_roughness: 0.7,

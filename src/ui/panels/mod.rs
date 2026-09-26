@@ -206,6 +206,7 @@ pub fn editor_ui(
         &mut meshes,
         &mut materials,
         &mut mesh_scene_state,
+        &mut mesh_preview,
     );
 
     Ok(())

@@ -23,7 +23,24 @@ pub fn spawn_mesh_scene(
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
     scene: &super::import::MeshScene,
-) -> Entity {
+) -> (Entity, Vec3, f32) {
+    let mut bounds_min = Vec3::splat(f32::INFINITY);
+    let mut bounds_max = Vec3::splat(f32::NEG_INFINITY);
+
+    for object in &scene.objects {
+        let translation = Vec3::from(object.transform.translation);
+        let scale = Vec3::from(object.transform.scale);
+
+        for primitive in &object.primitives {
+            for position in &primitive.positions {
+                let position = Vec3::from(*position) * scale + translation;
+
+                bounds_min = bounds_min.min(position);
+                bounds_max = bounds_max.max(position);
+            }
+        }
+    }
+
     let root = commands
         .spawn((
             Name::new("Imported Mesh"),
@@ -89,7 +106,19 @@ pub fn spawn_mesh_scene(
         }
     }
 
-    root
+    let bounds_center = if bounds_min.x.is_finite() {
+        (bounds_min + bounds_max) * 0.5
+    } else {
+        Vec3::ZERO
+    };
+
+    let bounds_radius = if bounds_min.x.is_finite() {
+        (bounds_max - bounds_center).length()
+    } else {
+        1.0
+    };
+
+    (root, bounds_center, bounds_radius)
 }
 
 pub fn spawn_mesh_viewport(mut commands: Commands, mesh_preview: Res<MeshPreview>) {
@@ -304,7 +333,7 @@ pub fn orbit_camera(
 
             mesh_preview.target_distance *= (-scroll * zoom_speed * 0.01).exp();
 
-            mesh_preview.target_distance = mesh_preview.target_distance.clamp(0.25, 100.0);
+            mesh_preview.target_distance = mesh_preview.target_distance.clamp(0.01, 100_000.0);
         }
     } else {
         mouse_wheel.clear();

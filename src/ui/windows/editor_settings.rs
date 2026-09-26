@@ -49,16 +49,16 @@ pub fn editor_settings_window(
                     .unwrap_or_default();
 
                 let response =
-                    ui.add(egui::TextEdit::singleline(&mut path_text).desired_width(320.0));
+                    ui.add(egui::TextEdit::singleline(&mut path_text).desired_width(350.0));
 
                 if response.changed() {
-                    editor_ui.editor_settings.assimp_library_path = if path_text.trim().is_empty() {
+                    editor_ui.mesh_import_error = None;
+
+                    editor_ui.mesh_import_path = if path_text.trim().is_empty() {
                         None
                     } else {
                         Some(path_text.into())
                     };
-
-                    editor_ui.editor_settings.save();
                 }
 
                 if ui.button("Browse...").clicked() {

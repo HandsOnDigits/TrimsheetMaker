@@ -1,11 +1,9 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
 
-use rfd::FileDialog;
-
 use crate::{
     mesh::{
-        MeshSceneState,
+        MeshPreview, MeshSceneState,
         import::{self, MeshBackend, MeshImportSettings},
         viewport::{despawn_imported_mesh, spawn_mesh_scene},
     },
@@ -19,6 +17,7 @@ pub fn import_mesh_window(
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
     mesh_scene_state: &mut MeshSceneState,
+    mesh_preview: &mut MeshPreview,
 ) {
     if !editor_ui.show_import_mesh_window {
         return;
@@ -43,6 +42,8 @@ pub fn import_mesh_window(
                     .add(egui::TextEdit::singleline(&mut path_text).desired_width(350.0))
                     .changed()
                 {
+                    editor_ui.mesh_import_error = None;
+
                     editor_ui.mesh_import_path = if path_text.trim().is_empty() {
                         None
                     } else {
@@ -51,7 +52,7 @@ pub fn import_mesh_window(
                 }
 
                 if ui.button("Browse...").clicked() {
-                    if let Some(path) = FileDialog::new()
+                    if let Some(path) = rfd::FileDialog::new()
                         .add_filter(
                             "Mesh Files",
                             &["gltf", "glb", "fbx", "obj", "dae", "3ds", "ply", "stl"],
@@ -68,25 +69,35 @@ pub fn import_mesh_window(
 
             ui.label("Backend");
 
-            ui.horizontal(|ui| {
-                ui.radio_value(
+            let mut backend_changed = false;
+
+            backend_changed |= ui
+                .radio_value(
                     &mut editor_ui.mesh_import_backend,
                     MeshBackend::Auto,
                     "Auto",
-                );
+                )
+                .changed();
 
-                ui.radio_value(
+            backend_changed |= ui
+                .radio_value(
                     &mut editor_ui.mesh_import_backend,
                     MeshBackend::Gltf,
                     "glTF",
-                );
+                )
+                .changed();
 
-                ui.radio_value(
+            backend_changed |= ui
+                .radio_value(
                     &mut editor_ui.mesh_import_backend,
                     MeshBackend::Assimp,
                     "Assimp",
-                );
-            });
+                )
+                .changed();
+
+            if backend_changed {
+                editor_ui.mesh_import_error = None;
+            }
 
             ui.separator();
 
@@ -119,9 +130,19 @@ pub fn import_mesh_window(
                         Ok(scene) => {
                             despawn_imported_mesh(commands, mesh_scene_state);
 
-                            let root = spawn_mesh_scene(commands, meshes, materials, &scene);
+                            let (root, bounds_center, bounds_radius) =
+                                spawn_mesh_scene(commands, meshes, materials, &scene);
 
                             mesh_scene_state.root = Some(root);
+
+                            mesh_preview.target = bounds_center;
+
+                            let fit_distance = (bounds_radius * 2.5).max(0.25);
+
+                            mesh_preview.distance = fit_distance;
+                            mesh_preview.target_distance = fit_distance;
+
+                            editor_ui.mesh_import_error = None;
                             editor_ui.show_import_mesh_window = false;
                         }
 
@@ -137,4 +158,8 @@ pub fn import_mesh_window(
         });
 
     editor_ui.show_import_mesh_window = open;
+
+    if !open {
+        editor_ui.mesh_import_error = None;
+    }
 }
