@@ -36,6 +36,50 @@ pub fn editor_settings_window(
 
             ui.separator();
 
+            ui.heading("Mesh Import");
+
+            ui.horizontal(|ui| {
+                ui.label("Assimp Library");
+
+                let mut path_text = editor_ui
+                    .editor_settings
+                    .assimp_library_path
+                    .as_ref()
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_default();
+
+                let response =
+                    ui.add(egui::TextEdit::singleline(&mut path_text).desired_width(320.0));
+
+                if response.changed() {
+                    editor_ui.editor_settings.assimp_library_path = if path_text.trim().is_empty() {
+                        None
+                    } else {
+                        Some(path_text.into())
+                    };
+
+                    editor_ui.editor_settings.save();
+                }
+
+                if ui.button("Browse...").clicked() {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("Assimp Library", &["dll", "so", "dylib"])
+                        .pick_file()
+                    {
+                        editor_ui.editor_settings.assimp_library_path = Some(path);
+                        editor_ui.editor_settings.save();
+                    }
+                }
+            });
+
+            if let Some(path) = &editor_ui.editor_settings.assimp_library_path {
+                if !path.is_file() {
+                    ui.colored_label(egui::Color32::RED, "Assimp library file does not exist.");
+                }
+            }
+
+            ui.separator();
+
             ui.heading("Hotkeys");
 
             ui.label("Click a shortcut to assign a new key combination.");

@@ -28,6 +28,8 @@ pub fn spawn_mesh_scene(
         .spawn((
             Name::new("Imported Mesh"),
             Transform::default(),
+            Visibility::default(),
+            InheritedVisibility::default(),
             ImportedMesh,
         ))
         .id();
@@ -44,6 +46,8 @@ pub fn spawn_mesh_scene(
                         object.transform.rotation[3],
                     ))
                     .with_scale(Vec3::from(object.transform.scale)),
+                Visibility::default(),
+                InheritedVisibility::default(),
                 ImportedMesh,
             ))
             .id();

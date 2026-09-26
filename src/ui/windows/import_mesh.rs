@@ -9,7 +9,6 @@ use crate::{
         import::{self, MeshBackend, MeshImportSettings},
         viewport::{despawn_imported_mesh, spawn_mesh_scene},
     },
-    platform,
     ui::EditorUi,
 };
 
@@ -60,6 +59,7 @@ pub fn import_mesh_window(
                         .pick_file()
                     {
                         editor_ui.mesh_import_path = Some(path);
+                        editor_ui.mesh_import_error = None;
                     }
                 }
             });
@@ -90,6 +90,12 @@ pub fn import_mesh_window(
 
             ui.separator();
 
+            if let Some(error) = &editor_ui.mesh_import_error {
+                ui.separator();
+
+                ui.colored_label(egui::Color32::RED, error);
+            }
+
             ui.horizontal(|ui| {
                 if ui.button("Cancel").clicked() {
                     editor_ui.show_import_mesh_window = false;
@@ -105,11 +111,9 @@ pub fn import_mesh_window(
                         return;
                     };
 
-                    let assimp_library = platform::default_assimp_library_paths()
-                        .into_iter()
-                        .find(|path| path.is_file());
-
-                    let settings = MeshImportSettings { assimp_library };
+                    let settings = MeshImportSettings {
+                        assimp_library: editor_ui.editor_settings.assimp_library_path.clone(),
+                    };
 
                     match import::import(&path, editor_ui.mesh_import_backend, &settings) {
                         Ok(scene) => {
@@ -122,7 +126,10 @@ pub fn import_mesh_window(
                         }
 
                         Err(error) => {
-                            eprintln!("Failed to import mesh '{}': {error}", path.display());
+                            editor_ui.mesh_import_error = Some(format!(
+                                "Failed to import mesh '{}': {error}",
+                                path.display()
+                            ));
                         }
                     }
                 }

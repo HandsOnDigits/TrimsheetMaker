@@ -7,7 +7,6 @@ use ui::EditorUiPlugin;
 mod data;
 mod image;
 mod mesh;
-mod platform;
 
 mod hotkeys;
 use hotkeys::HotkeyPlugin;

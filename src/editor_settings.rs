@@ -12,6 +12,8 @@ pub struct EditorSettings {
 
     #[serde(default)]
     pub hotkeys: HashMap<EditorAction, SavedHotkey>,
+
+    pub assimp_library_path: Option<std::path::PathBuf>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -28,6 +30,7 @@ impl Default for EditorSettings {
         Self {
             mouse_scroll_speed: 20.0,
             hotkeys: HashMap::new(),
+            assimp_library_path: None,
         }
     }
 }

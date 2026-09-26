@@ -77,6 +77,7 @@ pub struct EditorUi {
 
     pub mesh_import_path: Option<std::path::PathBuf>,
     pub mesh_import_backend: crate::mesh::import::MeshBackend,
+    pub mesh_import_error: Option<String>,
 
     pub mesh_view_split: f32,
 
@@ -132,6 +133,7 @@ impl Default for EditorUi {
 
             mesh_import_path: None,
             mesh_import_backend: crate::mesh::import::MeshBackend::Auto,
+            mesh_import_error: None,
 
             mesh_view_split: 0.5,
 
