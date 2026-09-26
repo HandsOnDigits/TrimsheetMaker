@@ -4,15 +4,15 @@ use bevy_egui::EguiPlugin;
 mod ui;
 use ui::EditorUiPlugin;
 
-mod assets;
 mod data;
+mod image;
 mod mesh;
+mod platform;
 
 mod hotkeys;
 use hotkeys::HotkeyPlugin;
 
 mod editor_settings;
-mod importer;
 mod project;
 mod project_settings;
 mod transform;

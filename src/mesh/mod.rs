@@ -1,7 +1,12 @@
-use bevy::{camera::RenderTarget, prelude::*, render::render_resource::TextureFormat};
-use bevy_egui::EguiPrimaryContextPass;
+mod import;
+
+mod regions;
+pub use regions::*;
 
 mod viewport;
+
+use bevy::{camera::RenderTarget, prelude::*, render::render_resource::TextureFormat};
+use bevy_egui::EguiPrimaryContextPass;
 
 #[derive(Component)]
 pub struct MeshPreviewCamera;
