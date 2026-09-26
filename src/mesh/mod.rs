@@ -18,26 +18,40 @@ pub struct MeshViewportInput {
     pub pointer_over_ui: bool,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct MeshRaycastTriangle {
+    pub v0: Vec3,
+    pub v1: Vec3,
+    pub v2: Vec3,
+
+    pub n0: Vec3,
+    pub n1: Vec3,
+    pub n2: Vec3,
+}
+
 #[derive(Resource, Default)]
 pub struct MeshSceneState {
     pub root: Option<Entity>,
     pub bounds_center: Vec3,
     pub bounds_radius: f32,
+    pub triangles: Vec<MeshRaycastTriangle>,
 }
 
-#[derive(Resource, Debug, Clone, Copy, PartialEq)]
+#[derive(Resource)]
 pub struct MeshLight {
     pub preset: MeshLightPreset,
     pub position: Vec3,
-    pub follow_mouse: bool,
+    pub target: Vec3,
+    pub follow_camera: bool,
 }
 
 impl Default for MeshLight {
     fn default() -> Self {
         Self {
             preset: MeshLightPreset::Studio,
-            position: Vec3::new(3.0, 3.0, 4.0),
-            follow_mouse: false,
+            position: Vec3::new(2.0, 2.0, 2.0),
+            target: Vec3::ZERO,
+            follow_camera: false,
         }
     }
 }
@@ -82,6 +96,8 @@ pub struct MeshPreview {
     pub target_distance: f32,
     pub rotation: Quat,
     pub orbiting: bool,
+    pub yaw: f32,
+    pub pitch: f32,
 }
 
 #[derive(Resource, Default)]
@@ -90,15 +106,6 @@ pub struct MeshViewportLayout {
     pub y: f32,
     pub width: f32,
     pub height: f32,
-}
-
-impl MeshViewportLayout {
-    pub fn contains(&self, position: Vec2) -> bool {
-        position.x >= self.x
-            && position.x <= self.x + self.width
-            && position.y >= self.y
-            && position.y <= self.y + self.height
-    }
 }
 
 pub struct MeshPreviewPlugin;
@@ -153,6 +160,8 @@ fn setup_mesh_preview(
         target_distance: 4.0,
         rotation: Quat::from_rotation_x(-0.25),
         orbiting: false,
+        yaw: 0.0,
+        pitch: 0.3,
     });
 
     commands.spawn((

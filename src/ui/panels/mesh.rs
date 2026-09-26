@@ -58,9 +58,9 @@ pub fn mesh_panel(
 
         ui.separator();
 
-        ui.checkbox(&mut mesh_light.follow_mouse, "Follow Mouse");
+        ui.checkbox(&mut mesh_light.follow_camera, "Follow Camera");
 
-        if let Some(hotkey) = hotkeys.display_name(EditorAction::ToggleMeshLightFollowMouse) {
+        if let Some(hotkey) = hotkeys.display_name(EditorAction::ToggleMeshLightFollowCamera) {
             ui.label(egui::RichText::new(format!("[{hotkey}]")).small().weak());
         }
     });

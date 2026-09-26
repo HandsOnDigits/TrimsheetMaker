@@ -155,7 +155,7 @@ impl HotkeyManager {
             .insert(EditorAction::ResetViewport, Hotkey::plain(KeyCode::KeyF));
 
         self.bindings.insert(
-            EditorAction::ToggleMeshLightFollowMouse,
+            EditorAction::ToggleMeshLightFollowCamera,
             Hotkey::shift(KeyCode::KeyL),
         );
     }

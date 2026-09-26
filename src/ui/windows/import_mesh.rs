@@ -130,8 +130,13 @@ pub fn import_mesh_window(
                         Ok(scene) => {
                             despawn_imported_mesh(commands, mesh_scene_state);
 
-                            let (root, bounds_center, bounds_radius) =
+                            let (root, bounds_center, bounds_radius, triangles) =
                                 spawn_mesh_scene(commands, meshes, materials, &scene);
+
+                            mesh_scene_state.root = Some(root);
+                            mesh_scene_state.bounds_center = bounds_center;
+                            mesh_scene_state.bounds_radius = bounds_radius;
+                            mesh_scene_state.triangles = triangles;
 
                             mesh_scene_state.root = Some(root);
 

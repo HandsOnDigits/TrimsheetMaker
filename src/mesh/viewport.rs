@@ -6,8 +6,8 @@ use bevy::{
 };
 
 use super::{
-    MeshLight, MeshLightPreset, MeshPreview, MeshPreviewCamera, MeshPreviewLight, MeshSceneState,
-    MeshViewportInput, MeshViewportLayout,
+    MeshLight, MeshLightPreset, MeshPreview, MeshPreviewCamera, MeshPreviewLight,
+    MeshRaycastTriangle, MeshSceneState, MeshViewportInput, MeshViewportLayout,
 };
 
 use crate::ui::EditorUi;
@@ -23,23 +23,104 @@ pub fn spawn_mesh_scene(
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
     scene: &super::import::MeshScene,
-) -> (Entity, Vec3, f32) {
+) -> (Entity, Vec3, f32, Vec<MeshRaycastTriangle>) {
     let mut bounds_min = Vec3::splat(f32::INFINITY);
     let mut bounds_max = Vec3::splat(f32::NEG_INFINITY);
 
+    let mut raycast_triangles = Vec::new();
+
     for object in &scene.objects {
         let translation = Vec3::from(object.transform.translation);
+
+        let rotation = Quat::from_xyzw(
+            object.transform.rotation[0],
+            object.transform.rotation[1],
+            object.transform.rotation[2],
+            object.transform.rotation[3],
+        );
+
         let scale = Vec3::from(object.transform.scale);
 
-        for primitive in &object.primitives {
-            for position in &primitive.positions {
-                let position = Vec3::from(*position) * scale + translation;
+        let transform = Transform {
+            translation,
+            rotation,
+            scale,
+        };
 
-                bounds_min = bounds_min.min(position);
-                bounds_max = bounds_max.max(position);
+        let normal_matrix = Mat3::from_quat(rotation)
+            * Mat3::from_diagonal(Vec3::new(
+                1.0 / scale.x.max(f32::EPSILON),
+                1.0 / scale.y.max(f32::EPSILON),
+                1.0 / scale.z.max(f32::EPSILON),
+            ));
+
+        for primitive in &object.primitives {
+            // ---------------------------------------------------------
+            // Bounds
+            // ---------------------------------------------------------
+
+            for position in &primitive.positions {
+                let world_position = transform.transform_point(Vec3::from(*position));
+
+                bounds_min = bounds_min.min(world_position);
+                bounds_max = bounds_max.max(world_position);
+            }
+
+            // ---------------------------------------------------------
+            // Raycast triangles
+            // ---------------------------------------------------------
+
+            for indices in primitive.indices.chunks_exact(3) {
+                let i0 = indices[0] as usize;
+                let i1 = indices[1] as usize;
+                let i2 = indices[2] as usize;
+
+                if i0 >= primitive.positions.len()
+                    || i1 >= primitive.positions.len()
+                    || i2 >= primitive.positions.len()
+                {
+                    continue;
+                }
+
+                let v0 = transform.transform_point(Vec3::from(primitive.positions[i0]));
+
+                let v1 = transform.transform_point(Vec3::from(primitive.positions[i1]));
+
+                let v2 = transform.transform_point(Vec3::from(primitive.positions[i2]));
+
+                let n0 = if i0 < primitive.normals.len() {
+                    (normal_matrix * Vec3::from(primitive.normals[i0])).normalize_or_zero()
+                } else {
+                    Vec3::ZERO
+                };
+
+                let n1 = if i1 < primitive.normals.len() {
+                    (normal_matrix * Vec3::from(primitive.normals[i1])).normalize_or_zero()
+                } else {
+                    Vec3::ZERO
+                };
+
+                let n2 = if i2 < primitive.normals.len() {
+                    (normal_matrix * Vec3::from(primitive.normals[i2])).normalize_or_zero()
+                } else {
+                    Vec3::ZERO
+                };
+
+                raycast_triangles.push(MeshRaycastTriangle {
+                    v0,
+                    v1,
+                    v2,
+                    n0,
+                    n1,
+                    n2,
+                });
             }
         }
     }
+
+    // -------------------------------------------------------------
+    // Spawn scene
+    // -------------------------------------------------------------
 
     let root = commands
         .spawn((
@@ -118,7 +199,7 @@ pub fn spawn_mesh_scene(
         1.0
     };
 
-    (root, bounds_center, bounds_radius)
+    (root, bounds_center, bounds_radius, raycast_triangles)
 }
 
 pub fn spawn_mesh_viewport(mut commands: Commands, mesh_preview: Res<MeshPreview>) {
@@ -159,11 +240,14 @@ pub fn despawn_imported_mesh(commands: &mut Commands, scene_state: &mut MeshScen
     if let Some(root) = scene_state.root.take() {
         commands.entity(root).despawn();
     }
+
+    scene_state.triangles.clear();
+    scene_state.bounds_center = Vec3::ZERO;
+    scene_state.bounds_radius = 1.0;
 }
 
 pub fn update_mesh_light(
     mesh_light: Res<MeshLight>,
-    mesh_preview: Res<MeshPreview>,
     mut lights: Query<(&mut DirectionalLight, &mut Transform), With<MeshPreviewLight>>,
 ) {
     if !mesh_light.is_changed() {
@@ -206,7 +290,7 @@ pub fn update_mesh_light(
     }
 
     *transform =
-        Transform::from_translation(mesh_light.position).looking_at(mesh_preview.target, Vec3::Y);
+        Transform::from_translation(mesh_light.position).looking_at(mesh_light.target, Vec3::Y);
 }
 
 pub fn orbit_camera(
@@ -218,6 +302,7 @@ pub fn orbit_camera(
     mesh_viewport: Res<MeshViewportLayout>,
     mesh_input: Res<MeshViewportInput>,
     editor_ui: Res<EditorUi>,
+    mesh_scene_state: Res<MeshSceneState>,
     time: Res<Time>,
     mut mesh_preview: ResMut<MeshPreview>,
     mut mesh_light: ResMut<MeshLight>,
@@ -225,137 +310,170 @@ pub fn orbit_camera(
     mut camera_transforms: Query<&mut Transform, With<MeshPreviewCamera>>,
 ) {
     let Ok(window) = windows.single() else {
-        mouse_motion.clear();
-        mouse_wheel.clear();
         return;
     };
 
-    let cursor_position = window.cursor_position();
+    let Some(cursor_position) = window.cursor_position() else {
+        return;
+    };
 
-    let cursor_inside = cursor_position.is_some_and(|position| mesh_viewport.contains(position));
+    let cursor_inside = cursor_position.x >= mesh_viewport.x
+        && cursor_position.x <= mesh_viewport.x + mesh_viewport.width
+        && cursor_position.y >= mesh_viewport.y
+        && cursor_position.y <= mesh_viewport.y + mesh_viewport.height;
 
-    // -------------------------------------------------------------
-    // Light target
-    // -------------------------------------------------------------
+    if !cursor_inside {
+        return;
+    }
 
-    if mesh_light.follow_mouse && cursor_inside && !mesh_input.pointer_over_ui {
-        if let Some(cursor) = cursor_position {
-            let Ok((camera, camera_global)) = cameras.single() else {
+    if mesh_input.pointer_over_ui {
+        return;
+    }
+
+    /*
+     * ------------------------------------------------------------
+     * Mouse motion
+     * ------------------------------------------------------------
+     *
+     * Left mouse:
+     *     Orbit camera
+     *
+     * Middle mouse:
+     *     Pan camera
+     *
+     * Right mouse:
+     *     Also orbit camera
+     *
+     * Keeping the actual orbit state as yaw/pitch avoids accumulating
+     * rotations on the camera Transform itself.
+     */
+
+    let mut mouse_delta = Vec2::ZERO;
+
+    for event in mouse_motion.read() {
+        mouse_delta += event.delta;
+    }
+
+    if mouse_delta != Vec2::ZERO {
+        let orbit_button =
+            mouse_buttons.pressed(MouseButton::Left) || mouse_buttons.pressed(MouseButton::Right);
+
+        if orbit_button {
+            let sensitivity = 0.01;
+
+            mesh_preview.yaw -= mouse_delta.x * sensitivity;
+            mesh_preview.pitch -= mouse_delta.y * sensitivity;
+
+            // Prevent the camera from going over the poles.
+            mesh_preview.pitch = mesh_preview.pitch.clamp(-1.5, 1.5);
+        }
+
+        /*
+         * Middle-mouse panning.
+         *
+         * Pan relative to the camera's current orientation rather
+         * than world X/Z, so panning remains intuitive after orbiting.
+         */
+        if mouse_buttons.pressed(MouseButton::Middle) {
+            let Ok((_camera, camera_global)) = cameras.single() else {
                 return;
             };
 
-            if let Ok(ray) = camera.viewport_to_world(camera_global, cursor) {
-                /*
-                 * Create a plane through the mesh target.
-                 *
-                 * The plane faces the camera, so the mouse cursor
-                 * always corresponds to a point on the mesh's
-                 * screen-facing plane.
-                 */
-                let plane_origin = mesh_preview.target;
-                let plane_normal = *camera_global.forward();
+            let right = *camera_global.right();
+            let up = *camera_global.up();
 
-                let denominator = ray.direction.dot(plane_normal);
+            let pan_speed = mesh_preview.distance * 0.0015;
 
-                if denominator.abs() > 0.0001 {
-                    let distance = (plane_origin - ray.origin).dot(plane_normal) / denominator;
-
-                    if distance >= 0.0 {
-                        let target = ray.origin + ray.direction * distance;
-
-                        /*
-                         * Move the light to the position represented
-                         * by the cursor while keeping it at a fixed
-                         * distance from the mesh.
-                         */
-                        let offset = target - mesh_preview.target;
-
-                        if offset.length_squared() > 0.0001 {
-                            mesh_light.position = offset.normalize() * 5.0;
-                        }
-                    }
-                }
-            }
+            mesh_preview.target += (-right * mouse_delta.x + up * mouse_delta.y) * pan_speed;
         }
     }
 
-    // -------------------------------------------------------------
-    // Camera orbit
-    // -------------------------------------------------------------
+    /*
+     * ------------------------------------------------------------
+     * Mouse wheel zoom
+     * ------------------------------------------------------------
+     *
+     * Ctrl + wheel:
+     *     Zoom
+     *
+     * Normal wheel:
+     *     Pan vertically.
+     *
+     * This preserves the existing scroll behavior while allowing
+     * the speed to come from Editor Settings.
+     */
 
-    if mesh_input.pointer_over_ui {
-        mesh_preview.orbiting = false;
+    let mut scroll = 0.0;
+
+    for event in mouse_wheel.read() {
+        scroll += event.y;
     }
 
-    if mouse_buttons.just_pressed(MouseButton::Left) && cursor_inside && !mesh_input.pointer_over_ui
-    {
-        mesh_preview.orbiting = true;
-    }
-
-    if mouse_buttons.just_released(MouseButton::Left) {
-        mesh_preview.orbiting = false;
-    }
-
-    if mesh_preview.orbiting {
-        let mut delta = Vec2::ZERO;
-
-        for event in mouse_motion.read() {
-            delta += event.delta;
-        }
-
-        let sensitivity = 0.01;
-
-        let yaw = Quat::from_rotation_y(-delta.x * sensitivity);
-        let pitch = Quat::from_rotation_x(-delta.y * sensitivity);
-
-        mesh_preview.rotation = yaw * mesh_preview.rotation;
-        mesh_preview.rotation = mesh_preview.rotation * pitch;
-    } else {
-        mouse_motion.clear();
-    }
-
-    // -------------------------------------------------------------
-    // Zoom
-    // -------------------------------------------------------------
-
-    let ctrl_pressed =
-        keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight);
-
-    if cursor_inside {
-        let mut scroll = 0.0;
-
-        for event in mouse_wheel.read() {
-            scroll += event.y;
-        }
-
-        if scroll != 0.0 && ctrl_pressed && !mesh_input.pointer_over_ui {
+    if scroll != 0.0 {
+        if keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight) {
             let zoom_speed = editor_ui.editor_settings.mouse_scroll_speed;
 
-            mesh_preview.target_distance *= (-scroll * zoom_speed * 0.01).exp();
+            mesh_preview.target_distance *= (-scroll * zoom_speed * 0.1).exp();
 
             mesh_preview.target_distance = mesh_preview.target_distance.clamp(0.01, 100_000.0);
+        } else {
+            /*
+             * Normal wheel movement pans the camera target vertically.
+             */
+            let Ok((_, camera_global)) = cameras.single() else {
+                return;
+            };
+
+            let up = *camera_global.up();
+
+            let pan_speed = mesh_preview.distance * 0.05;
+
+            mesh_preview.target += up * scroll * pan_speed;
         }
-    } else {
-        mouse_wheel.clear();
     }
 
-    // -------------------------------------------------------------
-    // Camera smoothing
-    // -------------------------------------------------------------
+    /*
+     * ------------------------------------------------------------
+     * Smooth zoom
+     * ------------------------------------------------------------
+     */
 
-    let smoothing = 12.0;
+    let zoom_factor = 12.0;
+    let t = 1.0 - (-zoom_factor * time.delta_secs()).exp();
 
-    let interpolation = 1.0 - (-smoothing * time.delta_secs()).exp();
+    mesh_preview.distance += (mesh_preview.target_distance - mesh_preview.distance) * t;
 
-    mesh_preview.distance = mesh_preview
-        .distance
-        .lerp(mesh_preview.target_distance, interpolation);
+    /*
+     * ------------------------------------------------------------
+     * Light follows mouse position on the actual mesh
+     * ------------------------------------------------------------
+     */
 
-    let offset = mesh_preview.rotation * Vec3::new(0.0, 0.0, mesh_preview.distance);
+    if mesh_light.follow_camera {
+        if let Ok((_, camera_global)) = cameras.single() {
+            let light_distance = (mesh_scene_state.bounds_radius * 2.0).max(1.0);
 
-    for mut transform in &mut camera_transforms {
-        transform.translation = mesh_preview.target + offset;
+            mesh_light.position = mesh_preview.target - *camera_global.forward() * light_distance;
 
-        transform.look_at(mesh_preview.target, Vec3::Y);
+            mesh_light.target = mesh_preview.target;
+        }
     }
+
+    /*
+     * ------------------------------------------------------------
+     * Apply spherical orbit to the camera
+     * ------------------------------------------------------------
+     */
+
+    let Ok(mut camera_transform) = camera_transforms.single_mut() else {
+        return;
+    };
+
+    let rotation = Quat::from_euler(EulerRot::YXZ, mesh_preview.yaw, mesh_preview.pitch, 0.0);
+
+    let offset = rotation * Vec3::new(0.0, 0.0, mesh_preview.distance);
+
+    camera_transform.translation = mesh_preview.target + offset;
+
+    camera_transform.look_at(mesh_preview.target, Vec3::Y);
 }

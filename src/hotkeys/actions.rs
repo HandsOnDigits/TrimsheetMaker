@@ -32,7 +32,7 @@ pub enum EditorAction {
     ToggleMaterialsPanel,
     ToggleInspectorPanel,
     ToggleStatusBar,
-    ToggleMeshLightFollowMouse,
+    ToggleMeshLightFollowCamera,
 }
 
 #[derive(Message, Debug, Clone, Copy)]
@@ -200,8 +200,8 @@ pub fn execute_action(
             editor_ui.show_status = !editor_ui.show_status;
         }
 
-        EditorAction::ToggleMeshLightFollowMouse => {
-            mesh_light.follow_mouse = !mesh_light.follow_mouse;
+        EditorAction::ToggleMeshLightFollowCamera => {
+            mesh_light.follow_camera = !mesh_light.follow_camera;
         }
     }
 }
