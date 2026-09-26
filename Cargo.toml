@@ -16,3 +16,4 @@ xatlas-rs-v2 = "0.1.4"
 uuid = { version = "1.26.1", features = ["v4", "serde"] }
 ron = "0.12.2"
 libloading = "0.9.0"
+gltf = { version = "1.4.1", features = ["utils"] }

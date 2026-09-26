@@ -284,8 +284,6 @@ unsafe fn convert_scene(
         return Err("Assimp scene has no root node".to_owned());
     }
 
-    let root = unsafe { &*scene_ref.root_node };
-
     let mut objects = Vec::new();
 
     unsafe {
