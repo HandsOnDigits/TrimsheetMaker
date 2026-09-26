@@ -19,6 +19,7 @@ pub enum EditorAction {
 
     ImportMultipleMaterials,
     ImportSingleMaterial,
+    ImportMesh,
 
     Undo,
     Redo,
@@ -161,6 +162,10 @@ pub fn execute_action(
 
         EditorAction::ImportSingleMaterial => {
             editor_ui.show_import_single_material_window = true;
+        }
+
+        EditorAction::ImportMesh => {
+            editor_ui.show_import_mesh_window = true;
         }
 
         EditorAction::RemoveSelectedMaterial => {

@@ -124,9 +124,11 @@ fn all_editable_actions() -> &'static [EditorAction] {
         EditorAction::NewAtlas,
         EditorAction::OpenProject,
         EditorAction::SaveProject,
+        EditorAction::SaveProjectAs,
         EditorAction::ExportAtlas,
         EditorAction::ImportMultipleMaterials,
         EditorAction::ImportSingleMaterial,
+        EditorAction::ImportMesh,
         EditorAction::RemoveSelectedMaterial,
         EditorAction::PackAtlas,
         EditorAction::ResetViewport,
@@ -146,8 +148,8 @@ fn action_display_name(action: EditorAction) -> &'static str {
         EditorAction::ExportAtlas => "Export Atlas",
 
         EditorAction::ImportMultipleMaterials => "Import Multiple Materials",
-
         EditorAction::ImportSingleMaterial => "Import Single Material",
+        EditorAction::ImportMesh => "Import Mesh",
 
         EditorAction::RemoveSelectedMaterial => "Remove Selected Material",
 

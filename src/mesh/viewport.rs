@@ -1,17 +1,92 @@
 use bevy::{
+    asset::RenderAssetUsages,
     input::mouse::{MouseMotion, MouseWheel},
     prelude::*,
+    render::render_resource::PrimitiveTopology,
 };
 
 use super::{
-    MeshLight, MeshLightPreset, MeshPreview, MeshPreviewCamera, MeshPreviewLight,
+    MeshLight, MeshLightPreset, MeshPreview, MeshPreviewCamera, MeshPreviewLight, MeshSceneState,
     MeshViewportInput, MeshViewportLayout,
 };
 
 use crate::ui::EditorUi;
 
 #[derive(Component)]
+pub struct ImportedMesh;
+
+#[derive(Component)]
 pub struct MeshViewportSection;
+
+pub fn spawn_mesh_scene(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    scene: &super::import::MeshScene,
+) -> Entity {
+    let root = commands
+        .spawn((
+            Name::new("Imported Mesh"),
+            Transform::default(),
+            ImportedMesh,
+        ))
+        .id();
+
+    for object in &scene.objects {
+        let object_entity = commands
+            .spawn((
+                Name::new(object.name.clone()),
+                Transform::from_translation(Vec3::from(object.transform.translation))
+                    .with_rotation(Quat::from_xyzw(
+                        object.transform.rotation[0],
+                        object.transform.rotation[1],
+                        object.transform.rotation[2],
+                        object.transform.rotation[3],
+                    ))
+                    .with_scale(Vec3::from(object.transform.scale)),
+                ImportedMesh,
+            ))
+            .id();
+
+        commands.entity(root).add_child(object_entity);
+
+        for (primitive_index, primitive) in object.primitives.iter().enumerate() {
+            let mut mesh = Mesh::new(
+                PrimitiveTopology::TriangleList,
+                RenderAssetUsages::default(),
+            );
+
+            mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, primitive.positions.clone());
+
+            mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, primitive.normals.clone());
+
+            mesh.insert_attribute(Mesh::ATTRIBUTE_TANGENT, primitive.tangents.clone());
+
+            mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, primitive.uvs.clone());
+
+            mesh.insert_indices(bevy::mesh::Indices::U32(primitive.indices.clone()));
+
+            let mesh_handle = meshes.add(mesh);
+
+            let material_handle = materials.add(StandardMaterial {
+                base_color: Color::srgb(0.7, 0.7, 0.7),
+                perceptual_roughness: 0.7,
+                ..default()
+            });
+
+            commands.entity(object_entity).with_children(|parent| {
+                parent.spawn((
+                    Name::new(format!("{} Primitive {}", object.name, primitive_index)),
+                    Mesh3d(mesh_handle),
+                    MeshMaterial3d(material_handle),
+                    ImportedMesh,
+                ));
+            });
+        }
+    }
+
+    root
+}
 
 pub fn spawn_mesh_viewport(mut commands: Commands, mesh_preview: Res<MeshPreview>) {
     commands.spawn((
@@ -44,6 +119,12 @@ pub fn update_mesh_viewport(
         node.top = Val::Px(layout.y);
         node.width = Val::Px(layout.width);
         node.height = Val::Px(layout.height);
+    }
+}
+
+pub fn despawn_imported_mesh(commands: &mut Commands, scene_state: &mut MeshSceneState) {
+    if let Some(root) = scene_state.root.take() {
+        commands.entity(root).despawn();
     }
 }
 

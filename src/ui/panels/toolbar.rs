@@ -106,6 +106,18 @@ pub fn toolbar(
                 ui.close();
             }
 
+            if menu_action_button(ui, hotkeys, EditorAction::ImportMesh, "Import Mesh…") {
+                execute_action(
+                    EditorAction::ImportMesh,
+                    editor_ui,
+                    atlas,
+                    images,
+                    mesh_preview,
+                    mesh_light,
+                );
+                ui.close();
+            }
+
             ui.separator();
 
             if menu_action_button(ui, hotkeys, EditorAction::ExportAtlas, "Export Atlas…") {

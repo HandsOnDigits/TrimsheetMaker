@@ -22,7 +22,7 @@ use super::EditorUi;
 use crate::{
     data::Atlas,
     hotkeys::{EditorAction, HotkeyManager},
-    mesh::{MeshLight, MeshPreview, MeshViewportInput, MeshViewportLayout},
+    mesh::{MeshLight, MeshPreview, MeshSceneState, MeshViewportInput, MeshViewportLayout},
     ui::windows,
 };
 
@@ -37,6 +37,10 @@ pub fn editor_ui(
     mut mesh_preview: ResMut<MeshPreview>,
     mut mesh_light: ResMut<MeshLight>,
     mut mesh_input: ResMut<MeshViewportInput>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut mesh_scene_state: ResMut<MeshSceneState>,
 ) -> Result {
     mesh_input.pointer_over_ui = false;
 
@@ -192,6 +196,16 @@ pub fn editor_ui(
         &mut editor_ui,
         &mut atlas,
         &mut images,
+    );
+
+    // Mesh import.
+    windows::import_mesh::import_mesh_window(
+        ctx,
+        &mut editor_ui,
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        &mut mesh_scene_state,
     );
 
     Ok(())

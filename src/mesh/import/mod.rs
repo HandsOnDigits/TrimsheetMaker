@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub mod assimp;
 pub mod assimp_sys;
@@ -96,7 +96,56 @@ pub struct MeshImportSettings {
     pub assimp_library: Option<PathBuf>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MeshBackend {
+    Auto,
     Gltf,
     Assimp,
+}
+
+impl MeshBackend {
+    pub fn from_path(path: &Path) -> Result<Self, MeshImportError> {
+        match path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .map(|extension| extension.to_ascii_lowercase())
+            .as_deref()
+        {
+            Some("gltf") | Some("glb") => Ok(Self::Gltf),
+
+            Some(
+                "fbx" | "obj" | "dae" | "3ds" | "ply" | "stl",
+                // Add other Assimp formats you intend to support.
+            ) => Ok(Self::Assimp),
+
+            Some(extension) => Err(MeshImportError::UnsupportedFormat(extension.to_owned())),
+
+            None => Err(MeshImportError::UnsupportedFormat(
+                "file has no extension".to_owned(),
+            )),
+        }
+    }
+}
+
+impl Default for MeshBackend {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
+pub fn import(
+    path: &Path,
+    backend: MeshBackend,
+    settings: &MeshImportSettings,
+) -> Result<MeshScene, MeshImportError> {
+    let backend = match backend {
+        MeshBackend::Auto => MeshBackend::from_path(path)?,
+        backend => backend,
+    };
+
+    match backend {
+        MeshBackend::Auto => unreachable!(),
+        MeshBackend::Gltf => gltf::import(path),
+        MeshBackend::Assimp => assimp::import(path, settings.assimp_library.as_deref()),
+    }
 }

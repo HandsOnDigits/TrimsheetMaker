@@ -73,6 +73,10 @@ pub struct EditorUi {
     pub show_import_multiple_materials_window: bool,
     pub show_import_single_material_window: bool,
     pub show_editor_settings_window: bool,
+    pub show_import_mesh_window: bool,
+
+    pub mesh_import_path: Option<std::path::PathBuf>,
+    pub mesh_import_backend: crate::mesh::import::MeshBackend,
 
     pub mesh_view_split: f32,
 
@@ -124,6 +128,10 @@ impl Default for EditorUi {
             show_import_multiple_materials_window: false,
             show_import_single_material_window: false,
             show_editor_settings_window: false,
+            show_import_mesh_window: false,
+
+            mesh_import_path: None,
+            mesh_import_backend: crate::mesh::import::MeshBackend::Auto,
 
             mesh_view_split: 0.5,
 

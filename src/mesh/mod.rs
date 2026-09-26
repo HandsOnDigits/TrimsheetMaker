@@ -1,9 +1,9 @@
-mod import;
+pub mod import;
 
 mod regions;
 pub use regions::*;
 
-mod viewport;
+pub mod viewport;
 
 use bevy::{camera::RenderTarget, prelude::*, render::render_resource::TextureFormat};
 use bevy_egui::EguiPrimaryContextPass;
@@ -17,6 +17,11 @@ pub struct MeshPreviewLight;
 #[derive(Resource, Default)]
 pub struct MeshViewportInput {
     pub pointer_over_ui: bool,
+}
+
+#[derive(Resource, Default)]
+pub struct MeshSceneState {
+    pub root: Option<Entity>,
 }
 
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
@@ -99,7 +104,8 @@ pub struct MeshPreviewPlugin;
 
 impl Plugin for MeshPreviewPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<MeshViewportLayout>()
+        app.init_resource::<MeshSceneState>()
+            .init_resource::<MeshViewportLayout>()
             .init_resource::<MeshLight>()
             .init_resource::<MeshViewportInput>()
             .add_systems(
