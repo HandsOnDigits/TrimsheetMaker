@@ -18,23 +18,11 @@ pub struct MeshViewportInput {
     pub pointer_over_ui: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct MeshRaycastTriangle {
-    pub v0: Vec3,
-    pub v1: Vec3,
-    pub v2: Vec3,
-
-    pub n0: Vec3,
-    pub n1: Vec3,
-    pub n2: Vec3,
-}
-
 #[derive(Resource, Default)]
 pub struct MeshSceneState {
     pub root: Option<Entity>,
     pub bounds_center: Vec3,
     pub bounds_radius: f32,
-    pub triangles: Vec<MeshRaycastTriangle>,
 }
 
 #[derive(Resource)]
@@ -95,7 +83,6 @@ pub struct MeshPreview {
     pub distance: f32,
     pub target_distance: f32,
     pub rotation: Quat,
-    pub orbiting: bool,
     pub yaw: f32,
     pub pitch: f32,
 }
@@ -159,7 +146,6 @@ fn setup_mesh_preview(
         distance: 4.0,
         target_distance: 4.0,
         rotation: Quat::from_rotation_x(-0.25),
-        orbiting: false,
         yaw: 0.0,
         pitch: 0.3,
     });

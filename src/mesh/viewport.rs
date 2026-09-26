@@ -6,8 +6,8 @@ use bevy::{
 };
 
 use super::{
-    MeshLight, MeshLightPreset, MeshPreview, MeshPreviewCamera, MeshPreviewLight,
-    MeshRaycastTriangle, MeshSceneState, MeshViewportInput, MeshViewportLayout,
+    MeshLight, MeshLightPreset, MeshPreview, MeshPreviewCamera, MeshPreviewLight, MeshSceneState,
+    MeshViewportInput, MeshViewportLayout,
 };
 
 use crate::ui::EditorUi;
@@ -23,11 +23,9 @@ pub fn spawn_mesh_scene(
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
     scene: &super::import::MeshScene,
-) -> (Entity, Vec3, f32, Vec<MeshRaycastTriangle>) {
+) -> (Entity, Vec3, f32) {
     let mut bounds_min = Vec3::splat(f32::INFINITY);
     let mut bounds_max = Vec3::splat(f32::NEG_INFINITY);
-
-    let mut raycast_triangles = Vec::new();
 
     for object in &scene.objects {
         let translation = Vec3::from(object.transform.translation);
@@ -46,13 +44,6 @@ pub fn spawn_mesh_scene(
             rotation,
             scale,
         };
-
-        let normal_matrix = Mat3::from_quat(rotation)
-            * Mat3::from_diagonal(Vec3::new(
-                1.0 / scale.x.max(f32::EPSILON),
-                1.0 / scale.y.max(f32::EPSILON),
-                1.0 / scale.z.max(f32::EPSILON),
-            ));
 
         for primitive in &object.primitives {
             // ---------------------------------------------------------
@@ -81,39 +72,6 @@ pub fn spawn_mesh_scene(
                 {
                     continue;
                 }
-
-                let v0 = transform.transform_point(Vec3::from(primitive.positions[i0]));
-
-                let v1 = transform.transform_point(Vec3::from(primitive.positions[i1]));
-
-                let v2 = transform.transform_point(Vec3::from(primitive.positions[i2]));
-
-                let n0 = if i0 < primitive.normals.len() {
-                    (normal_matrix * Vec3::from(primitive.normals[i0])).normalize_or_zero()
-                } else {
-                    Vec3::ZERO
-                };
-
-                let n1 = if i1 < primitive.normals.len() {
-                    (normal_matrix * Vec3::from(primitive.normals[i1])).normalize_or_zero()
-                } else {
-                    Vec3::ZERO
-                };
-
-                let n2 = if i2 < primitive.normals.len() {
-                    (normal_matrix * Vec3::from(primitive.normals[i2])).normalize_or_zero()
-                } else {
-                    Vec3::ZERO
-                };
-
-                raycast_triangles.push(MeshRaycastTriangle {
-                    v0,
-                    v1,
-                    v2,
-                    n0,
-                    n1,
-                    n2,
-                });
             }
         }
     }
@@ -199,7 +157,7 @@ pub fn spawn_mesh_scene(
         1.0
     };
 
-    (root, bounds_center, bounds_radius, raycast_triangles)
+    (root, bounds_center, bounds_radius)
 }
 
 pub fn spawn_mesh_viewport(mut commands: Commands, mesh_preview: Res<MeshPreview>) {
@@ -241,7 +199,6 @@ pub fn despawn_imported_mesh(commands: &mut Commands, scene_state: &mut MeshScen
         commands.entity(root).despawn();
     }
 
-    scene_state.triangles.clear();
     scene_state.bounds_center = Vec3::ZERO;
     scene_state.bounds_radius = 1.0;
 }
@@ -413,13 +370,13 @@ pub fn orbit_camera(
         if keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight) {
             let zoom_speed = editor_ui.editor_settings.mouse_scroll_speed;
 
-            mesh_preview.target_distance *= (-scroll * zoom_speed * 0.1).exp();
+            // Multiplicative zoom keeps the feel consistent at all distances.
+            let zoom_factor = (-scroll * zoom_speed * 0.05).exp();
+
+            mesh_preview.target_distance *= zoom_factor;
 
             mesh_preview.target_distance = mesh_preview.target_distance.clamp(0.01, 100_000.0);
         } else {
-            /*
-             * Normal wheel movement pans the camera target vertically.
-             */
             let Ok((_, camera_global)) = cameras.single() else {
                 return;
             };
@@ -438,10 +395,11 @@ pub fn orbit_camera(
      * ------------------------------------------------------------
      */
 
-    let zoom_factor = 12.0;
-    let t = 1.0 - (-zoom_factor * time.delta_secs()).exp();
+    let zoom_smoothing = 14.0;
 
-    mesh_preview.distance += (mesh_preview.target_distance - mesh_preview.distance) * t;
+    let t = 1.0 - (-zoom_smoothing * time.delta_secs()).exp();
+
+    mesh_preview.distance = mesh_preview.distance.lerp(mesh_preview.target_distance, t);
 
     /*
      * ------------------------------------------------------------

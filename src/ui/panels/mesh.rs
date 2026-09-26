@@ -19,33 +19,6 @@ pub fn mesh_panel(
 
         ui.separator();
 
-        if ui.button("−").clicked() {
-            mesh_preview.target_distance = (mesh_preview.target_distance * 0.9).clamp(0.25, 100.0);
-        }
-
-        ui.label(format!(
-            "{:.0}%",
-            (4.0 / mesh_preview.target_distance * 100.0).clamp(10.0, 400.0)
-        ));
-
-        if ui.button("+").clicked() {
-            mesh_preview.target_distance = (mesh_preview.target_distance * 1.1).clamp(0.25, 100.0);
-        }
-
-        ui.separator();
-
-        if ui.button("Reset").clicked() {
-            mesh_preview.target = Vec3::ZERO;
-            mesh_preview.distance = 4.0;
-            mesh_preview.target_distance = 4.0;
-            mesh_preview.rotation = Quat::from_rotation_x(-0.25);
-            mesh_preview.orbiting = false;
-
-            mesh_light.position = Vec3::new(3.0, 3.0, 4.0);
-        }
-
-        ui.separator();
-
         ui.label("Light");
 
         egui::ComboBox::from_id_salt("mesh_light_selector")
@@ -56,12 +29,23 @@ pub fn mesh_panel(
                 }
             });
 
-        ui.separator();
-
         ui.checkbox(&mut mesh_light.follow_camera, "Follow Camera");
 
         if let Some(hotkey) = hotkeys.display_name(EditorAction::ToggleMeshLightFollowCamera) {
             ui.label(egui::RichText::new(format!("[{hotkey}]")).small().weak());
+        }
+
+        ui.separator();
+
+        if ui.button("Reset").clicked() {
+            mesh_preview.target = Vec3::ZERO;
+            mesh_preview.distance = 4.0;
+            mesh_preview.target_distance = 4.0;
+            mesh_preview.yaw = 0.0;
+            mesh_preview.pitch = 0.3;
+
+            mesh_light.position = Vec3::new(3.0, 3.0, 4.0);
+            mesh_light.target = Vec3::ZERO;
         }
     });
 
