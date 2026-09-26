@@ -43,7 +43,7 @@ pub fn import_multiple_materials_window(
 
                 if ui.button("Browse").clicked() {
                     if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                        match crate::importer::multiple_materials::scan(&path) {
+                        match super::importer::multiple_materials::scan(&path) {
                             Ok(scan) => {
                                 editor_ui.multiple_materials_root = Some(path);
                                 editor_ui.import_materials = scan.materials;

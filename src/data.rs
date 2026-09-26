@@ -318,7 +318,7 @@ impl Atlas {
                         continue;
                     }
 
-                    match crate::assets::exr::load_exr(&texture.path) {
+                    match crate::image::import::exr::load_exr(&texture.path) {
                         Ok(image) => {
                             let size = (image.width(), image.height());
 

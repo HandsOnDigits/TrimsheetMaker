@@ -1,11 +1,9 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
 
-use crate::{
-    data::Atlas,
-    importer::{classify_textures, material_source_from_paths},
-    ui::EditorUi,
-};
+use crate::{data::Atlas, ui::EditorUi};
+
+use super::importer::{classify_textures, material_source_from_paths};
 
 pub fn import_single_material_window(
     ctx: &egui::Context,
@@ -51,7 +49,7 @@ pub fn import_single_material_window(
 
                 if ui.button("Browse").clicked() {
                     if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                        match crate::importer::single_material::scan(&path) {
+                        match super::importer::single_material::scan(&path) {
                             Ok(scan) => {
                                 editor_ui.single_material_root = Some(path);
                                 editor_ui.single_material_name = scan.name;
