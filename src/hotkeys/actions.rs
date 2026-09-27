@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
 use bevy::prelude::*;
-
 use bevy_egui::egui;
 
 use crate::{
@@ -70,21 +69,29 @@ pub fn execute_action(
             *atlas = Atlas::default();
             editor_ui.project_settings = ProjectSettings::default();
             editor_ui.project_path = None;
+
             editor_ui.selected_material = None;
+            editor_ui.dragging_material = None;
+            editor_ui.drag_offset = egui::Vec2::ZERO;
+
             editor_ui.atlas_zoom = 1.0;
             editor_ui.atlas_pan = egui::Vec2::ZERO;
 
-            crate::mesh::viewport::despawn_imported_mesh(commands, mesh_scene_state);
+            crate::mesh::viewport::despawn_all_meshes(commands, mesh_scene_state);
+
             editor_ui.mesh_import_path = None;
+            editor_ui.mesh_import_paths.clear();
 
             mesh_preview.target = Vec3::ZERO;
             mesh_preview.distance = 4.0;
             mesh_preview.target_distance = 4.0;
+            mesh_preview.yaw = 0.0;
+            mesh_preview.pitch = 0.3;
         }
 
         EditorAction::OpenProject => match project::open_project_dialog() {
             Ok(Some(path)) => match project::ProjectFile::load(&path) {
-                Ok((mut loaded_atlas, project_settings, mesh_path)) => {
+                Ok((mut loaded_atlas, project_settings, project_meshes)) => {
                     loaded_atlas.load_textures(images, None);
 
                     *atlas = loaded_atlas;
@@ -98,9 +105,12 @@ pub fn execute_action(
                     editor_ui.atlas_zoom = 1.0;
                     editor_ui.atlas_pan = egui::Vec2::ZERO;
 
-                    match project::load_project_mesh(
+                    editor_ui.mesh_import_path = None;
+                    editor_ui.mesh_import_paths.clear();
+
+                    match project::load_project_meshes(
                         &path,
-                        mesh_path.as_deref(),
+                        &project_meshes,
                         editor_ui,
                         commands,
                         meshes,
@@ -114,7 +124,8 @@ pub fn execute_action(
 
                         Err(error) => {
                             error!(
-                                "Project opened, but the saved mesh could not be loaded: {error}"
+                                "Project opened, but some saved meshes \
+                                         could not be loaded: {error}"
                             );
                         }
                     }
@@ -136,32 +147,35 @@ pub fn execute_action(
 
         EditorAction::SaveProject => {
             if let Some(path) = editor_ui.project_path.as_deref() {
-                match crate::project::save_project(
+                match project::save_project(
                     path,
                     atlas,
                     &editor_ui.project_settings,
-                    editor_ui.mesh_import_path.as_deref(),
+                    mesh_scene_state,
                 ) {
                     Ok(()) => {
                         info!("Project saved: {}", path.display());
                     }
+
                     Err(error) => {
                         error!("Failed to save project '{}': {error}", path.display());
                     }
                 }
             } else {
-                match crate::project::save_project_as_dialog(
+                match project::save_project_as_dialog(
                     atlas,
                     &editor_ui.project_settings,
-                    editor_ui.mesh_import_path.as_deref(),
+                    mesh_scene_state,
                 ) {
                     Ok(Some(path)) => {
                         info!("Project saved: {}", path.display());
                         editor_ui.project_path = Some(path);
                     }
+
                     Ok(None) => {
                         info!("Save Project cancelled");
                     }
+
                     Err(error) => {
                         error!("Failed to save project: {error}");
                     }
@@ -173,15 +187,17 @@ pub fn execute_action(
             match project::save_project_as_dialog(
                 atlas,
                 &editor_ui.project_settings,
-                editor_ui.mesh_import_path.as_deref(),
+                mesh_scene_state,
             ) {
                 Ok(Some(path)) => {
                     info!("Project saved: {}", path.display());
                     editor_ui.project_path = Some(path);
                 }
+
                 Ok(None) => {
                     info!("Save Project As cancelled");
                 }
+
                 Err(error) => {
                     error!("Failed to save project: {error}");
                 }
@@ -228,8 +244,10 @@ pub fn execute_action(
             editor_ui.atlas_pan = egui::Vec2::ZERO;
 
             mesh_preview.distance = 4.0;
-            mesh_preview.rotation = Quat::from_rotation_x(-0.25);
+            mesh_preview.target_distance = 4.0;
             mesh_preview.target = Vec3::ZERO;
+            mesh_preview.yaw = 0.0;
+            mesh_preview.pitch = 0.3;
         }
 
         EditorAction::ToggleMaterialsPanel => {

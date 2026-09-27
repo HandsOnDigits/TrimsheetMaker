@@ -44,7 +44,7 @@ impl std::fmt::Display for AssimpError {
 }
 
 pub struct AssimpLibrary {
-    library: Library,
+    _library: Library,
     path: PathBuf,
 
     get_version_major: unsafe extern "C" fn() -> u32,
@@ -124,7 +124,7 @@ impl AssimpLibrary {
         };
 
         Ok(Self {
-            library,
+            _library: library,
             path,
             get_version_major,
             get_version_minor,
@@ -136,10 +136,12 @@ impl AssimpLibrary {
         })
     }
 
+    #[allow(unused)]
     pub fn path(&self) -> &Path {
         &self.path
     }
 
+    #[allow(unused)]
     pub fn version(&self) -> (u32, u32, u32) {
         unsafe {
             (
@@ -150,6 +152,7 @@ impl AssimpLibrary {
         }
     }
 
+    #[cfg(test)]
     pub fn test_import(&self, path: &Path) -> Result<(), String> {
         let path = CString::new(path.to_string_lossy().as_bytes())
             .map_err(|_| "mesh path contains an embedded null byte".to_owned())?;

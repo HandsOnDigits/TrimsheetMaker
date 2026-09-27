@@ -6,8 +6,8 @@ use bevy::{
 };
 
 use super::{
-    MeshLight, MeshLightPreset, MeshPreview, MeshPreviewCamera, MeshPreviewLight, MeshSceneState,
-    MeshViewportInput, MeshViewportLayout,
+    ImportedMeshRoot, MeshLight, MeshLightPreset, MeshPreview, MeshPreviewCamera, MeshPreviewLight,
+    MeshSceneState, MeshViewportInput, MeshViewportLayout,
 };
 
 use crate::ui::EditorUi;
@@ -23,6 +23,7 @@ pub fn spawn_mesh_scene(
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
     scene: &super::import::MeshScene,
+    mesh_id: u64,
 ) -> (Entity, Vec3, f32) {
     let mut bounds_min = Vec3::splat(f32::INFINITY);
     let mut bounds_max = Vec3::splat(f32::NEG_INFINITY);
@@ -67,9 +68,10 @@ pub fn spawn_mesh_scene(
         .spawn((
             Name::new("Imported Mesh"),
             Transform::default(),
-            Visibility::default(),
+            Visibility::Visible,
             InheritedVisibility::default(),
             ImportedMesh,
+            ImportedMeshRoot { id: mesh_id },
         ))
         .id();
 
@@ -177,13 +179,14 @@ pub fn update_mesh_viewport(
     }
 }
 
-pub fn despawn_imported_mesh(commands: &mut Commands, scene_state: &mut MeshSceneState) {
-    if let Some(root) = scene_state.root.take() {
-        commands.entity(root).despawn();
+pub fn despawn_all_meshes(commands: &mut Commands, scene_state: &mut MeshSceneState) {
+    for mesh in scene_state.meshes.drain(..) {
+        if let Some(root) = mesh.root {
+            commands.entity(root).despawn();
+        }
     }
 
-    scene_state.bounds_center = Vec3::ZERO;
-    scene_state.bounds_radius = 1.0;
+    scene_state.next_id = 0;
 }
 
 pub fn update_mesh_light(
@@ -231,6 +234,27 @@ pub fn update_mesh_light(
 
     *transform =
         Transform::from_translation(mesh_light.position).looking_at(mesh_light.target, Vec3::Y);
+}
+
+pub fn sync_mesh_visibility(
+    scene_state: Res<MeshSceneState>,
+    mut query: Query<(&ImportedMeshRoot, &mut Visibility)>,
+) {
+    if !scene_state.is_changed() {
+        return;
+    }
+
+    for (root, mut visibility) in &mut query {
+        let Some(mesh) = scene_state.get(root.id) else {
+            continue;
+        };
+
+        *visibility = if mesh.visible {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
 }
 
 pub fn orbit_camera(
@@ -392,7 +416,10 @@ pub fn orbit_camera(
 
     if mesh_light.follow_camera {
         if let Ok((_, camera_global)) = cameras.single() {
-            let light_distance = (mesh_scene_state.bounds_radius * 2.0).max(1.0);
+            let light_distance = mesh_scene_state
+                .visible_bounds()
+                .map(|(_, radius)| (radius * 2.0).max(1.0))
+                .unwrap_or(1.0);
 
             mesh_light.position = mesh_preview.target - *camera_global.forward() * light_distance;
 

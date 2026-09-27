@@ -85,6 +85,7 @@ pub struct EditorUi {
     pub mesh_import_path: Option<std::path::PathBuf>,
     pub mesh_import_backend: crate::mesh::import::MeshBackend,
     pub mesh_import_error: Option<String>,
+    pub mesh_import_paths: Vec<std::path::PathBuf>,
 
     pub mesh_view_split: f32,
 
@@ -127,6 +128,7 @@ impl Default for EditorUi {
 
             single_material_name: String::new(),
             single_material_textures: BTreeMap::new(),
+            mesh_import_paths: Vec::new(),
 
             dragging_material: None,
             drag_offset: egui::Vec2::ZERO,

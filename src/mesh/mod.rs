@@ -18,11 +18,92 @@ pub struct MeshViewportInput {
     pub pointer_over_ui: bool,
 }
 
-#[derive(Resource, Default)]
-pub struct MeshSceneState {
+#[derive(Debug, Clone)]
+pub struct MeshEntry {
+    pub id: u64,
+    pub name: String,
+    pub path: std::path::PathBuf,
+    pub visible: bool,
     pub root: Option<Entity>,
     pub bounds_center: Vec3,
     pub bounds_radius: f32,
+}
+
+#[derive(Component)]
+pub struct ImportedMeshRoot {
+    pub id: u64,
+}
+
+#[derive(Resource, Default)]
+pub struct MeshSceneState {
+    pub meshes: Vec<MeshEntry>,
+    pub next_id: u64,
+}
+
+impl MeshSceneState {
+    pub fn add(
+        &mut self,
+        name: String,
+        path: std::path::PathBuf,
+        root: Entity,
+        bounds_center: Vec3,
+        bounds_radius: f32,
+    ) -> u64 {
+        let id = self.next_id;
+        self.next_id += 1;
+
+        self.meshes.push(MeshEntry {
+            id,
+            name,
+            path,
+            visible: true,
+            root: Some(root),
+            bounds_center,
+            bounds_radius,
+        });
+
+        id
+    }
+
+    pub fn get(&self, id: u64) -> Option<&MeshEntry> {
+        self.meshes.iter().find(|mesh| mesh.id == id)
+    }
+
+    pub fn get_mut(&mut self, id: u64) -> Option<&mut MeshEntry> {
+        self.meshes.iter_mut().find(|mesh| mesh.id == id)
+    }
+
+    pub fn visible_bounds(&self) -> Option<(Vec3, f32)> {
+        let mut min = Vec3::splat(f32::INFINITY);
+        let mut max = Vec3::splat(f32::NEG_INFINITY);
+
+        let mut found = false;
+
+        for mesh in &self.meshes {
+            if !mesh.visible {
+                continue;
+            }
+
+            let radius = mesh.bounds_radius.max(0.0);
+
+            let mesh_min = mesh.bounds_center - Vec3::splat(radius);
+            let mesh_max = mesh.bounds_center + Vec3::splat(radius);
+
+            min = min.min(mesh_min);
+            max = max.max(mesh_max);
+
+            found = true;
+        }
+
+        if !found {
+            return None;
+        }
+
+        let center = (min + max) * 0.5;
+        let radius = (max - center).length().max(1.0);
+
+        Some((center, radius))
+    }
 }
 
 #[derive(Resource)]
@@ -82,7 +163,6 @@ pub struct MeshPreview {
     pub target: Vec3,
     pub distance: f32,
     pub target_distance: f32,
-    pub rotation: Quat,
     pub yaw: f32,
     pub pitch: f32,
 }
@@ -99,10 +179,10 @@ pub struct MeshPreviewPlugin;
 
 impl Plugin for MeshPreviewPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<MeshSceneState>()
-            .init_resource::<MeshViewportLayout>()
+        app.init_resource::<MeshViewportLayout>()
             .init_resource::<MeshLight>()
             .init_resource::<MeshViewportInput>()
+            .init_resource::<MeshSceneState>()
             .add_systems(
                 Startup,
                 (setup_mesh_preview, viewport::spawn_mesh_viewport).chain(),
@@ -114,7 +194,8 @@ impl Plugin for MeshPreviewPlugin {
                     viewport::orbit_camera,
                     viewport::update_mesh_light,
                 ),
-            );
+            )
+            .add_systems(Update, viewport::sync_mesh_visibility);
     }
 }
 
@@ -145,7 +226,6 @@ fn setup_mesh_preview(
         target: Vec3::ZERO,
         distance: 4.0,
         target_distance: 4.0,
-        rotation: Quat::from_rotation_x(-0.25),
         yaw: 0.0,
         pitch: 0.3,
     });

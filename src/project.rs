@@ -1,4 +1,4 @@
-use bevy::{asset::Assets, ecs::system::Commands, pbr::StandardMaterial, prelude::Mesh};
+use bevy::prelude::*;
 
 use std::{
     fs,
@@ -12,7 +12,7 @@ use crate::{
     mesh::{
         MeshPreview, MeshSceneState,
         import::{self, MeshImportSettings},
-        viewport::{despawn_imported_mesh, spawn_mesh_scene},
+        viewport::spawn_mesh_scene,
     },
     project_settings::ProjectSettings,
     transform::Transform,
@@ -22,15 +22,29 @@ use crate::{
 pub const PROJECT_EXTENSION: &str = "tsm";
 pub const PROJECT_FORMAT_VERSION: u32 = 1;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectMesh {
+    pub id: u64,
+    pub name: String,
+    pub path: PathBuf,
+
+    #[serde(default = "default_mesh_visibility")]
+    pub visible: bool,
+}
+
+fn default_mesh_visibility() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectFile {
     pub format_version: u32,
     pub settings: ProjectSettings,
-    pub mesh: Option<PathBuf>,
+    pub meshes: Vec<ProjectMesh>,
     pub materials: Vec<ProjectMaterial>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProjectMaterial {
     pub index: usize,
     pub name: String,
@@ -38,7 +52,7 @@ pub struct ProjectMaterial {
     pub transform: Transform,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProjectTexture {
     pub id: String,
     pub path: PathBuf,
@@ -49,12 +63,23 @@ impl ProjectFile {
         project_path: &Path,
         atlas: &Atlas,
         settings: &ProjectSettings,
-        mesh_path: Option<&Path>,
+        mesh_scene_state: &MeshSceneState,
     ) -> Self {
         Self {
             format_version: PROJECT_FORMAT_VERSION,
             settings: settings.clone(),
-            mesh: mesh_path.map(|mesh_path| make_project_relative_path(project_path, mesh_path)),
+
+            meshes: mesh_scene_state
+                .meshes
+                .iter()
+                .map(|mesh| ProjectMesh {
+                    id: mesh.id,
+                    name: mesh.name.clone(),
+                    path: make_project_relative_path(project_path, &mesh.path),
+                    visible: mesh.visible,
+                })
+                .collect(),
+
             materials: atlas
                 .materials
                 .iter()
@@ -76,11 +101,11 @@ impl ProjectFile {
         path: impl AsRef<Path>,
         atlas: &Atlas,
         settings: &ProjectSettings,
-        mesh_path: Option<&Path>,
+        mesh_scene_state: &MeshSceneState,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let path = path.as_ref();
 
-        let project = Self::from_state(path, atlas, settings, mesh_path);
+        let project = Self::from_state(path, atlas, settings, mesh_scene_state);
 
         let config = ron::ser::PrettyConfig::new();
 
@@ -93,7 +118,7 @@ impl ProjectFile {
 
     pub fn load(
         path: impl AsRef<Path>,
-    ) -> Result<(Atlas, ProjectSettings, Option<PathBuf>), Box<dyn std::error::Error>> {
+    ) -> Result<(Atlas, ProjectSettings, Vec<ProjectMesh>), Box<dyn std::error::Error>> {
         let contents = fs::read_to_string(path)?;
 
         let project: Self = ron::from_str(&contents)?;
@@ -132,13 +157,13 @@ impl ProjectFile {
             })
             .collect();
 
-        Ok((atlas, project.settings, project.mesh))
+        Ok((atlas, project.settings, project.meshes))
     }
 }
 
-pub fn load_project_mesh(
+pub fn load_project_meshes(
     project_path: &Path,
-    mesh_path: Option<&Path>,
+    project_meshes: &[ProjectMesh],
     editor_ui: &mut EditorUi,
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
@@ -146,62 +171,88 @@ pub fn load_project_mesh(
     mesh_scene_state: &mut MeshSceneState,
     mesh_preview: &mut MeshPreview,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Always remove the currently loaded mesh first.
-    despawn_imported_mesh(commands, mesh_scene_state);
+    crate::mesh::viewport::despawn_all_meshes(commands, mesh_scene_state);
 
-    let Some(mesh_path) = mesh_path else {
-        editor_ui.mesh_import_path = None;
-        return Ok(());
-    };
-
-    /*
-     * Resolve relative mesh paths relative to the project file.
-     *
-     * Absolute paths are left untouched.
-     */
-    let resolved_path = if mesh_path.is_absolute() {
-        mesh_path.to_path_buf()
-    } else {
-        project_path
-            .parent()
-            .unwrap_or_else(|| Path::new("."))
-            .join(mesh_path)
-    };
-
-    editor_ui.mesh_import_path = Some(resolved_path.clone());
-
-    if !resolved_path.exists() {
-        return Err(format!(
-            "Saved mesh file does not exist: {}",
-            resolved_path.display()
-        )
-        .into());
-    }
+    editor_ui.mesh_import_path = None;
 
     let settings = MeshImportSettings {
         assimp_library: editor_ui.editor_settings.assimp_library_path.clone(),
     };
 
-    let scene = import::import(&resolved_path, editor_ui.mesh_import_backend, &settings)?;
+    let mut errors = Vec::new();
 
-    let (root, bounds_center, bounds_radius) =
-        spawn_mesh_scene(commands, meshes, materials, &scene);
+    for project_mesh in project_meshes {
+        let resolved_path = if project_mesh.path.is_absolute() {
+            project_mesh.path.clone()
+        } else {
+            project_path
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .join(&project_mesh.path)
+        };
 
-    mesh_scene_state.root = Some(root);
-    mesh_scene_state.bounds_center = bounds_center;
-    mesh_scene_state.bounds_radius = bounds_radius;
+        if !resolved_path.exists() {
+            errors.push(format!(
+                "{}: saved mesh file does not exist: {}",
+                project_mesh.name,
+                resolved_path.display()
+            ));
+            continue;
+        }
+
+        match import::import(&resolved_path, editor_ui.mesh_import_backend, &settings) {
+            Ok(scene) => {
+                /*
+                 * Reserve the runtime ID before spawning the entity.
+                 *
+                 * The same ID is then stored in MeshSceneState and used by
+                 * ImportedMeshRoot for visibility synchronization.
+                 */
+                let mesh_id = mesh_scene_state.next_id;
+
+                let (root, bounds_center, bounds_radius) =
+                    spawn_mesh_scene(commands, meshes, materials, &scene, mesh_id);
+
+                mesh_scene_state.add(
+                    project_mesh.name.clone(),
+                    resolved_path,
+                    root,
+                    bounds_center,
+                    bounds_radius,
+                );
+
+                if let Some(mesh) = mesh_scene_state.get_mut(mesh_id) {
+                    mesh.visible = project_mesh.visible;
+                }
+            }
+
+            Err(error) => {
+                errors.push(format!("{}: failed to import: {error}", project_mesh.name));
+            }
+        }
+    }
 
     /*
-     * Frame the camera around the imported mesh.
+     * Frame the camera around all successfully loaded meshes.
      */
-    mesh_preview.target = bounds_center;
+    if let Some((bounds_center, bounds_radius)) = mesh_scene_state.visible_bounds() {
+        mesh_preview.target = bounds_center;
 
-    let fit_distance = (bounds_radius * 2.5).max(0.25);
+        let fit_distance = (bounds_radius * 2.5).max(0.25);
 
-    mesh_preview.distance = fit_distance;
-    mesh_preview.target_distance = fit_distance;
+        mesh_preview.distance = fit_distance;
+        mesh_preview.target_distance = fit_distance;
+    } else {
+        mesh_preview.target = Vec3::ZERO;
+        mesh_preview.distance = 4.0;
+        mesh_preview.target_distance = 4.0;
+    }
 
-    Ok(())
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("\n").into())
+    }
 }
 
 impl ProjectTexture {
@@ -216,7 +267,7 @@ impl ProjectTexture {
 pub fn save_project_as_dialog(
     atlas: &Atlas,
     settings: &ProjectSettings,
-    mesh_path: Option<&Path>,
+    mesh_scene_state: &MeshSceneState,
 ) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
     let Some(mut path) = rfd::FileDialog::new()
         .add_filter("Trimsheet Project", &[PROJECT_EXTENSION])
@@ -230,7 +281,7 @@ pub fn save_project_as_dialog(
         path.set_extension(PROJECT_EXTENSION);
     }
 
-    ProjectFile::save(&path, atlas, settings, mesh_path)?;
+    ProjectFile::save(&path, atlas, settings, mesh_scene_state)?;
 
     Ok(Some(path))
 }
@@ -250,9 +301,9 @@ pub fn save_project(
     path: &Path,
     atlas: &Atlas,
     settings: &ProjectSettings,
-    mesh_path: Option<&Path>,
+    mesh_scene_state: &MeshSceneState,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    ProjectFile::save(path, atlas, settings, mesh_path)
+    ProjectFile::save(path, atlas, settings, mesh_scene_state)
 }
 
 fn make_project_relative_path(project_path: &Path, asset_path: &Path) -> PathBuf {
