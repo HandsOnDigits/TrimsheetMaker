@@ -158,6 +158,9 @@ impl HotkeyManager {
             EditorAction::ToggleMeshLightFollowCamera,
             Hotkey::shift(KeyCode::KeyL),
         );
+
+        self.bindings
+            .insert(EditorAction::ToggleMeshWindow, Hotkey::shift(KeyCode::KeyM));
     }
 
     pub fn binding(&self, action: EditorAction) -> Option<Hotkey> {

@@ -36,6 +36,7 @@ pub enum EditorAction {
     ToggleInspectorPanel,
     ToggleStatusBar,
     ToggleMeshLightFollowCamera,
+    ToggleMeshWindow,
 }
 
 #[derive(Message, Debug, Clone, Copy)]
@@ -266,6 +267,10 @@ pub fn execute_action(
 
         EditorAction::ToggleMeshLightFollowCamera => {
             mesh_light.follow_camera = !mesh_light.follow_camera;
+        }
+
+        EditorAction::ToggleMeshWindow => {
+            editor_ui.show_meshes_window = !editor_ui.show_meshes_window;
         }
     }
 }

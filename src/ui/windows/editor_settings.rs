@@ -180,6 +180,7 @@ fn all_editable_actions() -> &'static [EditorAction] {
         EditorAction::ToggleInspectorPanel,
         EditorAction::ToggleStatusBar,
         EditorAction::ToggleMeshLightFollowCamera,
+        EditorAction::ToggleMeshWindow,
     ]
 }
 
@@ -207,5 +208,6 @@ fn action_display_name(action: EditorAction) -> &'static str {
         EditorAction::ToggleInspectorPanel => "Toggle Inspector Panel",
         EditorAction::ToggleStatusBar => "Toggle Status Bar",
         EditorAction::ToggleMeshLightFollowCamera => "Toggle Mesh Light Follow Mouse",
+        EditorAction::ToggleMeshWindow => "Toggle Mesh Window",
     }
 }

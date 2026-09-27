@@ -84,6 +84,7 @@ pub struct EditorUi {
     pub show_import_single_material_window: bool,
     pub show_editor_settings_window: bool,
     pub show_import_mesh_window: bool,
+    pub show_meshes_window: bool,
 
     pub mesh_import_path: Option<std::path::PathBuf>,
     pub mesh_import_backend: crate::mesh::import::MeshBackend,
@@ -147,6 +148,7 @@ impl Default for EditorUi {
             show_import_single_material_window: false,
             show_editor_settings_window: false,
             show_import_mesh_window: false,
+            show_meshes_window: true,
 
             mesh_import_path: None,
             mesh_import_backend: crate::mesh::import::MeshBackend::Auto,

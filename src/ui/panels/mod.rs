@@ -149,12 +149,9 @@ pub fn editor_ui(
     root_ui.scope_builder(egui::UiBuilder::new().max_rect(mesh_rect), |ui| {
         mesh_panel(
             ui,
-            &mut editor_ui,
-            &mut commands,
             &mut mesh_preview,
             &mut mesh_light,
             &mut mesh_input,
-            &mut mesh_scene_state,
             &hotkeys,
             &mut mesh_viewport,
         );
@@ -216,6 +213,9 @@ pub fn editor_ui(
         &mut mesh_scene_state,
         &mut mesh_preview,
     );
+
+    // Mesh list.
+    windows::meshes::meshes_window(ctx, &mut editor_ui, &mut commands, &mut mesh_scene_state);
 
     Ok(())
 }
