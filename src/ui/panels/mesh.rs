@@ -7,10 +7,13 @@ use crate::{
         MeshLight, MeshLightPreset, MeshPreview, MeshSceneState, MeshViewportInput,
         MeshViewportLayout,
     },
+    ui::EditorUi,
 };
 
 pub fn mesh_panel(
     ui: &mut egui::Ui,
+    editor_ui: &mut EditorUi,
+    commands: &mut Commands,
     mesh_preview: &mut MeshPreview,
     mesh_light: &mut MeshLight,
     mesh_input: &mut MeshViewportInput,
@@ -73,6 +76,8 @@ pub fn mesh_panel(
             .max_height(140.0)
             .show(ui, |ui| {
                 for mesh in &mut mesh_scene_state.meshes {
+                    let selected = editor_ui.selected_mesh == Some(mesh.id);
+
                     ui.horizontal(|ui| {
                         ui.checkbox(&mut mesh.visible, "");
 
@@ -85,16 +90,53 @@ pub fn mesh_panel(
                             &mesh.name
                         };
 
-                        ui.label(name);
+                        let response = ui.selectable_label(selected, name);
+
+                        if response.clicked() {
+                            editor_ui.selected_mesh = Some(mesh.id);
+                        }
                     });
                 }
             });
     }
 
+    ui.horizontal(|ui| {
+        let has_selection = editor_ui
+            .selected_mesh
+            .and_then(|id| mesh_scene_state.get(id))
+            .is_some();
+
+        if ui
+            .add_enabled(has_selection, egui::Button::new("Delete Selected"))
+            .clicked()
+        {
+            if let Some(selected_id) = editor_ui.selected_mesh.take() {
+                if let Some(mesh) = mesh_scene_state.remove(selected_id) {
+                    if let Some(root) = mesh.root {
+                        commands.entity(root).despawn();
+                    }
+                }
+
+                // Re-frame the viewport around the remaining visible meshes.
+                if let Some((center, radius)) = mesh_scene_state.visible_bounds() {
+                    mesh_preview.target = center;
+
+                    let fit_distance = (radius * 2.5).max(0.25);
+
+                    mesh_preview.distance = fit_distance;
+                    mesh_preview.target_distance = fit_distance;
+                } else {
+                    mesh_preview.target = Vec3::ZERO;
+                    mesh_preview.distance = 4.0;
+                    mesh_preview.target_distance = 4.0;
+                }
+            }
+        }
+    });
+
     // Horizontal split.
     ui.separator();
 
-    // The native Bevy viewport starts below the toolbar and mesh list.
     let viewport_rect = ui.available_rect_before_wrap();
 
     mesh_viewport.x = viewport_rect.left();

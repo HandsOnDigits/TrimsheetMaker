@@ -76,6 +76,7 @@ pub struct EditorUi {
     pub project_path: Option<std::path::PathBuf>,
 
     pub selected_material: Option<usize>,
+    pub selected_mesh: Option<u64>,
 
     pub show_import_multiple_materials_window: bool,
     pub show_import_single_material_window: bool,
@@ -119,6 +120,9 @@ pub struct EditorUi {
 impl Default for EditorUi {
     fn default() -> Self {
         Self {
+            selected_material: None,
+            selected_mesh: None,
+
             project_path: None,
 
             multiple_materials_root: None,
@@ -152,8 +156,6 @@ impl Default for EditorUi {
             project_settings: ProjectSettings::default(),
 
             suffix_inputs: BTreeMap::new(),
-
-            selected_material: None,
 
             atlas_zoom: 1.0,
             atlas_pan: egui::Vec2::ZERO,

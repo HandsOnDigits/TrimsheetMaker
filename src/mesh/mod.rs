@@ -65,6 +65,11 @@ impl MeshSceneState {
         id
     }
 
+    pub fn remove(&mut self, id: u64) -> Option<MeshEntry> {
+        let index = self.meshes.iter().position(|mesh| mesh.id == id)?;
+        Some(self.meshes.remove(index))
+    }
+
     pub fn get(&self, id: u64) -> Option<&MeshEntry> {
         self.meshes.iter().find(|mesh| mesh.id == id)
     }

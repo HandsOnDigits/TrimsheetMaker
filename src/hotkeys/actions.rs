@@ -67,10 +67,12 @@ pub fn execute_action(
     match action {
         EditorAction::NewAtlas => {
             *atlas = Atlas::default();
+            editor_ui.selected_material = None;
+            editor_ui.selected_mesh = None;
+
             editor_ui.project_settings = ProjectSettings::default();
             editor_ui.project_path = None;
 
-            editor_ui.selected_material = None;
             editor_ui.dragging_material = None;
             editor_ui.drag_offset = egui::Vec2::ZERO;
 

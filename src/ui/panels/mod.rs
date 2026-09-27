@@ -16,6 +16,7 @@ use bevy::prelude::*;
 use bevy_egui::{EguiContexts, EguiTextureHandle, egui};
 
 mod mesh;
+use mesh::mesh_panel;
 
 use super::EditorUi;
 
@@ -146,8 +147,10 @@ pub fn editor_ui(
     );
 
     root_ui.scope_builder(egui::UiBuilder::new().max_rect(mesh_rect), |ui| {
-        mesh::mesh_panel(
+        mesh_panel(
             ui,
+            &mut editor_ui,
+            &mut commands,
             &mut mesh_preview,
             &mut mesh_light,
             &mut mesh_input,
