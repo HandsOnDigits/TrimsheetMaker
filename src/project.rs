@@ -23,6 +23,15 @@ pub const PROJECT_EXTENSION: &str = "tsm";
 pub const PROJECT_FORMAT_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectMeshPart {
+    pub index: usize,
+    pub name: String,
+
+    #[serde(default = "default_mesh_visibility")]
+    pub visible: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectMesh {
     pub id: u64,
     pub name: String,
@@ -30,6 +39,9 @@ pub struct ProjectMesh {
 
     #[serde(default = "default_mesh_visibility")]
     pub visible: bool,
+
+    #[serde(default)]
+    pub parts: Vec<ProjectMeshPart>,
 }
 
 fn default_mesh_visibility() -> bool {
@@ -77,6 +89,16 @@ impl ProjectFile {
                     name: mesh.name.clone(),
                     path: make_project_relative_path(project_path, &mesh.path),
                     visible: mesh.visible,
+
+                    parts: mesh
+                        .parts
+                        .iter()
+                        .map(|part| ProjectMeshPart {
+                            index: part.index,
+                            name: part.name.clone(),
+                            visible: part.visible,
+                        })
+                        .collect(),
                 })
                 .collect(),
 
@@ -210,19 +232,30 @@ pub fn load_project_meshes(
                  */
                 let mesh_id = mesh_scene_state.next_id;
 
-                let (root, bounds_center, bounds_radius) =
+                let (root, parts, bounds_center, bounds_radius) =
                     spawn_mesh_scene(commands, meshes, materials, &scene, mesh_id);
 
                 mesh_scene_state.add(
                     project_mesh.name.clone(),
                     resolved_path,
                     root,
+                    parts,
                     bounds_center,
                     bounds_radius,
                 );
 
                 if let Some(mesh) = mesh_scene_state.get_mut(mesh_id) {
                     mesh.visible = project_mesh.visible;
+
+                    for saved_part in &project_mesh.parts {
+                        if let Some(part) = mesh
+                            .parts
+                            .iter_mut()
+                            .find(|part| part.index == saved_part.index)
+                        {
+                            part.visible = saved_part.visible;
+                        }
+                    }
                 }
             }
 

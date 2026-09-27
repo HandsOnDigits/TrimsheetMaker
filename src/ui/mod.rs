@@ -78,6 +78,8 @@ pub struct EditorUi {
     pub selected_material: Option<usize>,
     pub selected_mesh: Option<u64>,
 
+    pub expanded_meshes: std::collections::BTreeSet<u64>,
+
     pub show_import_multiple_materials_window: bool,
     pub show_import_single_material_window: bool,
     pub show_editor_settings_window: bool,
@@ -120,10 +122,12 @@ pub struct EditorUi {
 impl Default for EditorUi {
     fn default() -> Self {
         Self {
+            project_path: None,
+
             selected_material: None,
             selected_mesh: None,
 
-            project_path: None,
+            expanded_meshes: std::collections::BTreeSet::new(),
 
             multiple_materials_root: None,
             import_materials: BTreeMap::new(),

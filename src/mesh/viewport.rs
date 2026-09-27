@@ -6,14 +6,20 @@ use bevy::{
 };
 
 use super::{
-    ImportedMeshRoot, MeshLight, MeshLightPreset, MeshPreview, MeshPreviewCamera, MeshPreviewLight,
-    MeshSceneState, MeshViewportInput, MeshViewportLayout,
+    ImportedMeshRoot, MeshLight, MeshLightPreset, MeshPartEntry, MeshPreview, MeshPreviewCamera,
+    MeshPreviewLight, MeshSceneState, MeshViewportInput, MeshViewportLayout,
 };
 
 use crate::ui::EditorUi;
 
 #[derive(Component)]
 pub struct ImportedMesh;
+
+#[derive(Component)]
+pub struct ImportedMeshPart {
+    pub mesh_id: u64,
+    pub part_index: usize,
+}
 
 #[derive(Component)]
 pub struct MeshViewportSection;
@@ -24,7 +30,7 @@ pub fn spawn_mesh_scene(
     materials: &mut Assets<StandardMaterial>,
     scene: &super::import::MeshScene,
     mesh_id: u64,
-) -> (Entity, Vec3, f32) {
+) -> (Entity, Vec<MeshPartEntry>, Vec3, f32) {
     let mut bounds_min = Vec3::splat(f32::INFINITY);
     let mut bounds_max = Vec3::splat(f32::NEG_INFINITY);
 
@@ -47,22 +53,13 @@ pub fn spawn_mesh_scene(
         };
 
         for primitive in &object.primitives {
-            // ---------------------------------------------------------
-            // Bounds
-            // ---------------------------------------------------------
-
             for position in &primitive.positions {
                 let world_position = transform.transform_point(Vec3::from(*position));
-
                 bounds_min = bounds_min.min(world_position);
                 bounds_max = bounds_max.max(world_position);
             }
         }
     }
-
-    // -------------------------------------------------------------
-    // Spawn scene
-    // -------------------------------------------------------------
 
     let root = commands
         .spawn((
@@ -75,7 +72,9 @@ pub fn spawn_mesh_scene(
         ))
         .id();
 
-    for object in &scene.objects {
+    let mut parts = Vec::with_capacity(scene.objects.len());
+
+    for (part_index, object) in scene.objects.iter().enumerate() {
         let object_entity = commands
             .spawn((
                 Name::new(object.name.clone()),
@@ -87,9 +86,13 @@ pub fn spawn_mesh_scene(
                         object.transform.rotation[3],
                     ))
                     .with_scale(Vec3::from(object.transform.scale)),
-                Visibility::default(),
+                Visibility::Visible,
                 InheritedVisibility::default(),
                 ImportedMesh,
+                ImportedMeshPart {
+                    mesh_id,
+                    part_index,
+                },
             ))
             .id();
 
@@ -102,13 +105,9 @@ pub fn spawn_mesh_scene(
             );
 
             mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, primitive.positions.clone());
-
             mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, primitive.normals.clone());
-
             mesh.insert_attribute(Mesh::ATTRIBUTE_TANGENT, primitive.tangents.clone());
-
             mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, primitive.uvs.clone());
-
             mesh.insert_indices(bevy::mesh::Indices::U32(primitive.indices.clone()));
 
             let mesh_handle = meshes.add(mesh);
@@ -124,10 +123,23 @@ pub fn spawn_mesh_scene(
                     Name::new(format!("{} Primitive {}", object.name, primitive_index)),
                     Mesh3d(mesh_handle),
                     MeshMaterial3d(material_handle),
+                    Visibility::Visible,
+                    InheritedVisibility::default(),
                     ImportedMesh,
+                    ImportedMeshPart {
+                        mesh_id,
+                        part_index,
+                    },
                 ));
             });
         }
+
+        parts.push(MeshPartEntry {
+            index: part_index,
+            name: object.name.clone(),
+            visible: true,
+            entity: Some(object_entity),
+        });
     }
 
     let bounds_center = if bounds_min.x.is_finite() {
@@ -142,7 +154,7 @@ pub fn spawn_mesh_scene(
         1.0
     };
 
-    (root, bounds_center, bounds_radius)
+    (root, parts, bounds_center, bounds_radius)
 }
 
 pub fn spawn_mesh_viewport(mut commands: Commands, mesh_preview: Res<MeshPreview>) {
@@ -238,22 +250,55 @@ pub fn update_mesh_light(
 
 pub fn sync_mesh_visibility(
     scene_state: Res<MeshSceneState>,
-    mut query: Query<(&ImportedMeshRoot, &mut Visibility)>,
+    mut queries: ParamSet<(
+        Query<(&ImportedMeshRoot, &mut Visibility)>,
+        Query<(&ImportedMeshPart, &mut Visibility)>,
+    )>,
 ) {
-    if !scene_state.is_changed() {
-        return;
+    // Whole-mesh visibility.
+    {
+        let mut root_query = queries.p0();
+
+        for (root, mut visibility) in &mut root_query {
+            let Some(mesh) = scene_state.get(root.id) else {
+                continue;
+            };
+
+            *visibility = if mesh.visible {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            };
+        }
     }
 
-    for (root, mut visibility) in &mut query {
-        let Some(mesh) = scene_state.get(root.id) else {
-            continue;
-        };
+    // Part visibility.
+    //
+    // This query now matches BOTH the part entity and all of its
+    // primitive children, so we do not depend on inherited visibility
+    // propagation to hide the actual rendered mesh.
+    {
+        let mut part_query = queries.p1();
 
-        *visibility = if mesh.visible {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
+        for (part, mut visibility) in &mut part_query {
+            let Some(mesh) = scene_state.get(part.mesh_id) else {
+                continue;
+            };
+
+            let Some(part_entry) = mesh
+                .parts
+                .iter()
+                .find(|entry| entry.index == part.part_index)
+            else {
+                continue;
+            };
+
+            *visibility = if mesh.visible && part_entry.visible {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            };
+        }
     }
 }
 

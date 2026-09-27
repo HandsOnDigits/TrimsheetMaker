@@ -76,10 +76,31 @@ pub fn mesh_panel(
             .max_height(140.0)
             .show(ui, |ui| {
                 for mesh in &mut mesh_scene_state.meshes {
-                    let selected = editor_ui.selected_mesh == Some(mesh.id);
+                    let mesh_id = mesh.id;
+                    let selected = editor_ui.selected_mesh == Some(mesh_id);
+                    let expanded = editor_ui.expanded_meshes.contains(&mesh_id);
 
                     ui.horizontal(|ui| {
+                        // Whole-mesh visibility.
                         ui.checkbox(&mut mesh.visible, "");
+
+                        // Expand/collapse button.
+                        let arrow = if expanded { "▼" } else { "▶" };
+
+                        if ui
+                            .add(
+                                egui::Button::new(arrow)
+                                    .frame(false)
+                                    .min_size(egui::vec2(18.0, 18.0)),
+                            )
+                            .clicked()
+                        {
+                            if expanded {
+                                editor_ui.expanded_meshes.remove(&mesh_id);
+                            } else {
+                                editor_ui.expanded_meshes.insert(mesh_id);
+                            }
+                        }
 
                         let name = if mesh.name.is_empty() {
                             mesh.path
@@ -93,9 +114,23 @@ pub fn mesh_panel(
                         let response = ui.selectable_label(selected, name);
 
                         if response.clicked() {
-                            editor_ui.selected_mesh = Some(mesh.id);
+                            editor_ui.selected_mesh = Some(mesh_id);
                         }
                     });
+
+                    if expanded {
+                        ui.indent(egui::Id::new(("mesh_parts", mesh_id)), |ui| {
+                            for part in &mut mesh.parts {
+                                ui.horizontal(|ui| {
+                                    ui.add_space(4.0);
+
+                                    ui.checkbox(&mut part.visible, "");
+
+                                    ui.label(egui::RichText::new(&part.name).small());
+                                });
+                            }
+                        });
+                    }
                 }
             });
     }
@@ -115,6 +150,8 @@ pub fn mesh_panel(
                     if let Some(root) = mesh.root {
                         commands.entity(root).despawn();
                     }
+
+                    editor_ui.expanded_meshes.remove(&selected_id);
                 }
 
                 // Re-frame the viewport around the remaining visible meshes.

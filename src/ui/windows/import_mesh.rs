@@ -143,7 +143,7 @@ pub fn import_mesh_window(
                                 // ImportedMeshRoot receives the same ID as MeshEntry.
                                 let mesh_id = mesh_scene_state.next_id;
 
-                                let (root, bounds_center, bounds_radius) =
+                                let (root, parts, bounds_center, bounds_radius) =
                                     spawn_mesh_scene(commands, meshes, materials, &scene, mesh_id);
 
                                 let name = path
@@ -156,6 +156,7 @@ pub fn import_mesh_window(
                                     name,
                                     PathBuf::from(&path),
                                     root,
+                                    parts,
                                     bounds_center,
                                     bounds_radius,
                                 );

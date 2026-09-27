@@ -25,8 +25,17 @@ pub struct MeshEntry {
     pub path: std::path::PathBuf,
     pub visible: bool,
     pub root: Option<Entity>,
+    pub parts: Vec<MeshPartEntry>,
     pub bounds_center: Vec3,
     pub bounds_radius: f32,
+}
+
+#[derive(Debug, Clone)]
+pub struct MeshPartEntry {
+    pub index: usize,
+    pub name: String,
+    pub visible: bool,
+    pub entity: Option<Entity>,
 }
 
 #[derive(Component)]
@@ -46,6 +55,7 @@ impl MeshSceneState {
         name: String,
         path: std::path::PathBuf,
         root: Entity,
+        parts: Vec<MeshPartEntry>,
         bounds_center: Vec3,
         bounds_radius: f32,
     ) -> u64 {
@@ -58,6 +68,7 @@ impl MeshSceneState {
             path,
             visible: true,
             root: Some(root),
+            parts,
             bounds_center,
             bounds_radius,
         });
@@ -200,7 +211,7 @@ impl Plugin for MeshPreviewPlugin {
                     viewport::update_mesh_light,
                 ),
             )
-            .add_systems(Update, viewport::sync_mesh_visibility);
+            .add_systems(PostUpdate, viewport::sync_mesh_visibility);
     }
 }
 
