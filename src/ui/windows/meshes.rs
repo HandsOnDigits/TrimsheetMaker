@@ -22,6 +22,8 @@ pub fn meshes_window(
             ctx.viewport_rect().center().y - 200.0,
         ))
         .show(ctx, |ui| {
+            ui.style_mut().override_font_id = Some(egui::FontId::proportional(16.0));
+
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new("Meshes").strong());
 

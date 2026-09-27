@@ -14,6 +14,10 @@ pub fn mesh_panel(
     hotkeys: &HotkeyManager,
     mesh_viewport: &mut MeshViewportLayout,
 ) {
+    // ------------------------------------------------------------
+    // Mesh toolbar
+    // ------------------------------------------------------------
+
     ui.horizontal(|ui| {
         ui.heading("Mesh");
 
@@ -49,10 +53,13 @@ pub fn mesh_panel(
         }
     });
 
-    // Horizontal split.
+    // ------------------------------------------------------------
+    // Viewport
+    // ------------------------------------------------------------
+
     ui.separator();
 
-    let viewport_rect = ui.max_rect();
+    let viewport_rect = ui.available_rect_before_wrap();
 
     mesh_viewport.x = viewport_rect.left();
     mesh_viewport.y = viewport_rect.top();
