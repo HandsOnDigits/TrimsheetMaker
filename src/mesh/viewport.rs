@@ -56,23 +56,6 @@ pub fn spawn_mesh_scene(
                 bounds_min = bounds_min.min(world_position);
                 bounds_max = bounds_max.max(world_position);
             }
-
-            // ---------------------------------------------------------
-            // Raycast triangles
-            // ---------------------------------------------------------
-
-            for indices in primitive.indices.chunks_exact(3) {
-                let i0 = indices[0] as usize;
-                let i1 = indices[1] as usize;
-                let i2 = indices[2] as usize;
-
-                if i0 >= primitive.positions.len()
-                    || i1 >= primitive.positions.len()
-                    || i2 >= primitive.positions.len()
-                {
-                    continue;
-                }
-            }
         }
     }
 

@@ -6,7 +6,7 @@ use super::{EditorUi, menu_action_button};
 use crate::{
     data::Atlas,
     hotkeys::{EditorAction, HotkeyManager, execute_action},
-    mesh::{MeshLight, MeshPreview},
+    mesh::{MeshLight, MeshPreview, MeshSceneState},
 };
 
 pub fn toolbar(
@@ -17,6 +17,10 @@ pub fn toolbar(
     hotkeys: &HotkeyManager,
     mesh_preview: &mut MeshPreview,
     mesh_light: &mut MeshLight,
+    mesh_scene_state: &mut MeshSceneState,
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
 ) {
     ui.horizontal(|ui| {
         ui.add_space(8.0);
@@ -30,6 +34,10 @@ pub fn toolbar(
                     images,
                     mesh_preview,
                     mesh_light,
+                    mesh_scene_state,
+                    commands,
+                    meshes,
+                    materials,
                 );
                 ui.close();
             }
@@ -42,6 +50,10 @@ pub fn toolbar(
                     images,
                     mesh_preview,
                     mesh_light,
+                    mesh_scene_state,
+                    commands,
+                    meshes,
+                    materials,
                 );
                 ui.close();
             }
@@ -54,6 +66,10 @@ pub fn toolbar(
                     images,
                     mesh_preview,
                     mesh_light,
+                    mesh_scene_state,
+                    commands,
+                    meshes,
+                    materials,
                 );
                 ui.close();
             }
@@ -66,6 +82,10 @@ pub fn toolbar(
                     images,
                     mesh_preview,
                     mesh_light,
+                    mesh_scene_state,
+                    commands,
+                    meshes,
+                    materials,
                 );
                 ui.close();
             }
@@ -85,6 +105,10 @@ pub fn toolbar(
                     images,
                     mesh_preview,
                     mesh_light,
+                    mesh_scene_state,
+                    commands,
+                    meshes,
+                    materials,
                 );
                 ui.close();
             }
@@ -102,6 +126,10 @@ pub fn toolbar(
                     images,
                     mesh_preview,
                     mesh_light,
+                    mesh_scene_state,
+                    commands,
+                    meshes,
+                    materials,
                 );
                 ui.close();
             }
@@ -114,6 +142,10 @@ pub fn toolbar(
                     images,
                     mesh_preview,
                     mesh_light,
+                    mesh_scene_state,
+                    commands,
+                    meshes,
+                    materials,
                 );
                 ui.close();
             }
@@ -128,6 +160,10 @@ pub fn toolbar(
                     images,
                     mesh_preview,
                     mesh_light,
+                    mesh_scene_state,
+                    commands,
+                    meshes,
+                    materials,
                 );
                 ui.close();
             }
@@ -149,6 +185,10 @@ pub fn toolbar(
                     images,
                     mesh_preview,
                     mesh_light,
+                    mesh_scene_state,
+                    commands,
+                    meshes,
+                    materials,
                 );
                 ui.close();
             }
@@ -161,6 +201,10 @@ pub fn toolbar(
                     images,
                     mesh_preview,
                     mesh_light,
+                    mesh_scene_state,
+                    commands,
+                    meshes,
+                    materials,
                 );
                 ui.close();
             }
@@ -183,6 +227,10 @@ pub fn toolbar(
                     images,
                     mesh_preview,
                     mesh_light,
+                    mesh_scene_state,
+                    commands,
+                    meshes,
+                    materials,
                 );
                 ui.close();
             }

@@ -5,7 +5,11 @@ use bevy::prelude::*;
 use bevy_egui::egui;
 
 use crate::{
-    data::Atlas, mesh::MeshLight, project, project_settings::ProjectSettings, ui::EditorUi,
+    data::Atlas,
+    mesh::{MeshLight, MeshPreview, MeshSceneState},
+    project,
+    project_settings::ProjectSettings,
+    ui::EditorUi,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -54,8 +58,12 @@ pub fn execute_action(
     editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
     images: &mut Assets<Image>,
-    mesh_preview: &mut crate::mesh::MeshPreview,
+    mesh_preview: &mut MeshPreview,
     mesh_light: &mut MeshLight,
+    mesh_scene_state: &mut MeshSceneState,
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
 ) {
     match action {
         EditorAction::NewAtlas => {
@@ -65,16 +73,23 @@ pub fn execute_action(
             editor_ui.selected_material = None;
             editor_ui.atlas_zoom = 1.0;
             editor_ui.atlas_pan = egui::Vec2::ZERO;
+
+            crate::mesh::viewport::despawn_imported_mesh(commands, mesh_scene_state);
+            editor_ui.mesh_import_path = None;
+
+            mesh_preview.target = Vec3::ZERO;
+            mesh_preview.distance = 4.0;
+            mesh_preview.target_distance = 4.0;
         }
 
-        EditorAction::OpenProject => match crate::project::open_project_dialog() {
-            Ok(Some(path)) => match crate::project::ProjectFile::load(&path) {
-                Ok((mut loaded_atlas, project_settings)) => {
+        EditorAction::OpenProject => match project::open_project_dialog() {
+            Ok(Some(path)) => match project::ProjectFile::load(&path) {
+                Ok((mut loaded_atlas, project_settings, mesh_path)) => {
                     loaded_atlas.load_textures(images, None);
 
                     *atlas = loaded_atlas;
                     editor_ui.project_settings = project_settings;
-                    editor_ui.project_path = Some(path);
+                    editor_ui.project_path = Some(path.clone());
 
                     editor_ui.selected_material = None;
                     editor_ui.dragging_material = None;
@@ -83,10 +98,26 @@ pub fn execute_action(
                     editor_ui.atlas_zoom = 1.0;
                     editor_ui.atlas_pan = egui::Vec2::ZERO;
 
-                    info!(
-                        "Project opened: {}",
-                        editor_ui.project_path.as_deref().unwrap().display()
-                    );
+                    match project::load_project_mesh(
+                        &path,
+                        mesh_path.as_deref(),
+                        editor_ui,
+                        commands,
+                        meshes,
+                        materials,
+                        mesh_scene_state,
+                        mesh_preview,
+                    ) {
+                        Ok(()) => {
+                            info!("Project opened: {}", path.display());
+                        }
+
+                        Err(error) => {
+                            error!(
+                                "Project opened, but the saved mesh could not be loaded: {error}"
+                            );
+                        }
+                    }
                 }
 
                 Err(error) => {
@@ -105,7 +136,12 @@ pub fn execute_action(
 
         EditorAction::SaveProject => {
             if let Some(path) = editor_ui.project_path.as_deref() {
-                match crate::project::save_project(path, atlas, &editor_ui.project_settings) {
+                match crate::project::save_project(
+                    path,
+                    atlas,
+                    &editor_ui.project_settings,
+                    editor_ui.mesh_import_path.as_deref(),
+                ) {
                     Ok(()) => {
                         info!("Project saved: {}", path.display());
                     }
@@ -114,7 +150,11 @@ pub fn execute_action(
                     }
                 }
             } else {
-                match crate::project::save_project_as_dialog(atlas, &editor_ui.project_settings) {
+                match crate::project::save_project_as_dialog(
+                    atlas,
+                    &editor_ui.project_settings,
+                    editor_ui.mesh_import_path.as_deref(),
+                ) {
                     Ok(Some(path)) => {
                         info!("Project saved: {}", path.display());
                         editor_ui.project_path = Some(path);
@@ -130,7 +170,11 @@ pub fn execute_action(
         }
 
         EditorAction::SaveProjectAs => {
-            match project::save_project_as_dialog(atlas, &editor_ui.project_settings) {
+            match project::save_project_as_dialog(
+                atlas,
+                &editor_ui.project_settings,
+                editor_ui.mesh_import_path.as_deref(),
+            ) {
                 Ok(Some(path)) => {
                     info!("Project saved: {}", path.display());
                     editor_ui.project_path = Some(path);

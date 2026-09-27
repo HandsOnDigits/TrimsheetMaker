@@ -77,6 +77,10 @@ pub fn editor_ui(
                 &hotkeys,
                 &mut mesh_preview,
                 &mut mesh_light,
+                &mut mesh_scene_state,
+                &mut commands,
+                &mut meshes,
+                &mut materials,
             );
         });
 
