@@ -151,6 +151,7 @@ pub fn editor_ui(
             &mut mesh_preview,
             &mut mesh_light,
             &mut mesh_input,
+            &mut mesh_scene_state,
             &hotkeys,
             &mut mesh_viewport,
         );

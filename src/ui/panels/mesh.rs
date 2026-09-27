@@ -3,7 +3,10 @@ use bevy_egui::egui;
 
 use crate::{
     hotkeys::{EditorAction, HotkeyManager},
-    mesh::{MeshLight, MeshLightPreset, MeshPreview, MeshViewportInput, MeshViewportLayout},
+    mesh::{
+        MeshLight, MeshLightPreset, MeshPreview, MeshSceneState, MeshViewportInput,
+        MeshViewportLayout,
+    },
 };
 
 pub fn mesh_panel(
@@ -11,6 +14,7 @@ pub fn mesh_panel(
     mesh_preview: &mut MeshPreview,
     mesh_light: &mut MeshLight,
     mesh_input: &mut MeshViewportInput,
+    mesh_scene_state: &mut MeshSceneState,
     hotkeys: &HotkeyManager,
     mesh_viewport: &mut MeshViewportLayout,
 ) {
@@ -49,10 +53,48 @@ pub fn mesh_panel(
         }
     });
 
+    // Mesh list.
+    ui.separator();
+
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new("Meshes").strong());
+
+        ui.label(
+            egui::RichText::new(format!("{} loaded", mesh_scene_state.meshes.len()))
+                .small()
+                .weak(),
+        );
+    });
+
+    if mesh_scene_state.meshes.is_empty() {
+        ui.label(egui::RichText::new("No meshes imported.").italics().weak());
+    } else {
+        egui::ScrollArea::vertical()
+            .max_height(140.0)
+            .show(ui, |ui| {
+                for mesh in &mut mesh_scene_state.meshes {
+                    ui.horizontal(|ui| {
+                        ui.checkbox(&mut mesh.visible, "");
+
+                        let name = if mesh.name.is_empty() {
+                            mesh.path
+                                .file_name()
+                                .and_then(|name| name.to_str())
+                                .unwrap_or("Mesh")
+                        } else {
+                            &mesh.name
+                        };
+
+                        ui.label(name);
+                    });
+                }
+            });
+    }
+
     // Horizontal split.
     ui.separator();
 
-    // The native Bevy viewport starts below the toolbar.
+    // The native Bevy viewport starts below the toolbar and mesh list.
     let viewport_rect = ui.available_rect_before_wrap();
 
     mesh_viewport.x = viewport_rect.left();
