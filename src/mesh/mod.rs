@@ -16,6 +16,7 @@ pub struct MeshPreviewLight;
 #[derive(Resource, Default)]
 pub struct MeshViewportInput {
     pub pointer_over_ui: bool,
+    pub floating_window_dragging: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -205,11 +206,11 @@ impl Plugin for MeshPreviewPlugin {
             )
             .add_systems(
                 EguiPrimaryContextPass,
-                (
-                    viewport::update_mesh_viewport,
-                    viewport::orbit_camera,
-                    viewport::update_mesh_light,
-                ),
+                (viewport::update_mesh_viewport, viewport::update_mesh_light),
+            )
+            .add_systems(
+                EguiPrimaryContextPass,
+                viewport::orbit_camera.after(crate::ui::panels::editor_ui),
             )
             .add_systems(PostUpdate, viewport::sync_mesh_visibility);
     }

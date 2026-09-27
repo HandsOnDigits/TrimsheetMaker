@@ -5,20 +5,18 @@ use crate::{data::Atlas, ui::EditorUi};
 
 use super::importer::{classify_textures, material_source_from_paths};
 
+use super::FloatingWindowInteraction;
+
 pub fn import_single_material_window(
     ctx: &egui::Context,
     editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
     images: &mut Assets<Image>,
-) {
-    if !editor_ui.show_import_single_material_window {
-        return;
-    }
-
+) -> bool {
     let mut open = editor_ui.show_import_single_material_window;
     let mut close_window = false;
 
-    egui::Window::new("Import Material")
+    let window_response = egui::Window::new("Import Material")
         .open(&mut open)
         .collapsible(false)
         .resizable(false)
@@ -168,15 +166,14 @@ pub fn import_single_material_window(
             });
         });
 
-    if close_window {
-        open = false;
-    }
+    let owns_pointer = window_response
+        .as_ref()
+        .map(|response| response.owns_pointer(ctx))
+        .unwrap_or(false);
 
     editor_ui.show_import_single_material_window = open;
 
-    if !open {
-        reset_single_material_state(editor_ui);
-    }
+    owns_pointer
 }
 
 fn texture_file_row(ui: &mut egui::Ui, label: &str, id: &str, editor_ui: &mut EditorUi) {
@@ -257,10 +254,4 @@ fn import_material(editor_ui: &mut EditorUi, atlas: &mut Atlas, images: &mut Ass
     editor_ui.project_settings.sync_from_atlas(atlas);
 
     editor_ui.selected_material = Some(index);
-}
-
-fn reset_single_material_state(editor_ui: &mut EditorUi) {
-    editor_ui.single_material_root = None;
-    editor_ui.single_material_name.clear();
-    editor_ui.single_material_textures.clear();
 }

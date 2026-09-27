@@ -1,19 +1,22 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
 
-use crate::hotkeys::{CaptureResult, EditorAction, HotkeyManager};
+use crate::{
+    hotkeys::{CaptureResult, EditorAction, HotkeyManager},
+    ui::{EditorSettings, EditorUi},
+};
 
-use super::super::{EditorSettings, EditorUi};
+use super::FloatingWindowInteraction;
 
 pub fn editor_settings_window(
     ctx: &egui::Context,
     editor_ui: &mut EditorUi,
     hotkeys: &mut HotkeyManager,
     keyboard: &ButtonInput<KeyCode>,
-) {
+) -> bool {
     let mut open = editor_ui.show_editor_settings_window;
 
-    egui::Window::new("Editor Settings")
+    let window_response = egui::Window::new("Editor Settings")
         .open(&mut open)
         .resizable(true)
         .default_width(560.0)
@@ -160,7 +163,14 @@ pub fn editor_settings_window(
             }
         });
 
+    let owns_pointer = window_response
+        .as_ref()
+        .map(|response| response.owns_pointer(ctx))
+        .unwrap_or(false);
+
     editor_ui.show_editor_settings_window = open;
+
+    owns_pointer
 }
 
 fn all_editable_actions() -> &'static [EditorAction] {
@@ -181,6 +191,7 @@ fn all_editable_actions() -> &'static [EditorAction] {
         EditorAction::ToggleStatusBar,
         EditorAction::ToggleMeshLightFollowCamera,
         EditorAction::ToggleMeshWindow,
+        EditorAction::ToggleMeshPartsVisibility,
     ]
 }
 
@@ -207,7 +218,8 @@ fn action_display_name(action: EditorAction) -> &'static str {
         EditorAction::ToggleMaterialsPanel => "Toggle Materials Panel",
         EditorAction::ToggleInspectorPanel => "Toggle Inspector Panel",
         EditorAction::ToggleStatusBar => "Toggle Status Bar",
-        EditorAction::ToggleMeshLightFollowCamera => "Toggle Mesh Light Follow Mouse",
+        EditorAction::ToggleMeshLightFollowCamera => "Toggle Light Follow Camera",
         EditorAction::ToggleMeshWindow => "Toggle Mesh Window",
+        EditorAction::ToggleMeshPartsVisibility => "Toggle All Mesh Parts",
     }
 }

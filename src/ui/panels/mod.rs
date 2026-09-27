@@ -44,6 +44,7 @@ pub fn editor_ui(
     mut mesh_scene_state: ResMut<MeshSceneState>,
 ) -> Result {
     mesh_input.pointer_over_ui = false;
+    mesh_input.floating_window_dragging = false;
 
     for material in &mut atlas.materials {
         for texture in &mut material.textures {
@@ -114,7 +115,7 @@ pub fn editor_ui(
     }
 
     if editor_ui.show_editor_settings_window {
-        windows::editor_settings::editor_settings_window(
+        mesh_input.floating_window_dragging |= windows::editor_settings::editor_settings_window(
             ctx,
             &mut editor_ui,
             &mut hotkeys,
@@ -182,29 +183,30 @@ pub fn editor_ui(
         root_ui.visuals().widgets.noninteractive.bg_fill,
     );
 
-    // Atlas occupies the right side.
     root_ui.scope_builder(egui::UiBuilder::new().max_rect(atlas_rect), |ui| {
         atlas::atlas_view::atlas_view(ui, &mut editor_ui, &mut atlas, &keyboard);
     });
 
     // Bulk/folder import.
-    windows::import_multiple_materials::import_multiple_materials_window(
-        ctx,
-        &mut editor_ui,
-        &mut atlas,
-        &mut images,
-    );
+    mesh_input.floating_window_dragging |=
+        windows::import_multiple_materials::import_multiple_materials_window(
+            ctx,
+            &mut editor_ui,
+            &mut atlas,
+            &mut images,
+        );
 
     // Single-material import.
-    windows::import_single_material::import_single_material_window(
-        ctx,
-        &mut editor_ui,
-        &mut atlas,
-        &mut images,
-    );
+    mesh_input.floating_window_dragging |=
+        windows::import_single_material::import_single_material_window(
+            ctx,
+            &mut editor_ui,
+            &mut atlas,
+            &mut images,
+        );
 
     // Mesh import.
-    windows::import_mesh::import_mesh_window(
+    mesh_input.floating_window_dragging |= windows::import_mesh::import_mesh_window(
         ctx,
         &mut editor_ui,
         &mut commands,
@@ -215,7 +217,8 @@ pub fn editor_ui(
     );
 
     // Mesh list.
-    windows::meshes::meshes_window(ctx, &mut editor_ui, &mut commands, &mut mesh_scene_state);
+    mesh_input.floating_window_dragging |=
+        windows::meshes::meshes_window(ctx, &mut editor_ui, &mut commands, &mut mesh_scene_state);
 
     Ok(())
 }

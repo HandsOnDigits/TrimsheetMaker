@@ -318,6 +318,28 @@ pub fn orbit_camera(
     cameras: Query<(&Camera, &GlobalTransform), With<MeshPreviewCamera>>,
     mut camera_transforms: Query<&mut Transform, With<MeshPreviewCamera>>,
 ) {
+    /*
+     * ------------------------------------------------------------
+     * Consume mouse input first.
+     *
+     * This is important when the pointer is over a floating egui
+     * window. We do not want mouse events to remain queued and then
+     * move the camera after the window interaction ends.
+     * ------------------------------------------------------------
+     */
+
+    let mut mouse_delta = Vec2::ZERO;
+
+    for event in mouse_motion.read() {
+        mouse_delta += event.delta;
+    }
+
+    let mut scroll = 0.0;
+
+    for event in mouse_wheel.read() {
+        scroll += event.y;
+    }
+
     let Ok(window) = windows.single() else {
         return;
     };
@@ -335,7 +357,13 @@ pub fn orbit_camera(
         return;
     }
 
-    if mesh_input.pointer_over_ui {
+    /*
+     * Floating egui windows and other UI elements own the pointer.
+     *
+     * Do this AFTER consuming the mouse events so they cannot leak
+     * into the next frame.
+     */
+    if mesh_input.pointer_over_ui || mesh_input.floating_window_dragging {
         return;
     }
 
@@ -351,17 +379,8 @@ pub fn orbit_camera(
      *     Pan camera
      *
      * Right mouse:
-     *     Also orbit camera
-     *
-     * Keeping the actual orbit state as yaw/pitch avoids accumulating
-     * rotations on the camera Transform itself.
+     *     Orbit camera
      */
-
-    let mut mouse_delta = Vec2::ZERO;
-
-    for event in mouse_motion.read() {
-        mouse_delta += event.delta;
-    }
 
     if mouse_delta != Vec2::ZERO {
         let orbit_button =
@@ -373,16 +392,9 @@ pub fn orbit_camera(
             mesh_preview.yaw -= mouse_delta.x * sensitivity;
             mesh_preview.pitch -= mouse_delta.y * sensitivity;
 
-            // Prevent the camera from going over the poles.
             mesh_preview.pitch = mesh_preview.pitch.clamp(-1.5, 1.5);
         }
 
-        /*
-         * Middle-mouse panning.
-         *
-         * Pan relative to the camera's current orientation rather
-         * than world X/Z, so panning remains intuitive after orbiting.
-         */
         if mouse_buttons.pressed(MouseButton::Middle) {
             let Ok((_camera, camera_global)) = cameras.single() else {
                 return;
@@ -399,30 +411,20 @@ pub fn orbit_camera(
 
     /*
      * ------------------------------------------------------------
-     * Mouse wheel zoom
+     * Mouse wheel
      * ------------------------------------------------------------
      *
      * Ctrl + wheel:
      *     Zoom
      *
      * Normal wheel:
-     *     Pan vertically.
-     *
-     * This preserves the existing scroll behavior while allowing
-     * the speed to come from Editor Settings.
+     *     Vertical pan
      */
-
-    let mut scroll = 0.0;
-
-    for event in mouse_wheel.read() {
-        scroll += event.y;
-    }
 
     if scroll != 0.0 {
         if keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight) {
             let zoom_speed = editor_ui.editor_settings.mouse_scroll_speed;
 
-            // Multiplicative zoom keeps the feel consistent at all distances.
             let zoom_factor = (-scroll * zoom_speed * 0.05).exp();
 
             mesh_preview.target_distance *= zoom_factor;
@@ -455,7 +457,7 @@ pub fn orbit_camera(
 
     /*
      * ------------------------------------------------------------
-     * Light follows mouse position on the actual mesh
+     * Light follows camera
      * ------------------------------------------------------------
      */
 
@@ -474,7 +476,7 @@ pub fn orbit_camera(
 
     /*
      * ------------------------------------------------------------
-     * Apply spherical orbit to the camera
+     * Apply spherical orbit
      * ------------------------------------------------------------
      */
 

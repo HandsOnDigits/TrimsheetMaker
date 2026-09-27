@@ -37,6 +37,7 @@ pub enum EditorAction {
     ToggleStatusBar,
     ToggleMeshLightFollowCamera,
     ToggleMeshWindow,
+    ToggleMeshPartsVisibility,
 }
 
 #[derive(Message, Debug, Clone, Copy)]
@@ -271,6 +272,18 @@ pub fn execute_action(
 
         EditorAction::ToggleMeshWindow => {
             editor_ui.show_meshes_window = !editor_ui.show_meshes_window;
+        }
+
+        EditorAction::ToggleMeshPartsVisibility => {
+            if let Some(mesh_id) = editor_ui.selected_mesh {
+                if let Some(mesh) = mesh_scene_state.get_mut(mesh_id) {
+                    let all_visible = mesh.parts.iter().all(|part| part.visible);
+
+                    for part in &mut mesh.parts {
+                        part.visible = !all_visible;
+                    }
+                }
+            }
         }
     }
 }

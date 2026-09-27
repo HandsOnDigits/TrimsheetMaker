@@ -5,20 +5,18 @@ use bevy_egui::egui;
 
 use crate::{data::Atlas, ui::EditorUi};
 
+use super::FloatingWindowInteraction;
+
 pub fn import_multiple_materials_window(
     ctx: &egui::Context,
     editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
     images: &mut Assets<Image>,
-) {
-    if !editor_ui.show_import_multiple_materials_window {
-        return;
-    }
-
+) -> bool {
     let mut open = editor_ui.show_import_multiple_materials_window;
     let mut close_window = false;
 
-    egui::Window::new("Import Materials")
+    let window_response = egui::Window::new("Import Materials")
         .open(&mut open)
         .collapsible(false)
         .resizable(false)
@@ -192,9 +190,12 @@ pub fn import_multiple_materials_window(
             });
         });
 
-    if close_window {
-        open = false;
-    }
+    let owns_pointer = window_response
+        .as_ref()
+        .map(|response| response.owns_pointer(ctx))
+        .unwrap_or(false);
 
     editor_ui.show_import_multiple_materials_window = open;
+
+    owns_pointer
 }

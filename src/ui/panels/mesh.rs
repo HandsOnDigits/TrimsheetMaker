@@ -52,7 +52,7 @@ pub fn mesh_panel(
     // Horizontal split.
     ui.separator();
 
-    let viewport_rect = ui.available_rect_before_wrap();
+    let viewport_rect = ui.max_rect();
 
     mesh_viewport.x = viewport_rect.left();
     mesh_viewport.y = viewport_rect.top();

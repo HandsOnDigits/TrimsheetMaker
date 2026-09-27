@@ -12,6 +12,8 @@ use crate::{
     ui::EditorUi,
 };
 
+use super::FloatingWindowInteraction;
+
 pub fn import_mesh_window(
     ctx: &egui::Context,
     editor_ui: &mut EditorUi,
@@ -20,14 +22,10 @@ pub fn import_mesh_window(
     materials: &mut Assets<StandardMaterial>,
     mesh_scene_state: &mut MeshSceneState,
     mesh_preview: &mut MeshPreview,
-) {
-    if !editor_ui.show_import_mesh_window {
-        return;
-    }
-
+) -> bool {
     let mut open = editor_ui.show_import_mesh_window;
 
-    egui::Window::new("Import Meshes")
+    let window_response = egui::Window::new("Import Meshes")
         .open(&mut open)
         .resizable(false)
         .show(ctx, |ui| {
@@ -200,9 +198,12 @@ pub fn import_mesh_window(
             });
         });
 
+    let owns_pointer = window_response
+        .as_ref()
+        .map(|response| response.owns_pointer(ctx))
+        .unwrap_or(false);
+
     editor_ui.show_import_mesh_window = open;
 
-    if !open {
-        editor_ui.mesh_import_error = None;
-    }
+    owns_pointer
 }

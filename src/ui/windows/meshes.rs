@@ -3,22 +3,24 @@ use bevy_egui::egui;
 
 use crate::{mesh::MeshSceneState, ui::EditorUi};
 
+use super::FloatingWindowInteraction;
+
 pub fn meshes_window(
     ctx: &egui::Context,
     editor_ui: &mut EditorUi,
     commands: &mut Commands,
     mesh_scene_state: &mut MeshSceneState,
-) {
-    if !editor_ui.show_meshes_window {
-        return;
-    }
-
+) -> bool {
     let mut open = editor_ui.show_meshes_window;
 
-    egui::Window::new("Meshes")
+    let window_response = egui::Window::new("Meshes")
         .open(&mut open)
         .resizable(true)
         .default_width(300.0)
+        .default_pos(egui::pos2(
+            ctx.viewport_rect().center().x - 150.0,
+            ctx.viewport_rect().center().y - 200.0,
+        ))
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new("Meshes").strong());
@@ -46,7 +48,7 @@ pub fn meshes_window(
                     ui.horizontal(|ui| {
                         ui.checkbox(&mut mesh.visible, "");
 
-                        let arrow = if expanded { "▼" } else { "▶" };
+                        let arrow = if expanded { "v" } else { ">" };
 
                         if ui
                             .add(
@@ -118,5 +120,12 @@ pub fn meshes_window(
             }
         });
 
+    let owns_pointer = window_response
+        .as_ref()
+        .map(|response| response.owns_pointer(ctx))
+        .unwrap_or(false);
+
     editor_ui.show_meshes_window = open;
+
+    owns_pointer
 }

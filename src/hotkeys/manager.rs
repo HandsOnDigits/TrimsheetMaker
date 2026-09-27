@@ -161,6 +161,11 @@ impl HotkeyManager {
 
         self.bindings
             .insert(EditorAction::ToggleMeshWindow, Hotkey::shift(KeyCode::KeyM));
+
+        self.bindings.insert(
+            EditorAction::ToggleMeshPartsVisibility,
+            Hotkey::shift(KeyCode::KeyH),
+        );
     }
 
     pub fn binding(&self, action: EditorAction) -> Option<Hotkey> {
