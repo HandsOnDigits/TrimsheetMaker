@@ -157,12 +157,7 @@ pub fn meshes_window(
                 ui.label("Select a material first");
             }
 
-            if let Some(selection) = mesh_preview.selected_primitive {
-                ui.label(format!(
-                    "Primitive: {} / {}",
-                    selection.object_index, selection.primitive_index
-                ));
-            } else {
+            if mesh_preview.selected_primitive.is_none() {
                 ui.label("Select a mesh first");
             }
 

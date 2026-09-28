@@ -129,7 +129,22 @@ pub fn unwrap_mesh(input: &UnwrapInput) -> Result<UnwrappedMesh> {
             );
 
             positions.push(input.positions[xref]);
-            uvs.push(vertex.uv);
+
+            let uv = [
+                if atlas.width() > 0 {
+                    vertex.uv[0] / atlas.width() as f32
+                } else {
+                    0.0
+                },
+                if atlas.height() > 0 {
+                    vertex.uv[1] / atlas.height() as f32
+                } else {
+                    0.0
+                },
+            ];
+
+            uvs.push(uv);
+
             vertex_xrefs.push(vertex.xref);
             atlas_indices.push(vertex.atlas_index);
             chart_indices.push(vertex.chart_index);
