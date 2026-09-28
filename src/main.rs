@@ -29,7 +29,7 @@ fn main() {
         }))
         .add_plugins(EguiPlugin::default())
         .add_plugins(HotkeyPlugin)
-        .add_plugins(mesh::MeshPreviewPlugin)
+        .add_plugins(mesh::viewport::MeshPreviewPlugin)
         .add_plugins(EditorUiPlugin)
         .run();
 }

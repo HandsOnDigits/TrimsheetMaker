@@ -1,13 +1,13 @@
-use std::path::PathBuf;
-
 use bevy::prelude::*;
 use bevy_egui::egui;
 
 use crate::{
     mesh::{
-        MeshPreview, MeshSceneState,
+        MeshSceneState,
         import::{self, MeshBackend, MeshImportSettings},
-        viewport::spawn_mesh_scene,
+        spawn_mesh_scene,
+        unwrap::MeshUvMode,
+        viewport::MeshPreview,
     },
     ui::EditorUi,
 };
@@ -152,12 +152,18 @@ pub fn import_mesh_window(
 
                                 mesh_scene_state.add(
                                     name,
-                                    PathBuf::from(&path),
+                                    path,
+                                    scene.clone(),
                                     root,
                                     parts,
                                     bounds_center,
                                     bounds_radius,
                                 );
+
+                                mesh_preview.selected_mesh_id = Some(mesh_id);
+                                mesh_preview.uv_mode = MeshUvMode::Imported;
+                                mesh_preview.unwrapped_mesh_id = None;
+                                mesh_preview.unwrapped_scene = None;
 
                                 imported += 1;
                             }

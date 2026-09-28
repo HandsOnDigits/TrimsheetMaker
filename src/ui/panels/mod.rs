@@ -23,7 +23,10 @@ use super::EditorUi;
 use crate::{
     data::Atlas,
     hotkeys::{EditorAction, HotkeyManager},
-    mesh::{MeshLight, MeshPreview, MeshSceneState, MeshViewportInput, MeshViewportLayout},
+    mesh::{
+        MeshLight, MeshSceneState,
+        viewport::{MeshPreview, MeshViewportInput, MeshViewportLayout},
+    },
     ui::windows,
 };
 
@@ -184,7 +187,7 @@ pub fn editor_ui(
     );
 
     root_ui.scope_builder(egui::UiBuilder::new().max_rect(atlas_rect), |ui| {
-        atlas::atlas_view::atlas_view(ui, &mut editor_ui, &mut atlas, &keyboard);
+        atlas::atlas_view::atlas_view(ui, &mut editor_ui, &mut atlas, &keyboard, &mesh_preview);
     });
 
     // Bulk/folder import.

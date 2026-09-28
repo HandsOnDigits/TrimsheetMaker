@@ -1,160 +1,130 @@
 use bevy::{
-    asset::RenderAssetUsages,
+    camera::RenderTarget,
     input::mouse::{MouseMotion, MouseWheel},
     prelude::*,
-    render::render_resource::PrimitiveTopology,
+    render::render_resource::TextureFormat,
 };
 
 use super::{
-    ImportedMeshRoot, MeshLight, MeshLightPreset, MeshPartEntry, MeshPreview, MeshPreviewCamera,
-    MeshPreviewLight, MeshSceneState, MeshViewportInput, MeshViewportLayout,
+    ImportedMeshPart, ImportedMeshRoot, MeshLight, MeshLightPreset, MeshSceneState,
+    create_bevy_mesh,
+    unwrap::{MeshUvMode, UnwrappedMeshScene},
 };
+
+use bevy_egui::EguiPrimaryContextPass;
 
 use crate::ui::EditorUi;
 
 #[derive(Component)]
-pub struct ImportedMesh;
+pub struct MeshPreviewCamera;
 
 #[derive(Component)]
-pub struct ImportedMeshPart {
-    pub mesh_id: u64,
-    pub part_index: usize,
+pub struct MeshPreviewLight;
+
+#[derive(Resource, Default)]
+pub struct MeshViewportInput {
+    pub pointer_over_ui: bool,
+    pub floating_window_dragging: bool,
 }
 
 #[derive(Component)]
 pub struct MeshViewportSection;
 
-pub fn spawn_mesh_scene(
-    commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
-    scene: &super::import::MeshScene,
-    mesh_id: u64,
-) -> (Entity, Vec<MeshPartEntry>, Vec3, f32) {
-    let mut bounds_min = Vec3::splat(f32::INFINITY);
-    let mut bounds_max = Vec3::splat(f32::NEG_INFINITY);
+#[derive(Resource)]
+pub struct MeshPreview {
+    pub camera: Entity,
+    pub target: Vec3,
+    pub distance: f32,
+    pub target_distance: f32,
+    pub yaw: f32,
+    pub pitch: f32,
+    pub uv_mode: MeshUvMode,
+    pub unwrapped_scene: Option<UnwrappedMeshScene>,
+    pub selected_mesh_id: Option<u64>,
+    pub unwrapped_mesh_id: Option<u64>,
+}
 
-    for object in &scene.objects {
-        let translation = Vec3::from(object.transform.translation);
+#[derive(Resource, Default)]
+pub struct MeshViewportLayout {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
 
-        let rotation = Quat::from_xyzw(
-            object.transform.rotation[0],
-            object.transform.rotation[1],
-            object.transform.rotation[2],
-            object.transform.rotation[3],
-        );
+fn setup_mesh_preview(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let image = Image::new_target_texture(1, 1, TextureFormat::Rgba8UnormSrgb, None);
 
-        let scale = Vec3::from(object.transform.scale);
+    let image_handle = images.add(image);
 
-        let transform = Transform {
-            translation,
-            rotation,
-            scale,
-        };
-
-        for primitive in &object.primitives {
-            for position in &primitive.positions {
-                let world_position = transform.transform_point(Vec3::from(*position));
-                bounds_min = bounds_min.min(world_position);
-                bounds_max = bounds_max.max(world_position);
-            }
-        }
-    }
-
-    let root = commands
+    let camera = commands
         .spawn((
-            Name::new("Imported Mesh"),
-            Transform::default(),
-            Visibility::Visible,
-            InheritedVisibility::default(),
-            ImportedMesh,
-            ImportedMeshRoot { id: mesh_id },
+            Camera3d::default(),
+            Camera {
+                order: -1,
+                ..default()
+            },
+            RenderTarget::Image(image_handle.into()),
+            Transform::from_xyz(0.0, 1.5, 4.0).looking_at(Vec3::ZERO, Vec3::Y),
+            MeshPreviewCamera,
         ))
         .id();
 
-    let mut parts = Vec::with_capacity(scene.objects.len());
+    commands.insert_resource(MeshPreview {
+        camera,
+        target: Vec3::ZERO,
+        distance: 4.0,
+        target_distance: 4.0,
+        yaw: 0.0,
+        pitch: 0.3,
+        uv_mode: MeshUvMode::Imported,
+        unwrapped_scene: None,
+        selected_mesh_id: None,
+        unwrapped_mesh_id: None,
+    });
 
-    for (part_index, object) in scene.objects.iter().enumerate() {
-        let object_entity = commands
-            .spawn((
-                Name::new(object.name.clone()),
-                Transform::from_translation(Vec3::from(object.transform.translation))
-                    .with_rotation(Quat::from_xyzw(
-                        object.transform.rotation[0],
-                        object.transform.rotation[1],
-                        object.transform.rotation[2],
-                        object.transform.rotation[3],
-                    ))
-                    .with_scale(Vec3::from(object.transform.scale)),
-                Visibility::Visible,
-                InheritedVisibility::default(),
-                ImportedMesh,
-                ImportedMeshPart {
-                    mesh_id,
-                    part_index,
-                },
-            ))
-            .id();
+    commands.spawn((
+        DirectionalLight {
+            illuminance: 10_000.0,
+            ..default()
+        },
+        Transform::from_xyz(2.0, 4.0, 2.0).looking_at(Vec3::ZERO, Vec3::Y),
+        MeshPreviewLight,
+    ));
 
-        commands.entity(root).add_child(object_entity);
+    commands.spawn((
+        MeshMaterial3d(materials.add(StandardMaterial {
+            base_color: Color::srgb(0.7, 0.7, 0.7),
+            perceptual_roughness: 0.7,
+            ..default()
+        })),
+        Transform::from_xyz(0.0, 0.0, 0.0),
+    ));
+}
 
-        for (primitive_index, primitive) in object.primitives.iter().enumerate() {
-            let mut mesh = Mesh::new(
-                PrimitiveTopology::TriangleList,
-                RenderAssetUsages::default(),
-            );
+pub struct MeshPreviewPlugin;
 
-            mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, primitive.positions.clone());
-            mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, primitive.normals.clone());
-            mesh.insert_attribute(Mesh::ATTRIBUTE_TANGENT, primitive.tangents.clone());
-            mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, primitive.uvs.clone());
-            mesh.insert_indices(bevy::mesh::Indices::U32(primitive.indices.clone()));
-
-            let mesh_handle = meshes.add(mesh);
-
-            let material_handle = materials.add(StandardMaterial {
-                base_color: Color::srgb(0.7, 0.7, 0.7),
-                perceptual_roughness: 0.7,
-                ..default()
-            });
-
-            commands.entity(object_entity).with_children(|parent| {
-                parent.spawn((
-                    Name::new(format!("{} Primitive {}", object.name, primitive_index)),
-                    Mesh3d(mesh_handle),
-                    MeshMaterial3d(material_handle),
-                    Visibility::Visible,
-                    InheritedVisibility::default(),
-                    ImportedMesh,
-                    ImportedMeshPart {
-                        mesh_id,
-                        part_index,
-                    },
-                ));
-            });
-        }
-
-        parts.push(MeshPartEntry {
-            index: part_index,
-            name: object.name.clone(),
-            visible: true,
-            entity: Some(object_entity),
-        });
+impl Plugin for MeshPreviewPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<MeshViewportLayout>()
+            .init_resource::<MeshLight>()
+            .init_resource::<MeshViewportInput>()
+            .init_resource::<MeshSceneState>()
+            .add_systems(Startup, (setup_mesh_preview, spawn_mesh_viewport).chain())
+            .add_systems(
+                EguiPrimaryContextPass,
+                (update_mesh_viewport, update_mesh_light),
+            )
+            .add_systems(
+                EguiPrimaryContextPass,
+                orbit_camera.after(crate::ui::panels::editor_ui),
+            )
+            .add_systems(PostUpdate, (sync_mesh_visibility, sync_mesh_uv_mode));
     }
-
-    let bounds_center = if bounds_min.x.is_finite() {
-        (bounds_min + bounds_max) * 0.5
-    } else {
-        Vec3::ZERO
-    };
-
-    let bounds_radius = if bounds_min.x.is_finite() {
-        (bounds_max - bounds_center).length()
-    } else {
-        1.0
-    };
-
-    (root, parts, bounds_center, bounds_radius)
 }
 
 pub fn spawn_mesh_viewport(mut commands: Commands, mesh_preview: Res<MeshPreview>) {
@@ -298,6 +268,83 @@ pub fn sync_mesh_visibility(
             } else {
                 Visibility::Hidden
             };
+        }
+    }
+}
+
+pub fn sync_mesh_uv_mode(
+    mesh_preview: Res<MeshPreview>,
+    mesh_scene_state: Res<MeshSceneState>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut query: Query<(&ImportedMeshPart, &mut Mesh3d)>,
+) {
+    if !mesh_preview.is_changed() {
+        return;
+    }
+
+    let Some(mesh_id) = mesh_preview.selected_mesh_id else {
+        return;
+    };
+
+    let Some(mesh_entry) = mesh_scene_state.get(mesh_id) else {
+        return;
+    };
+
+    for (part, mut mesh3d) in &mut query {
+        if part.mesh_id != mesh_id {
+            continue;
+        }
+
+        let Some(primitive_index) = part.primitive_index else {
+            continue;
+        };
+
+        let Some(object) = mesh_entry.scene.objects.get(part.part_index) else {
+            continue;
+        };
+
+        let Some(primitive) = object.primitives.get(primitive_index) else {
+            continue;
+        };
+
+        match mesh_preview.uv_mode {
+            MeshUvMode::Imported => {
+                mesh3d.0 = create_bevy_mesh(
+                    &mut meshes,
+                    primitive.positions.clone(),
+                    primitive.normals.clone(),
+                    primitive.tangents.clone(),
+                    primitive.uvs.clone(),
+                    primitive.indices.clone(),
+                );
+            }
+
+            MeshUvMode::Unwrapped => {
+                if mesh_preview.unwrapped_mesh_id != Some(mesh_id) {
+                    continue;
+                }
+
+                let Some(unwrapped_scene) = mesh_preview.unwrapped_scene.as_ref() else {
+                    continue;
+                };
+
+                let Some(unwrapped_object) = unwrapped_scene.objects.get(part.part_index) else {
+                    continue;
+                };
+
+                let Some(unwrapped) = unwrapped_object.primitives.get(primitive_index) else {
+                    continue;
+                };
+
+                mesh3d.0 = create_bevy_mesh(
+                    &mut meshes,
+                    unwrapped.positions.clone(),
+                    unwrapped.normals.clone(),
+                    unwrapped.tangents.clone(),
+                    unwrapped.uvs.clone(),
+                    unwrapped.indices.clone(),
+                );
+            }
         }
     }
 }

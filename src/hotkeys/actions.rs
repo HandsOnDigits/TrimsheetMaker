@@ -5,7 +5,7 @@ use bevy_egui::egui;
 
 use crate::{
     data::Atlas,
-    mesh::{MeshLight, MeshPreview, MeshSceneState},
+    mesh::{MeshLight, MeshSceneState, viewport::MeshPreview},
     project,
     project_settings::ProjectSettings,
     ui::EditorUi,

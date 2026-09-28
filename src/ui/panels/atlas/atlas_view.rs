@@ -6,6 +6,7 @@ use bevy_egui::egui;
 
 use crate::{
     data::{Atlas, AtlasMaterial},
+    mesh::viewport::MeshPreview,
     transform::Rotation,
     ui::EditorUi,
 };
@@ -15,6 +16,7 @@ pub fn atlas_view(
     editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
     keyboard: &ButtonInput<KeyCode>,
+    mesh_preview: &MeshPreview,
 ) {
     ui.horizontal(|ui| {
         ui.heading("Atlas");
@@ -86,10 +88,16 @@ pub fn atlas_view(
 
     let painter = ui.painter_at(viewport_rect);
 
-    draw_atlas(&painter, viewport_rect, editor_ui, atlas);
+    draw_atlas(&painter, viewport_rect, editor_ui, atlas, mesh_preview);
 }
 
-fn draw_atlas(painter: &egui::Painter, viewport: egui::Rect, editor_ui: &EditorUi, atlas: &Atlas) {
+fn draw_atlas(
+    painter: &egui::Painter,
+    viewport: egui::Rect,
+    editor_ui: &EditorUi,
+    atlas: &Atlas,
+    mesh_preview: &MeshPreview,
+) {
     let zoom = editor_ui.atlas_zoom;
 
     let atlas_size = egui::vec2(atlas.width as f32 * zoom, atlas.height as f32 * zoom);
@@ -109,12 +117,18 @@ fn draw_atlas(painter: &egui::Painter, viewport: egui::Rect, editor_ui: &EditorU
 
     let preview_group = editor_ui.project_settings.preview_texture_group.as_deref();
 
+    // Draw material textures first.
     for material in &atlas.materials {
         let rect = atlas_material_rect(material, atlas_rect, zoom);
 
         let selected = editor_ui.selected_material == Some(material.index);
 
         draw_material_region(painter, rect, material, selected, preview_group);
+    }
+
+    // Draw mesh UVs on top of the atlas.
+    if let Some(unwrapped_scene) = mesh_preview.unwrapped_scene.as_ref() {
+        draw_uv_overlay(painter, atlas_rect, unwrapped_scene);
     }
 }
 
@@ -255,4 +269,52 @@ fn draw_rotated_texture(
     mesh.indices.extend_from_slice(&[0, 1, 2, 0, 2, 3]);
 
     painter.add(egui::Shape::mesh(mesh));
+}
+
+fn draw_uv_overlay(
+    painter: &egui::Painter,
+    atlas_rect: egui::Rect,
+    scene: &crate::mesh::unwrap::UnwrappedMeshScene,
+) {
+    for object in &scene.objects {
+        for primitive in &object.primitives {
+            for triangle in primitive.indices.chunks_exact(3) {
+                let ia = triangle[0] as usize;
+                let ib = triangle[1] as usize;
+                let ic = triangle[2] as usize;
+
+                let Some(&a) = primitive.uvs.get(ia) else {
+                    continue;
+                };
+
+                let Some(&b) = primitive.uvs.get(ib) else {
+                    continue;
+                };
+
+                let Some(&c) = primitive.uvs.get(ic) else {
+                    continue;
+                };
+
+                let a = atlas_uv_to_screen(a, atlas_rect);
+                let b = atlas_uv_to_screen(b, atlas_rect);
+                let c = atlas_uv_to_screen(c, atlas_rect);
+
+                let stroke = egui::Stroke::new(
+                    1.0,
+                    egui::Color32::from_rgba_unmultiplied(255, 255, 255, 180),
+                );
+
+                painter.line_segment([a, b], stroke);
+                painter.line_segment([b, c], stroke);
+                painter.line_segment([c, a], stroke);
+            }
+        }
+    }
+}
+
+fn atlas_uv_to_screen(uv: [f32; 2], atlas_rect: egui::Rect) -> egui::Pos2 {
+    egui::pos2(
+        atlas_rect.left() + uv[0] * atlas_rect.width(),
+        atlas_rect.bottom() - uv[1] * atlas_rect.height(),
+    )
 }

@@ -10,9 +10,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
     data::{Atlas, AtlasMaterial, MaterialTexture},
     mesh::{
-        MeshPreview, MeshSceneState,
+        MeshSceneState,
         import::{self, MeshImportSettings},
-        viewport::spawn_mesh_scene,
+        spawn_mesh_scene,
+        viewport::MeshPreview,
     },
     project_settings::ProjectSettings,
     transform::Transform,
@@ -237,7 +238,8 @@ pub fn load_project_meshes(
 
                 mesh_scene_state.add(
                     project_mesh.name.clone(),
-                    resolved_path,
+                    resolved_path.clone(),
+                    scene.clone(),
                     root,
                     parts,
                     bounds_center,
