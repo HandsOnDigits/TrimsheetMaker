@@ -40,10 +40,15 @@ pub struct UnwrappedMeshScene {
 }
 
 impl UnwrappedMeshScene {
-    pub fn primitives(&self) -> impl Iterator<Item = &UnwrappedPrimitive> {
+    pub fn primitive(
+        &self,
+        object_index: usize,
+        primitive_index: usize,
+    ) -> Option<&UnwrappedPrimitive> {
         self.objects
-            .iter()
-            .flat_map(|object| object.primitives.iter())
+            .get(object_index)?
+            .primitives
+            .get(primitive_index)
     }
 }
 

@@ -6,7 +6,7 @@ use bevy_egui::egui;
 
 use crate::{
     data::{Atlas, AtlasMaterial},
-    mesh::viewport::MeshPreview,
+    mesh::{MeshSceneState, viewport::MeshPreview},
     transform::Rotation,
     ui::EditorUi,
 };
@@ -17,6 +17,7 @@ pub fn atlas_view(
     atlas: &mut Atlas,
     keyboard: &ButtonInput<KeyCode>,
     mesh_preview: &MeshPreview,
+    mesh_scene_state: &MeshSceneState,
 ) {
     ui.horizontal(|ui| {
         ui.heading("Atlas");
@@ -88,7 +89,14 @@ pub fn atlas_view(
 
     let painter = ui.painter_at(viewport_rect);
 
-    draw_atlas(&painter, viewport_rect, editor_ui, atlas, mesh_preview);
+    draw_atlas(
+        &painter,
+        viewport_rect,
+        editor_ui,
+        atlas,
+        mesh_preview,
+        mesh_scene_state,
+    );
 }
 
 fn draw_atlas(
@@ -97,6 +105,7 @@ fn draw_atlas(
     editor_ui: &EditorUi,
     atlas: &Atlas,
     mesh_preview: &MeshPreview,
+    mesh_scene_state: &MeshSceneState,
 ) {
     let zoom = editor_ui.atlas_zoom;
 
@@ -126,9 +135,19 @@ fn draw_atlas(
         draw_material_region(painter, rect, material, selected, preview_group);
     }
 
-    // Draw mesh UVs on top of the atlas.
-    if let Some(unwrapped_scene) = mesh_preview.unwrapped_scene.as_ref() {
-        draw_uv_overlay(painter, atlas_rect, unwrapped_scene);
+    // Draw assigned mesh UVs on top of the atlas.
+    if let Some(selected_index) = editor_ui.selected_material {
+        if let Some(material) = atlas.materials.iter().find(|m| m.index == selected_index) {
+            let material_rect = atlas_material_rect(material, atlas_rect, zoom);
+
+            draw_uv_overlay(
+                painter,
+                material_rect,
+                material,
+                mesh_preview,
+                mesh_scene_state,
+            );
+        }
     }
 }
 
@@ -273,48 +292,96 @@ fn draw_rotated_texture(
 
 fn draw_uv_overlay(
     painter: &egui::Painter,
-    atlas_rect: egui::Rect,
-    scene: &crate::mesh::unwrap::UnwrappedMeshScene,
+    material_rect: egui::Rect,
+    material: &AtlasMaterial,
+    mesh_preview: &MeshPreview,
+    mesh_scene_state: &MeshSceneState,
 ) {
-    for object in &scene.objects {
-        for primitive in &object.primitives {
-            for triangle in primitive.indices.chunks_exact(3) {
-                let ia = triangle[0] as usize;
-                let ib = triangle[1] as usize;
-                let ic = triangle[2] as usize;
+    let stroke = egui::Stroke::new(
+        1.0,
+        egui::Color32::from_rgba_unmultiplied(255, 255, 255, 180),
+    );
 
-                let Some(&a) = primitive.uvs.get(ia) else {
-                    continue;
-                };
+    for assignment in &material.mesh_assignments {
+        let Some(mesh) = mesh_scene_state.get(assignment.mesh_id) else {
+            continue;
+        };
 
-                let Some(&b) = primitive.uvs.get(ib) else {
-                    continue;
-                };
+        let Some(object) = mesh.scene.objects.get(assignment.object_index) else {
+            continue;
+        };
 
-                let Some(&c) = primitive.uvs.get(ic) else {
-                    continue;
-                };
+        let Some(primitive) = object.primitives.get(assignment.primitive_index) else {
+            continue;
+        };
 
-                let a = atlas_uv_to_screen(a, atlas_rect);
-                let b = atlas_uv_to_screen(b, atlas_rect);
-                let c = atlas_uv_to_screen(c, atlas_rect);
+        // Use the imported primitive by default.
+        let (uvs, indices): (&[[f32; 2]], &[u32]) = if mesh_preview.uv_mode
+            == crate::mesh::unwrap::MeshUvMode::Unwrapped
+            && mesh_preview.unwrapped_mesh_id == Some(assignment.mesh_id)
+        {
+            let Some(unwrapped_scene) = mesh_preview.unwrapped_scene.as_ref() else {
+                continue;
+            };
 
-                let stroke = egui::Stroke::new(
-                    1.0,
-                    egui::Color32::from_rgba_unmultiplied(255, 255, 255, 180),
-                );
+            let Some(unwrapped) =
+                unwrapped_scene.primitive(assignment.object_index, assignment.primitive_index)
+            else {
+                continue;
+            };
 
-                painter.line_segment([a, b], stroke);
-                painter.line_segment([b, c], stroke);
-                painter.line_segment([c, a], stroke);
-            }
+            (&unwrapped.uvs, &unwrapped.indices)
+        } else {
+            (&primitive.uvs, &primitive.indices)
+        };
+
+        for triangle in indices.chunks_exact(3) {
+            let ia = triangle[0] as usize;
+            let ib = triangle[1] as usize;
+            let ic = triangle[2] as usize;
+
+            let Some(&a) = uvs.get(ia) else {
+                continue;
+            };
+
+            let Some(&b) = uvs.get(ib) else {
+                continue;
+            };
+
+            let Some(&c) = uvs.get(ic) else {
+                continue;
+            };
+
+            let a = transform_material_uv(a, material.transform.rotation);
+            let b = transform_material_uv(b, material.transform.rotation);
+            let c = transform_material_uv(c, material.transform.rotation);
+
+            let a = material_uv_to_screen(a, material_rect);
+            let b = material_uv_to_screen(b, material_rect);
+            let c = material_uv_to_screen(c, material_rect);
+
+            painter.line_segment([a, b], stroke);
+            painter.line_segment([b, c], stroke);
+            painter.line_segment([c, a], stroke);
         }
     }
 }
 
-fn atlas_uv_to_screen(uv: [f32; 2], atlas_rect: egui::Rect) -> egui::Pos2 {
+fn material_uv_to_screen(uv: [f32; 2], material_rect: egui::Rect) -> egui::Pos2 {
     egui::pos2(
-        atlas_rect.left() + uv[0] * atlas_rect.width(),
-        atlas_rect.bottom() - uv[1] * atlas_rect.height(),
+        material_rect.left() + uv[0] * material_rect.width(),
+        material_rect.bottom() - uv[1] * material_rect.height(),
     )
+}
+
+fn transform_material_uv(uv: [f32; 2], rotation: Rotation) -> [f32; 2] {
+    match rotation {
+        Rotation::Deg0 => uv,
+
+        Rotation::Deg90 => [uv[1], 1.0 - uv[0]],
+
+        Rotation::Deg180 => [1.0 - uv[0], 1.0 - uv[1]],
+
+        Rotation::Deg270 => [1.0 - uv[1], uv[0]],
+    }
 }

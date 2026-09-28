@@ -237,6 +237,7 @@ impl Atlas {
             name: source.name,
             textures,
             transform: Transform::default(),
+            mesh_assignments: Vec::new(),
         });
 
         index
@@ -296,6 +297,7 @@ impl Atlas {
                 height: size,
                 ..Default::default()
             },
+            mesh_assignments: Vec::new(),
         });
 
         index
@@ -385,13 +387,55 @@ impl Default for Atlas {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct MaterialMeshAssignment {
+    pub mesh_id: u64,
+    pub object_index: usize,
+    pub primitive_index: usize,
+}
+
 pub struct AtlasMaterial {
     pub index: usize,
     pub name: String,
-
     pub textures: Vec<MaterialTexture>,
-
     pub transform: Transform,
+
+    pub mesh_assignments: Vec<MaterialMeshAssignment>,
+}
+
+impl AtlasMaterial {
+    pub fn has_mesh_assignment(
+        &self,
+        mesh_id: u64,
+        object_index: usize,
+        primitive_index: usize,
+    ) -> bool {
+        self.mesh_assignments.iter().any(|assignment| {
+            assignment.mesh_id == mesh_id
+                && assignment.object_index == object_index
+                && assignment.primitive_index == primitive_index
+        })
+    }
+
+    pub fn assign_mesh(&mut self, mesh_id: u64, object_index: usize, primitive_index: usize) {
+        if self.has_mesh_assignment(mesh_id, object_index, primitive_index) {
+            return;
+        }
+
+        self.mesh_assignments.push(MaterialMeshAssignment {
+            mesh_id,
+            object_index,
+            primitive_index,
+        });
+    }
+
+    pub fn unassign_mesh(&mut self, mesh_id: u64, object_index: usize, primitive_index: usize) {
+        self.mesh_assignments.retain(|assignment| {
+            assignment.mesh_id != mesh_id
+                || assignment.object_index != object_index
+                || assignment.primitive_index != primitive_index
+        });
+    }
 }
 
 #[derive(Clone, Copy)]

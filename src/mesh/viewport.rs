@@ -6,8 +6,8 @@ use bevy::{
 };
 
 use super::{
-    ImportedMeshPart, ImportedMeshRoot, MeshLight, MeshLightPreset, MeshSceneState,
-    create_bevy_mesh,
+    ImportedMeshPart, ImportedMeshRoot, MeshLight, MeshLightPreset, MeshPrimitiveSelection,
+    MeshSceneState, create_bevy_mesh,
     unwrap::{MeshUvMode, UnwrappedMeshScene},
 };
 
@@ -42,6 +42,7 @@ pub struct MeshPreview {
     pub unwrapped_scene: Option<UnwrappedMeshScene>,
     pub selected_mesh_id: Option<u64>,
     pub unwrapped_mesh_id: Option<u64>,
+    pub selected_primitive: Option<MeshPrimitiveSelection>,
 }
 
 #[derive(Resource, Default)]
@@ -85,6 +86,7 @@ fn setup_mesh_preview(
         unwrapped_scene: None,
         selected_mesh_id: None,
         unwrapped_mesh_id: None,
+        selected_primitive: None,
     });
 
     commands.spawn((

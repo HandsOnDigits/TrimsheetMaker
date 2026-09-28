@@ -187,7 +187,14 @@ pub fn editor_ui(
     );
 
     root_ui.scope_builder(egui::UiBuilder::new().max_rect(atlas_rect), |ui| {
-        atlas::atlas_view::atlas_view(ui, &mut editor_ui, &mut atlas, &keyboard, &mesh_preview);
+        atlas::atlas_view::atlas_view(
+            ui,
+            &mut editor_ui,
+            &mut atlas,
+            &keyboard,
+            &mesh_preview,
+            &mesh_scene_state,
+        );
     });
 
     // Bulk/folder import.
@@ -220,8 +227,14 @@ pub fn editor_ui(
     );
 
     // Mesh list.
-    mesh_input.floating_window_dragging |=
-        windows::meshes::meshes_window(ctx, &mut editor_ui, &mut commands, &mut mesh_scene_state);
+    mesh_input.floating_window_dragging |= windows::meshes::meshes_window(
+        ctx,
+        &mut editor_ui,
+        &mut atlas,
+        &mut commands,
+        &mut mesh_scene_state,
+        &mut mesh_preview,
+    );
 
     Ok(())
 }

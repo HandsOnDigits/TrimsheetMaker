@@ -1,7 +1,6 @@
 pub mod import;
 use import::MeshScene;
 
-mod regions;
 pub mod unwrap;
 pub mod viewport;
 
@@ -36,6 +35,7 @@ pub struct MeshPartEntry {
     pub name: String,
     pub visible: bool,
     pub entity: Option<Entity>,
+    pub object_index: usize,
 }
 
 #[derive(Component)]
@@ -175,6 +175,13 @@ impl MeshLightPreset {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MeshPrimitiveSelection {
+    pub mesh_id: u64,
+    pub object_index: usize,
+    pub primitive_index: usize,
+}
+
 fn create_bevy_mesh(
     meshes: &mut Assets<Mesh>,
     positions: Vec<[f32; 3]>,
@@ -310,6 +317,7 @@ pub fn spawn_mesh_scene(
             name: object.name.clone(),
             visible: true,
             entity: Some(object_entity),
+            object_index: part_index,
         });
     }
 

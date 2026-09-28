@@ -1,15 +1,21 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
 
-use crate::{mesh::MeshSceneState, ui::EditorUi};
+use crate::{
+    data::Atlas,
+    mesh::{MeshPrimitiveSelection, MeshSceneState, viewport::MeshPreview},
+    ui::EditorUi,
+};
 
 use super::FloatingWindowInteraction;
 
 pub fn meshes_window(
     ctx: &egui::Context,
     editor_ui: &mut EditorUi,
+    atlas: &mut Atlas,
     commands: &mut Commands,
     mesh_scene_state: &mut MeshSceneState,
+    mesh_preview: &mut MeshPreview,
 ) -> bool {
     let mut open = editor_ui.show_meshes_window;
 
@@ -80,12 +86,16 @@ pub fn meshes_window(
 
                         if response.clicked() {
                             editor_ui.selected_mesh = Some(mesh_id);
+                            mesh_preview.selected_mesh_id = Some(mesh_id);
+                            mesh_preview.selected_primitive = None;
                         }
                     });
 
                     if expanded {
                         ui.indent(egui::Id::new(("mesh_parts", mesh_id)), |ui| {
                             for part in &mut mesh.parts {
+                                let object_index = part.object_index;
+
                                 ui.horizontal(|ui| {
                                     ui.add_space(4.0);
 
@@ -93,8 +103,142 @@ pub fn meshes_window(
 
                                     ui.label(egui::RichText::new(&part.name).small());
                                 });
+
+                                let Some(object) = mesh.scene.objects.get(object_index) else {
+                                    continue;
+                                };
+
+                                ui.indent(
+                                    egui::Id::new(("mesh_primitives", mesh_id, object_index)),
+                                    |ui| {
+                                        for primitive_index in 0..object.primitives.len() {
+                                            let selected = mesh_preview.selected_primitive
+                                                == Some(MeshPrimitiveSelection {
+                                                    mesh_id,
+                                                    object_index,
+                                                    primitive_index,
+                                                });
+
+                                            let label = format!("Primitive {primitive_index}");
+
+                                            if ui.selectable_label(selected, label).clicked() {
+                                                mesh_preview.selected_mesh_id = Some(mesh_id);
+
+                                                mesh_preview.selected_primitive =
+                                                    Some(MeshPrimitiveSelection {
+                                                        mesh_id,
+                                                        object_index,
+                                                        primitive_index,
+                                                    });
+                                            }
+                                        }
+                                    },
+                                );
                             }
                         });
+                    }
+                }
+            });
+
+            ui.separator();
+
+            let can_assign =
+                editor_ui.selected_material.is_some() && mesh_preview.selected_primitive.is_some();
+
+            if let Some(material_index) = editor_ui.selected_material {
+                if let Some(material) = atlas
+                    .materials
+                    .iter()
+                    .find(|material| material.index == material_index)
+                {
+                    ui.label(format!("Material: {}", material.name));
+                }
+            } else {
+                ui.label("Select a material first");
+            }
+
+            if let Some(selection) = mesh_preview.selected_primitive {
+                ui.label(format!(
+                    "Primitive: {} / {}",
+                    selection.object_index, selection.primitive_index
+                ));
+            } else {
+                ui.label("Select a mesh first");
+            }
+
+            let is_assigned = if let (Some(material_index), Some(selection)) =
+                (editor_ui.selected_material, mesh_preview.selected_primitive)
+            {
+                atlas
+                    .materials
+                    .iter()
+                    .find(|material| material.index == material_index)
+                    .is_some_and(|material| {
+                        material.has_mesh_assignment(
+                            selection.mesh_id,
+                            selection.object_index,
+                            selection.primitive_index,
+                        )
+                    })
+            } else {
+                false
+            };
+
+            ui.horizontal(|ui| {
+                if is_assigned {
+                    ui.label(
+                        egui::RichText::new("Assigned")
+                            .strong()
+                            .color(egui::Color32::LIGHT_GREEN),
+                    );
+
+                    if ui.button("Unassign").clicked() {
+                        if let (Some(material_index), Some(selection)) =
+                            (editor_ui.selected_material, mesh_preview.selected_primitive)
+                        {
+                            if let Some(material) = atlas
+                                .materials
+                                .iter_mut()
+                                .find(|material| material.index == material_index)
+                            {
+                                material.unassign_mesh(
+                                    selection.mesh_id,
+                                    selection.object_index,
+                                    selection.primitive_index,
+                                );
+                            }
+                        }
+                    }
+                } else {
+                    let response =
+                        ui.add_enabled(can_assign, egui::Button::new("Assign to Material"));
+
+                    if response.clicked() {
+                        if let (Some(material_index), Some(selection)) =
+                            (editor_ui.selected_material, mesh_preview.selected_primitive)
+                        {
+                            // Remove this primitive from any previous material.
+                            for material in &mut atlas.materials {
+                                material.unassign_mesh(
+                                    selection.mesh_id,
+                                    selection.object_index,
+                                    selection.primitive_index,
+                                );
+                            }
+
+                            // Assign it to the selected material.
+                            if let Some(material) = atlas
+                                .materials
+                                .iter_mut()
+                                .find(|material| material.index == material_index)
+                            {
+                                material.assign_mesh(
+                                    selection.mesh_id,
+                                    selection.object_index,
+                                    selection.primitive_index,
+                                );
+                            }
+                        }
                     }
                 }
             });
@@ -115,6 +259,11 @@ pub fn meshes_window(
                         if let Some(root) = mesh.root {
                             commands.entity(root).despawn();
                         }
+                    }
+
+                    if mesh_preview.selected_mesh_id == Some(selected_id) {
+                        mesh_preview.selected_mesh_id = None;
+                        mesh_preview.selected_primitive = None;
                     }
 
                     editor_ui.expanded_meshes.remove(&selected_id);

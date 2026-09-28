@@ -8,7 +8,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    data::{Atlas, AtlasMaterial, MaterialTexture},
+    data::{Atlas, AtlasMaterial, MaterialMeshAssignment, MaterialTexture},
     mesh::{
         MeshSceneState,
         import::{self, MeshImportSettings},
@@ -63,6 +63,9 @@ pub struct ProjectMaterial {
     pub name: String,
     pub textures: Vec<ProjectTexture>,
     pub transform: Transform,
+
+    #[serde(default)]
+    pub mesh_assignments: Vec<ProjectMaterialMeshAssignment>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -115,6 +118,16 @@ impl ProjectFile {
                         .map(ProjectTexture::from_texture)
                         .collect(),
                     transform: material.transform.clone(),
+
+                    mesh_assignments: material
+                        .mesh_assignments
+                        .iter()
+                        .map(|assignment| ProjectMaterialMeshAssignment {
+                            mesh_id: assignment.mesh_id,
+                            object_index: assignment.object_index,
+                            primitive_index: assignment.primitive_index,
+                        })
+                        .collect(),
                 })
                 .collect(),
         }
@@ -177,6 +190,16 @@ impl ProjectFile {
                     })
                     .collect(),
                 transform: material.transform,
+
+                mesh_assignments: material
+                    .mesh_assignments
+                    .into_iter()
+                    .map(|assignment| MaterialMeshAssignment {
+                        mesh_id: assignment.mesh_id,
+                        object_index: assignment.object_index,
+                        primitive_index: assignment.primitive_index,
+                    })
+                    .collect(),
             })
             .collect();
 
@@ -297,6 +320,13 @@ impl ProjectTexture {
             path: texture.path.clone(),
         }
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ProjectMaterialMeshAssignment {
+    pub mesh_id: u64,
+    pub object_index: usize,
+    pub primitive_index: usize,
 }
 
 pub fn save_project_as_dialog(
