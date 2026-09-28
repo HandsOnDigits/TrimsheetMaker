@@ -213,7 +213,6 @@ pub fn load_project_meshes(
     editor_ui: &mut EditorUi,
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
     mesh_scene_state: &mut MeshSceneState,
     mesh_preview: &mut MeshPreview,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -248,18 +247,19 @@ pub fn load_project_meshes(
 
         match import::import(&resolved_path, editor_ui.mesh_import_backend, &settings) {
             Ok(scene) => {
-                /*
-                 * Reserve the runtime ID before spawning the entity.
-                 *
-                 * The same ID is then stored in MeshSceneState and used by
-                 * ImportedMeshRoot for visibility synchronization.
-                 */
-                let mesh_id = mesh_scene_state.next_id;
+                // Preserve the ID stored in the project file.
+                let mesh_id = project_mesh.id;
 
-                let (root, parts, bounds_center, bounds_radius) =
-                    spawn_mesh_scene(commands, meshes, materials, &scene, mesh_id);
+                let (root, parts, bounds_center, bounds_radius) = spawn_mesh_scene(
+                    commands,
+                    meshes,
+                    &scene,
+                    mesh_id,
+                    mesh_preview.material.clone(),
+                );
 
-                mesh_scene_state.add(
+                mesh_scene_state.add_with_id(
+                    project_mesh.id,
                     project_mesh.name.clone(),
                     resolved_path.clone(),
                     scene.clone(),
@@ -290,9 +290,6 @@ pub fn load_project_meshes(
         }
     }
 
-    /*
-     * Frame the camera around all successfully loaded meshes.
-     */
     if let Some((bounds_center, bounds_radius)) = mesh_scene_state.visible_bounds() {
         mesh_preview.target = bounds_center;
 

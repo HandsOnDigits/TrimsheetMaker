@@ -64,7 +64,6 @@ pub fn execute_action(
     mesh_scene_state: &mut MeshSceneState,
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
 ) {
     match action {
         EditorAction::NewAtlas => {
@@ -118,7 +117,6 @@ pub fn execute_action(
                         editor_ui,
                         commands,
                         meshes,
-                        materials,
                         mesh_scene_state,
                         mesh_preview,
                     ) {

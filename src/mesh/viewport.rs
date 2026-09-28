@@ -7,13 +7,17 @@ use bevy::{
 
 use super::{
     ImportedMeshPart, ImportedMeshRoot, MeshLight, MeshLightPreset, MeshPrimitiveSelection,
-    MeshSceneState, create_bevy_mesh,
-    unwrap::{MeshUvMode, UnwrappedMeshScene},
+    MeshSceneState,
+    unwrap::{MeshUvMode, UnwrappedMeshScene, create_unwrapped_bevy_mesh},
 };
 
 use bevy_egui::EguiPrimaryContextPass;
 
-use crate::ui::EditorUi;
+use crate::{
+    data::{Atlas, AtlasMaterial, rebuild_atlas_image},
+    transform::Rotation,
+    ui::EditorUi,
+};
 
 #[derive(Component)]
 pub struct MeshPreviewCamera;
@@ -43,6 +47,9 @@ pub struct MeshPreview {
     pub selected_mesh_id: Option<u64>,
     pub unwrapped_mesh_id: Option<u64>,
     pub selected_primitive: Option<MeshPrimitiveSelection>,
+
+    pub material: Handle<StandardMaterial>,
+    pub uv_revision: u64,
 }
 
 #[derive(Resource, Default)]
@@ -53,12 +60,49 @@ pub struct MeshViewportLayout {
     pub height: f32,
 }
 
+#[derive(Resource)]
+pub struct MeshUvSyncState {
+    pub mesh_revision: u64,
+    pub atlas_revision: u64,
+}
+
+impl Default for MeshUvSyncState {
+    fn default() -> Self {
+        Self {
+            mesh_revision: u64::MAX,
+            atlas_revision: u64::MAX,
+        }
+    }
+}
+
+#[derive(Resource)]
+pub struct AtlasImageSyncState {
+    pub revision: u64,
+}
+
+impl Default for AtlasImageSyncState {
+    fn default() -> Self {
+        Self { revision: u64::MAX }
+    }
+}
+
+#[derive(Resource)]
+pub struct AtlasMaterialSyncState {
+    pub revision: u64,
+}
+
+impl Default for AtlasMaterialSyncState {
+    fn default() -> Self {
+        Self { revision: u64::MAX }
+    }
+}
+
 fn setup_mesh_preview(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let image = Image::new_target_texture(1, 1, TextureFormat::Rgba8UnormSrgb, None);
+    let image = Image::new_target_texture(1024, 1024, TextureFormat::Rgba8UnormSrgb, None);
 
     let image_handle = images.add(image);
 
@@ -75,6 +119,12 @@ fn setup_mesh_preview(
         ))
         .id();
 
+    let material = materials.add(StandardMaterial {
+        base_color: Color::WHITE,
+        perceptual_roughness: 0.7,
+        ..default()
+    });
+
     commands.insert_resource(MeshPreview {
         camera,
         target: Vec3::ZERO,
@@ -87,6 +137,8 @@ fn setup_mesh_preview(
         selected_mesh_id: None,
         unwrapped_mesh_id: None,
         selected_primitive: None,
+        material,
+        uv_revision: 0,
     });
 
     commands.spawn((
@@ -96,15 +148,6 @@ fn setup_mesh_preview(
         },
         Transform::from_xyz(2.0, 4.0, 2.0).looking_at(Vec3::ZERO, Vec3::Y),
         MeshPreviewLight,
-    ));
-
-    commands.spawn((
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::srgb(0.7, 0.7, 0.7),
-            perceptual_roughness: 0.7,
-            ..default()
-        })),
-        Transform::from_xyz(0.0, 0.0, 0.0),
     ));
 }
 
@@ -116,16 +159,27 @@ impl Plugin for MeshPreviewPlugin {
             .init_resource::<MeshLight>()
             .init_resource::<MeshViewportInput>()
             .init_resource::<MeshSceneState>()
+            .init_resource::<MeshUvSyncState>()
+            .init_resource::<AtlasImageSyncState>()
+            .init_resource::<AtlasMaterialSyncState>()
             .add_systems(Startup, (setup_mesh_preview, spawn_mesh_viewport).chain())
             .add_systems(
                 EguiPrimaryContextPass,
-                (update_mesh_viewport, update_mesh_light),
+                (
+                    update_mesh_viewport,
+                    update_mesh_light,
+                    orbit_camera.after(crate::ui::panels::editor_ui),
+                ),
             )
             .add_systems(
-                EguiPrimaryContextPass,
-                orbit_camera.after(crate::ui::panels::editor_ui),
-            )
-            .add_systems(PostUpdate, (sync_mesh_visibility, sync_mesh_uv_mode));
+                Update,
+                (
+                    sync_mesh_visibility,
+                    sync_mesh_uv_mode,
+                    sync_atlas_image,
+                    sync_mesh_material.after(sync_atlas_image),
+                ),
+            );
     }
 }
 
@@ -274,34 +328,88 @@ pub fn sync_mesh_visibility(
     }
 }
 
+fn transform_material_uv(uv: [f32; 2], rotation: Rotation) -> [f32; 2] {
+    match rotation {
+        Rotation::Deg0 => uv,
+        Rotation::Deg90 => [uv[1], 1.0 - uv[0]],
+        Rotation::Deg180 => [1.0 - uv[0], 1.0 - uv[1]],
+        Rotation::Deg270 => [1.0 - uv[1], uv[0]],
+    }
+}
+
+fn atlas_uv(uv: [f32; 2], material: &AtlasMaterial, atlas: &Atlas) -> [f32; 2] {
+    let uv = transform_material_uv(uv, material.transform.rotation);
+
+    let atlas_width = atlas.width as f32;
+    let atlas_height = atlas.height as f32;
+
+    if atlas_width <= 0.0 || atlas_height <= 0.0 {
+        return [0.0, 0.0];
+    }
+
+    let x = material.transform.x as f32;
+    let y = material.transform.y as f32;
+    let width = material.transform.width as f32;
+    let height = material.transform.height as f32;
+
+    [
+        (x + uv[0] * width) / atlas_width,
+        1.0 - ((y + height - uv[1] * height) / atlas_height),
+    ]
+}
+
+fn material_uvs(
+    uvs: &[[f32; 2]],
+    material: Option<&AtlasMaterial>,
+    atlas: &Atlas,
+) -> Vec<[f32; 2]> {
+    let Some(material) = material else {
+        return uvs.to_vec();
+    };
+
+    uvs.iter()
+        .copied()
+        .map(|uv| atlas_uv(uv, material, atlas))
+        .collect()
+}
+
 pub fn sync_mesh_uv_mode(
     mesh_preview: Res<MeshPreview>,
+    atlas: Res<Atlas>,
     mesh_scene_state: Res<MeshSceneState>,
+    mut sync_state: ResMut<MeshUvSyncState>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut query: Query<(&ImportedMeshPart, &mut Mesh3d)>,
 ) {
-    if !mesh_preview.is_changed() {
+    if sync_state.mesh_revision == mesh_preview.uv_revision
+        && sync_state.atlas_revision == atlas.uv_revision
+    {
         return;
     }
 
-    let Some(mesh_id) = mesh_preview.selected_mesh_id else {
-        return;
-    };
-
-    let Some(mesh_entry) = mesh_scene_state.get(mesh_id) else {
-        return;
-    };
+    sync_state.mesh_revision = mesh_preview.uv_revision;
+    sync_state.atlas_revision = atlas.uv_revision;
 
     for (part, mut mesh3d) in &mut query {
-        if part.mesh_id != mesh_id {
+        let Some(mesh_entry) = mesh_scene_state.get(part.mesh_id) else {
             continue;
-        }
+        };
 
         let Some(primitive_index) = part.primitive_index else {
             continue;
         };
 
-        let Some(object) = mesh_entry.scene.objects.get(part.part_index) else {
+        let Some(part_entry) = mesh_entry
+            .parts
+            .iter()
+            .find(|entry| entry.index == part.part_index)
+        else {
+            continue;
+        };
+
+        let object_index = part_entry.object_index;
+
+        let Some(object) = mesh_entry.scene.objects.get(object_index) else {
             continue;
         };
 
@@ -309,20 +417,21 @@ pub fn sync_mesh_uv_mode(
             continue;
         };
 
+        let material = atlas.materials.iter().find(|material| {
+            material.has_mesh_assignment(part.mesh_id, object_index, primitive_index)
+        });
+
         match mesh_preview.uv_mode {
             MeshUvMode::Imported => {
-                mesh3d.0 = create_bevy_mesh(
-                    &mut meshes,
-                    primitive.positions.clone(),
-                    primitive.normals.clone(),
-                    primitive.tangents.clone(),
-                    primitive.uvs.clone(),
-                    primitive.indices.clone(),
-                );
+                let uvs = material_uvs(&primitive.uvs, material, &atlas);
+
+                if let Some(mut mesh) = meshes.get_mut(&mesh3d.0) {
+                    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+                }
             }
 
             MeshUvMode::Unwrapped => {
-                if mesh_preview.unwrapped_mesh_id != Some(mesh_id) {
+                if mesh_preview.unwrapped_mesh_id != Some(part.mesh_id) {
                     continue;
                 }
 
@@ -330,7 +439,7 @@ pub fn sync_mesh_uv_mode(
                     continue;
                 };
 
-                let Some(unwrapped_object) = unwrapped_scene.objects.get(part.part_index) else {
+                let Some(unwrapped_object) = unwrapped_scene.objects.get(object_index) else {
                     continue;
                 };
 
@@ -338,14 +447,11 @@ pub fn sync_mesh_uv_mode(
                     continue;
                 };
 
-                mesh3d.0 = create_bevy_mesh(
-                    &mut meshes,
-                    unwrapped.positions.clone(),
-                    unwrapped.normals.clone(),
-                    unwrapped.tangents.clone(),
-                    unwrapped.uvs.clone(),
-                    unwrapped.indices.clone(),
-                );
+                let uvs = material_uvs(&unwrapped.uvs, material, &atlas);
+
+                let handle = create_unwrapped_bevy_mesh(&mut meshes, unwrapped, uvs);
+
+                mesh3d.0 = handle;
             }
         }
     }
@@ -540,4 +646,34 @@ pub fn orbit_camera(
     camera_transform.translation = mesh_preview.target + offset;
 
     camera_transform.look_at(mesh_preview.target, Vec3::Y);
+}
+
+pub fn sync_mesh_material(
+    atlas: Res<Atlas>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mesh_preview: Res<MeshPreview>,
+    mut sync_state: ResMut<AtlasMaterialSyncState>,
+) {
+    let Some(image) = atlas.image.clone() else {
+        return;
+    };
+
+    let Some(mut material) = materials.get_mut(&mesh_preview.material) else {
+        return;
+    };
+
+    if sync_state.revision == atlas.image_revision
+        && material.base_color_texture.as_ref() == Some(&image)
+    {
+        return;
+    }
+
+    material.base_color = Color::WHITE;
+    material.base_color_texture = Some(image);
+
+    sync_state.revision = atlas.image_revision;
+}
+
+pub fn sync_atlas_image(mut atlas: ResMut<Atlas>, mut images: ResMut<Assets<Image>>) {
+    rebuild_atlas_image(&mut atlas, &mut images, Some("base_color"));
 }

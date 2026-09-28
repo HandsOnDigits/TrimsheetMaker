@@ -1,3 +1,5 @@
+use bevy::{asset::RenderAssetUsages, mesh::PrimitiveTopology, prelude::*};
+
 use anyhow::{Result, anyhow, ensure};
 use xatlas_rs_v2::{ChartOptions, IndexData, MeshData, MeshDecl, PackOptions, Xatlas};
 
@@ -417,6 +419,30 @@ pub fn unwrap_current_mesh(
     mesh_preview.unwrapped_scene = Some(unwrapped);
     mesh_preview.unwrapped_mesh_id = Some(mesh_id);
     mesh_preview.uv_mode = MeshUvMode::Unwrapped;
+    mesh_preview.uv_revision = mesh_preview.uv_revision.wrapping_add(1);
 
     Ok(())
+}
+
+pub fn create_unwrapped_bevy_mesh(
+    meshes: &mut Assets<Mesh>,
+    primitive: &UnwrappedPrimitive,
+    uvs: Vec<[f32; 2]>,
+) -> Handle<Mesh> {
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, primitive.positions.clone());
+
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, primitive.normals.clone());
+
+    mesh.insert_attribute(Mesh::ATTRIBUTE_TANGENT, primitive.tangents.clone());
+
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+
+    mesh.insert_indices(bevy::mesh::Indices::U32(primitive.indices.clone()));
+
+    meshes.add(mesh)
 }

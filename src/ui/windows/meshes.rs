@@ -219,6 +219,8 @@ pub fn meshes_window(
                                     selection.object_index,
                                     selection.primitive_index,
                                 );
+
+                                atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
                             }
 
                             // Assign it to the selected material.
@@ -233,6 +235,8 @@ pub fn meshes_window(
                                     selection.primitive_index,
                                 );
                             }
+
+                            atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
                         }
                     }
                 }
@@ -255,6 +259,14 @@ pub fn meshes_window(
                             commands.entity(root).despawn();
                         }
                     }
+
+                    for material in &mut atlas.materials {
+                        material
+                            .mesh_assignments
+                            .retain(|assignment| assignment.mesh_id != selected_id);
+                    }
+
+                    atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
 
                     if mesh_preview.selected_mesh_id == Some(selected_id) {
                         mesh_preview.selected_mesh_id = None;

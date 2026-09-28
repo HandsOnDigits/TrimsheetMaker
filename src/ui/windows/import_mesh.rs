@@ -19,7 +19,6 @@ pub fn import_mesh_window(
     editor_ui: &mut EditorUi,
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
     mesh_scene_state: &mut MeshSceneState,
     mesh_preview: &mut MeshPreview,
 ) -> bool {
@@ -141,8 +140,13 @@ pub fn import_mesh_window(
                                 // ImportedMeshRoot receives the same ID as MeshEntry.
                                 let mesh_id = mesh_scene_state.next_id;
 
-                                let (root, parts, bounds_center, bounds_radius) =
-                                    spawn_mesh_scene(commands, meshes, materials, &scene, mesh_id);
+                                let (root, parts, bounds_center, bounds_radius) = spawn_mesh_scene(
+                                    commands,
+                                    meshes,
+                                    &scene,
+                                    mesh_id,
+                                    mesh_preview.material.clone(),
+                                );
 
                                 let name = path
                                     .file_stem()

@@ -53,7 +53,6 @@ fn apply_editor_actions(
     mut mesh_scene_state: ResMut<MeshSceneState>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     for message in messages.read() {
         hotkeys::execute_action(
@@ -66,7 +65,6 @@ fn apply_editor_actions(
             &mut mesh_scene_state,
             &mut commands,
             &mut meshes,
-            &mut materials,
         );
     }
 }

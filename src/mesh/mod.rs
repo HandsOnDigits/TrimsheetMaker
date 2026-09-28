@@ -34,7 +34,6 @@ pub struct MeshPartEntry {
     pub index: usize,
     pub name: String,
     pub visible: bool,
-    pub entity: Option<Entity>,
     pub object_index: usize,
 }
 
@@ -122,6 +121,32 @@ impl MeshSceneState {
 
         Some((center, radius))
     }
+
+    pub fn add_with_id(
+        &mut self,
+        id: u64,
+        name: String,
+        path: std::path::PathBuf,
+        scene: import::MeshScene,
+        root: Entity,
+        parts: Vec<MeshPartEntry>,
+        bounds_center: Vec3,
+        bounds_radius: f32,
+    ) {
+        self.meshes.push(MeshEntry {
+            id,
+            name,
+            path,
+            visible: true,
+            scene,
+            root: Some(root),
+            parts,
+            bounds_center,
+            bounds_radius,
+        });
+
+        self.next_id = self.next_id.max(id.saturating_add(1));
+    }
 }
 
 #[derive(Resource)]
@@ -207,9 +232,9 @@ fn create_bevy_mesh(
 pub fn spawn_mesh_scene(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
     scene: &MeshScene,
     mesh_id: u64,
+    material: Handle<StandardMaterial>,
 ) -> (Entity, Vec<MeshPartEntry>, Vec3, f32) {
     let mut bounds_min = Vec3::splat(f32::INFINITY);
     let mut bounds_max = Vec3::splat(f32::NEG_INFINITY);
@@ -289,17 +314,11 @@ pub fn spawn_mesh_scene(
                 primitive.indices.clone(),
             );
 
-            let material_handle = materials.add(StandardMaterial {
-                base_color: Color::srgb(0.7, 0.7, 0.7),
-                perceptual_roughness: 0.7,
-                ..default()
-            });
-
             commands.entity(object_entity).with_children(|parent| {
                 parent.spawn((
                     Name::new(format!("{} Primitive {}", object.name, primitive_index)),
                     Mesh3d(mesh_handle),
-                    MeshMaterial3d(material_handle),
+                    MeshMaterial3d(material.clone()),
                     Visibility::Visible,
                     InheritedVisibility::default(),
                     ImportedMesh,
@@ -316,7 +335,6 @@ pub fn spawn_mesh_scene(
             index: part_index,
             name: object.name.clone(),
             visible: true,
-            entity: Some(object_entity),
             object_index: part_index,
         });
     }

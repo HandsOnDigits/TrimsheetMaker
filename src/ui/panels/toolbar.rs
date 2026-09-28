@@ -24,7 +24,6 @@ pub fn toolbar(
     mesh_scene_state: &mut MeshSceneState,
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
 ) {
     ui.horizontal(|ui| {
         ui.add_space(8.0);
@@ -41,7 +40,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    materials,
                 );
                 ui.close();
             }
@@ -57,7 +55,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    materials,
                 );
                 ui.close();
             }
@@ -73,7 +70,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    materials,
                 );
                 ui.close();
             }
@@ -89,7 +85,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    materials,
                 );
                 ui.close();
             }
@@ -112,7 +107,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    materials,
                 );
                 ui.close();
             }
@@ -133,7 +127,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    materials,
                 );
                 ui.close();
             }
@@ -149,7 +142,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    materials,
                 );
                 ui.close();
             }
@@ -167,7 +159,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    materials,
                 );
                 ui.close();
             }
@@ -192,7 +183,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    materials,
                 );
                 ui.close();
             }
@@ -208,7 +198,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    materials,
                 );
                 ui.close();
             }
@@ -265,7 +254,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    materials,
                 );
                 ui.close();
             }

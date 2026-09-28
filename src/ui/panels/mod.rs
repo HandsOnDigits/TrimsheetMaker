@@ -43,7 +43,6 @@ pub fn editor_ui(
     mut mesh_input: ResMut<MeshViewportInput>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
     mut mesh_scene_state: ResMut<MeshSceneState>,
 ) -> Result {
     mesh_input.pointer_over_ui = false;
@@ -85,7 +84,6 @@ pub fn editor_ui(
                 &mut mesh_scene_state,
                 &mut commands,
                 &mut meshes,
-                &mut materials,
             );
         });
 
@@ -221,7 +219,6 @@ pub fn editor_ui(
         &mut editor_ui,
         &mut commands,
         &mut meshes,
-        &mut materials,
         &mut mesh_scene_state,
         &mut mesh_preview,
     );
