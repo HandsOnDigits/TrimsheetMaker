@@ -14,6 +14,7 @@ pub struct ImportedMeshPart {
     pub mesh_id: u64,
     pub part_index: usize,
     pub primitive_index: Option<usize>,
+    pub source_mesh: Option<Handle<Mesh>>,
 }
 
 #[derive(Debug, Clone)]
@@ -298,6 +299,7 @@ pub fn spawn_mesh_scene(
                     mesh_id,
                     part_index,
                     primitive_index: None,
+                    source_mesh: None,
                 },
             ))
             .id();
@@ -317,7 +319,7 @@ pub fn spawn_mesh_scene(
             commands.entity(object_entity).with_children(|parent| {
                 parent.spawn((
                     Name::new(format!("{} Primitive {}", object.name, primitive_index)),
-                    Mesh3d(mesh_handle),
+                    Mesh3d(mesh_handle.clone()),
                     MeshMaterial3d(material.clone()),
                     Visibility::Visible,
                     InheritedVisibility::default(),
@@ -326,6 +328,7 @@ pub fn spawn_mesh_scene(
                         mesh_id,
                         part_index,
                         primitive_index: Some(primitive_index),
+                        source_mesh: Some(mesh_handle),
                     },
                 ));
             });

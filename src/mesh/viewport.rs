@@ -2,7 +2,7 @@ use bevy::{
     camera::RenderTarget,
     input::mouse::{MouseMotion, MouseWheel},
     prelude::*,
-    render::render_resource::TextureFormat,
+    render::render_resource::{Extent3d, TextureFormat},
 };
 
 use super::{
@@ -64,6 +64,7 @@ pub struct MeshViewportLayout {
 pub struct MeshUvSyncState {
     pub mesh_revision: u64,
     pub atlas_revision: u64,
+    pub uv_mode: MeshUvMode,
 }
 
 impl Default for MeshUvSyncState {
@@ -71,6 +72,7 @@ impl Default for MeshUvSyncState {
         Self {
             mesh_revision: u64::MAX,
             atlas_revision: u64::MAX,
+            uv_mode: MeshUvMode::Imported,
         }
     }
 }
@@ -97,14 +99,30 @@ impl Default for AtlasMaterialSyncState {
     }
 }
 
+#[derive(Resource)]
+pub struct MeshPreviewRenderTarget {
+    pub image: Handle<Image>,
+    pub width: u32,
+    pub height: u32,
+}
+
 fn setup_mesh_preview(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let image = Image::new_target_texture(1024, 1024, TextureFormat::Rgba8UnormSrgb, None);
+    let width = 1024;
+    let height = 1024;
+
+    let image = Image::new_target_texture(width, height, TextureFormat::Rgba8UnormSrgb, None);
 
     let image_handle = images.add(image);
+
+    commands.insert_resource(MeshPreviewRenderTarget {
+        image: image_handle.clone(),
+        width,
+        height,
+    });
 
     let camera = commands
         .spawn((
@@ -174,6 +192,7 @@ impl Plugin for MeshPreviewPlugin {
             .add_systems(
                 Update,
                 (
+                    resize_mesh_preview_render_target,
                     sync_mesh_visibility,
                     sync_mesh_uv_mode,
                     sync_atlas_image,
@@ -383,12 +402,14 @@ pub fn sync_mesh_uv_mode(
 ) {
     if sync_state.mesh_revision == mesh_preview.uv_revision
         && sync_state.atlas_revision == atlas.uv_revision
+        && sync_state.uv_mode == mesh_preview.uv_mode
     {
         return;
     }
 
     sync_state.mesh_revision = mesh_preview.uv_revision;
     sync_state.atlas_revision = atlas.uv_revision;
+    sync_state.uv_mode = mesh_preview.uv_mode;
 
     for (part, mut mesh3d) in &mut query {
         let Some(mesh_entry) = mesh_scene_state.get(part.mesh_id) else {
@@ -423,9 +444,17 @@ pub fn sync_mesh_uv_mode(
 
         match mesh_preview.uv_mode {
             MeshUvMode::Imported => {
+                let Some(source_mesh) = part.source_mesh.clone() else {
+                    continue;
+                };
+
+                if mesh3d.0 != source_mesh {
+                    mesh3d.0 = source_mesh.clone();
+                }
+
                 let uvs = material_uvs(&primitive.uvs, material, &atlas);
 
-                if let Some(mut mesh) = meshes.get_mut(&mesh3d.0) {
+                if let Some(mut mesh) = meshes.get_mut(&source_mesh) {
                     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
                 }
             }
@@ -674,6 +703,42 @@ pub fn sync_mesh_material(
     sync_state.revision = atlas.image_revision;
 }
 
-pub fn sync_atlas_image(mut atlas: ResMut<Atlas>, mut images: ResMut<Assets<Image>>) {
+pub fn sync_atlas_image(
+    mut atlas: ResMut<Atlas>,
+    mut images: ResMut<Assets<Image>>,
+    mut sync_state: ResMut<AtlasImageSyncState>,
+) {
+    if sync_state.revision == atlas.image_revision {
+        return;
+    }
+
     rebuild_atlas_image(&mut atlas, &mut images, Some("base_color"));
+
+    sync_state.revision = atlas.image_revision;
+}
+
+pub fn resize_mesh_preview_render_target(
+    layout: Res<MeshViewportLayout>,
+    mut target: ResMut<MeshPreviewRenderTarget>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    let width = layout.width.max(1.0).round() as u32;
+    let height = layout.height.max(1.0).round() as u32;
+
+    if target.width == width && target.height == height {
+        return;
+    }
+
+    let Some(mut image) = images.get_mut(&target.image) else {
+        return;
+    };
+
+    image.resize(Extent3d {
+        width,
+        height,
+        depth_or_array_layers: 1,
+    });
+
+    target.width = width;
+    target.height = height;
 }

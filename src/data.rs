@@ -602,11 +602,6 @@ pub fn rebuild_atlas_image(
         let source_width = image.width() as usize;
         let source_height = image.height() as usize;
 
-        println!(
-            "SOURCE: {}x{} format={:?}",
-            source_width, source_height, image.texture_descriptor.format
-        );
-
         if source_width == 0 || source_height == 0 {
             continue;
         }
@@ -701,10 +696,6 @@ pub fn rebuild_atlas_image(
                             source_data[src_index + 14],
                             source_data[src_index + 15],
                         ]);
-
-                        if dst_x == 0 && dst_y == 0 {
-                            println!("EXR SAMPLE: r={:.4}, g={:.4}, b={:.4}, a={:.4}", r, g, b, a);
-                        }
 
                         atlas_data[dst_index] = float_to_srgb8(r);
                         atlas_data[dst_index + 1] = float_to_srgb8(g);
