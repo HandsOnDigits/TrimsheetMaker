@@ -356,3 +356,18 @@ pub fn spawn_mesh_scene(
 
     (root, parts, bounds_center, bounds_radius)
 }
+
+pub fn create_imported_bevy_mesh(
+    meshes: &mut Assets<Mesh>,
+    primitive: &import::MeshPrimitive,
+    uvs: Vec<[f32; 2]>,
+) -> Handle<Mesh> {
+    create_bevy_mesh(
+        meshes,
+        primitive.positions.clone(),
+        primitive.normals.clone(),
+        primitive.tangents.clone(),
+        uvs,
+        primitive.indices.clone(),
+    )
+}

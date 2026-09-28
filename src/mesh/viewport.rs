@@ -7,7 +7,7 @@ use bevy::{
 
 use super::{
     ImportedMeshPart, ImportedMeshRoot, MeshLight, MeshLightPreset, MeshPrimitiveSelection,
-    MeshSceneState,
+    MeshSceneState, create_imported_bevy_mesh,
     unwrap::{MeshUvMode, UnwrappedMeshScene, create_unwrapped_bevy_mesh},
 };
 
@@ -355,7 +355,6 @@ fn transform_material_uv(uv: [f32; 2], rotation: Rotation) -> [f32; 2] {
         Rotation::Deg270 => [1.0 - uv[1], uv[0]],
     }
 }
-
 fn atlas_uv(uv: [f32; 2], material: &AtlasMaterial, atlas: &Atlas) -> [f32; 2] {
     let uv = transform_material_uv(uv, material.transform.rotation);
 
@@ -373,7 +372,7 @@ fn atlas_uv(uv: [f32; 2], material: &AtlasMaterial, atlas: &Atlas) -> [f32; 2] {
 
     [
         (x + uv[0] * width) / atlas_width,
-        1.0 - ((y + height - uv[1] * height) / atlas_height),
+        (y + (1.0 - uv[1]) * height) / atlas_height,
     ]
 }
 
@@ -383,7 +382,8 @@ fn material_uvs(
     atlas: &Atlas,
 ) -> Vec<[f32; 2]> {
     let Some(material) = material else {
-        return uvs.to_vec();
+        // Map unassigned primitives to a single pixel to avoid rendering the full atlas
+        return vec![[0.0, 0.0]; uvs.len()];
     };
 
     uvs.iter()
@@ -444,19 +444,11 @@ pub fn sync_mesh_uv_mode(
 
         match mesh_preview.uv_mode {
             MeshUvMode::Imported => {
-                let Some(source_mesh) = part.source_mesh.clone() else {
-                    continue;
-                };
-
-                if mesh3d.0 != source_mesh {
-                    mesh3d.0 = source_mesh.clone();
-                }
-
                 let uvs = material_uvs(&primitive.uvs, material, &atlas);
 
-                if let Some(mut mesh) = meshes.get_mut(&source_mesh) {
-                    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-                }
+                let handle = create_imported_bevy_mesh(&mut meshes, primitive, uvs);
+
+                mesh3d.0 = handle;
             }
 
             MeshUvMode::Unwrapped => {

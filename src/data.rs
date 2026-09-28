@@ -608,43 +608,44 @@ pub fn rebuild_atlas_image(
 
         let transform = material.transform;
 
-        let region_width = transform.width as usize;
-        let region_height = transform.height as usize;
+        // Retrieve the bounds of the material *after* rotation is applied
+        let (rect_x, rect_y, dest_width, dest_height) = transform.atlas_rect();
 
-        if region_width == 0 || region_height == 0 {
+        if dest_width == 0 || dest_height == 0 {
             println!("INVALID REGION: {}", material.name);
             continue;
         }
 
-        for dst_y in 0..region_height {
-            for dst_x in 0..region_width {
+        for dst_y in 0..dest_height {
+            for dst_x in 0..dest_width {
+                // Evaluate destination rotation relative to the rotated bounding box
                 let (src_x, src_y) = match transform.rotation {
                     Rotation::Deg0 => (
-                        dst_x * source_width / region_width,
-                        dst_y * source_height / region_height,
+                        dst_x as usize * source_width / dest_width as usize,
+                        dst_y as usize * source_height / dest_height as usize,
                     ),
 
                     Rotation::Deg90 => (
-                        dst_y * source_width / region_height,
+                        dst_y as usize * source_width / dest_height as usize,
                         source_height
                             .saturating_sub(1)
-                            .saturating_sub(dst_x * source_height / region_width),
+                            .saturating_sub(dst_x as usize * source_height / dest_width as usize),
                     ),
 
                     Rotation::Deg180 => (
                         source_width
                             .saturating_sub(1)
-                            .saturating_sub(dst_x * source_width / region_width),
+                            .saturating_sub(dst_x as usize * source_width / dest_width as usize),
                         source_height
                             .saturating_sub(1)
-                            .saturating_sub(dst_y * source_height / region_height),
+                            .saturating_sub(dst_y as usize * source_height / dest_height as usize),
                     ),
 
                     Rotation::Deg270 => (
                         source_width
                             .saturating_sub(1)
-                            .saturating_sub(dst_y * source_width / region_height),
-                        dst_x * source_height / region_width,
+                            .saturating_sub(dst_y as usize * source_width / dest_height as usize),
+                        dst_x as usize * source_height / dest_width as usize,
                     ),
                 };
 
@@ -652,8 +653,9 @@ pub fn rebuild_atlas_image(
                     continue;
                 }
 
-                let dst_x_atlas = transform.x + dst_x as i32;
-                let dst_y_atlas = transform.y + dst_y as i32;
+                // Apply relative coordinates to the shifted atlas_rect() origin
+                let dst_x_atlas = rect_x as i32 + dst_x as i32;
+                let dst_y_atlas = rect_y as i32 + dst_y as i32;
 
                 if dst_x_atlas < 0
                     || dst_y_atlas < 0
@@ -666,6 +668,15 @@ pub fn rebuild_atlas_image(
                 let dst_index = (dst_y_atlas as usize * width + dst_x_atlas as usize) * 4;
 
                 match image.texture_descriptor.format {
+                    TextureFormat::Rgba8UnormSrgb | TextureFormat::Rgba8Unorm => {
+                        let src_index = (src_y * source_width + src_x) * 4;
+
+                        atlas_data[dst_index] = source_data[src_index]; // R
+                        atlas_data[dst_index + 1] = source_data[src_index + 1]; // G
+                        atlas_data[dst_index + 2] = source_data[src_index + 2]; // B
+                        atlas_data[dst_index + 3] = source_data[src_index + 3]; // A
+                    }
+
                     TextureFormat::Rgba32Float => {
                         let src_index = (src_y * source_width + src_x) * 16;
 
