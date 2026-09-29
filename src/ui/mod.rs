@@ -83,6 +83,9 @@ pub struct EditorUi {
     pub show_editor_settings_window: bool,
     pub show_import_mesh_window: bool,
     pub show_meshes_window: bool,
+    pub show_rendering_window: bool,
+
+    pub rendering_window_state: windows::rendering::RenderingWindowState,
 
     pub mesh_import_path: Option<std::path::PathBuf>,
     pub mesh_import_backend: crate::mesh::import::MeshBackend,
@@ -147,6 +150,9 @@ impl Default for EditorUi {
             show_editor_settings_window: false,
             show_import_mesh_window: false,
             show_meshes_window: true,
+            show_rendering_window: false,
+
+            rendering_window_state: windows::rendering::RenderingWindowState::default(),
 
             mesh_import_path: None,
             mesh_import_backend: crate::mesh::import::MeshBackend::Auto,

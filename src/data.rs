@@ -429,8 +429,10 @@ impl Default for Atlas {
             width: 512,
             height: 512,
             padding: 16,
+
             materials: Vec::new(),
             image: None,
+
             uv_revision: 0,
             image_revision: 0,
         }

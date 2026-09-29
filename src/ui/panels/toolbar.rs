@@ -243,6 +243,13 @@ pub fn toolbar(
 
             ui.separator();
 
+            if ui.button("Rendering").clicked() {
+                editor_ui.show_rendering_window = true;
+                ui.close();
+            }
+
+            ui.separator();
+
             if menu_action_button(ui, hotkeys, EditorAction::ResetViewport, "Reset Viewports") {
                 execute_action(
                     EditorAction::ResetViewport,

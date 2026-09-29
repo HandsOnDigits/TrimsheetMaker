@@ -62,6 +62,11 @@ pub fn editor_ui(
 
     let ctx = contexts.ctx_mut()?;
 
+    #[cfg(debug_assertions)]
+    ctx.global_style_mut(|style| {
+        style.debug.show_unaligned = false;
+    });
+
     let mut root_ui = egui::Ui::new(
         ctx.clone(),
         "trimsheet_maker_root".into(),
@@ -232,6 +237,10 @@ pub fn editor_ui(
         &mut mesh_scene_state,
         &mut mesh_preview,
     );
+
+    // Rendering
+    mesh_input.floating_window_dragging |=
+        windows::rendering::rendering_window(ctx, &mut editor_ui);
 
     Ok(())
 }

@@ -7,6 +7,7 @@ edition = "2024"
 anyhow = "1.0.104"
 bevy = { version = "0.19.1", features = ["exr"] }
 bevy_egui = "0.42.0"
+egui_node_editor = "0.11.0"
 exr = "1.74.0"
 rayon = "1.12.0"
 rfd = "0.17.2"
