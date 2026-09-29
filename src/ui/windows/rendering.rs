@@ -21,8 +21,6 @@ use super::FloatingWindowInteraction;
 pub enum RenderingDataType {
     Texture,
     Color,
-    Normal,
-    Height,
     Channel,
 }
 
@@ -32,8 +30,6 @@ impl DataTypeTrait<RenderingGraphState> for RenderingDataType {
             Self::Texture => egui::Color32::from_rgb(180, 180, 180),
             Self::Color => egui::Color32::from_rgb(220, 170, 80),
             Self::Channel => egui::Color32::from_rgb(120, 180, 220),
-            Self::Normal => egui::Color32::from_rgb(160, 120, 220),
-            Self::Height => egui::Color32::from_rgb(180, 140, 100),
         }
     }
 
@@ -42,8 +38,6 @@ impl DataTypeTrait<RenderingGraphState> for RenderingDataType {
             Self::Texture => "Texture",
             Self::Color => "Color",
             Self::Channel => "Channel",
-            Self::Normal => "Normal",
-            Self::Height => "Height",
         })
     }
 }
@@ -125,7 +119,6 @@ impl NodeDataTrait for RenderingNodeData {
 
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(data_type.name()).small().weak());
-
             ui.label(param_name);
         });
 
@@ -161,9 +154,8 @@ impl WidgetValueTrait for RenderingValue {
 
             RenderingNodeKind::MaterialOutput => match param_name {
                 "Base Color" => RenderingDataType::Color,
-                "Normal" => RenderingDataType::Normal,
-                "Height" => RenderingDataType::Height,
-                "AO" | "Roughness" | "Metallic" => RenderingDataType::Channel,
+                "Normal" => RenderingDataType::Texture,
+                "Height" | "AO" | "Roughness" | "Metallic" => RenderingDataType::Channel,
                 _ => return Vec::new(),
             },
 
@@ -188,9 +180,8 @@ impl WidgetValueTrait for RenderingValue {
 
             RenderingNodeKind::MaterialOutput => match param_name {
                 "Base Color" => RenderingDataType::Color,
-                "Normal" => RenderingDataType::Normal,
-                "Height" => RenderingDataType::Height,
-                "AO" | "Roughness" | "Metallic" => RenderingDataType::Channel,
+                "Normal" => RenderingDataType::Texture,
+                "Height" | "AO" | "Roughness" | "Metallic" => RenderingDataType::Channel,
                 _ => return Vec::new(),
             },
 
@@ -307,7 +298,6 @@ impl NodeTemplateTrait for RenderingNodeTemplate {
             }
 
             Self::SplitChannels => {
-                // INPUT
                 graph.add_input_param(
                     node_id,
                     "Texture".to_string(),
@@ -317,7 +307,6 @@ impl NodeTemplateTrait for RenderingNodeTemplate {
                     true,
                 );
 
-                // OUTPUTS
                 for channel in ["R", "G", "B", "A"] {
                     graph.add_output_param(
                         node_id,
@@ -328,7 +317,6 @@ impl NodeTemplateTrait for RenderingNodeTemplate {
             }
 
             Self::MaterialOutput => {
-                // INPUTS
                 graph.add_input_param(
                     node_id,
                     "Base Color".to_string(),
@@ -341,47 +329,22 @@ impl NodeTemplateTrait for RenderingNodeTemplate {
                 graph.add_input_param(
                     node_id,
                     "Normal".to_string(),
-                    RenderingDataType::Normal,
+                    RenderingDataType::Texture,
                     RenderingValue::None,
                     InputParamKind::ConnectionOnly,
                     true,
                 );
 
-                graph.add_input_param(
-                    node_id,
-                    "Height".to_string(),
-                    RenderingDataType::Height,
-                    RenderingValue::None,
-                    InputParamKind::ConnectionOnly,
-                    true,
-                );
-
-                graph.add_input_param(
-                    node_id,
-                    "AO".to_string(),
-                    RenderingDataType::Channel,
-                    RenderingValue::None,
-                    InputParamKind::ConnectionOnly,
-                    true,
-                );
-
-                graph.add_input_param(
-                    node_id,
-                    "Roughness".to_string(),
-                    RenderingDataType::Channel,
-                    RenderingValue::None,
-                    InputParamKind::ConnectionOnly,
-                    true,
-                );
-
-                graph.add_input_param(
-                    node_id,
-                    "Metallic".to_string(),
-                    RenderingDataType::Channel,
-                    RenderingValue::None,
-                    InputParamKind::ConnectionOnly,
-                    true,
-                );
+                for name in ["Height", "AO", "Roughness", "Metallic"] {
+                    graph.add_input_param(
+                        node_id,
+                        name.to_string(),
+                        RenderingDataType::Channel,
+                        RenderingValue::None,
+                        InputParamKind::ConnectionOnly,
+                        true,
+                    );
+                }
             }
         }
     }
