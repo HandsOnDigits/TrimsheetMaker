@@ -683,13 +683,12 @@ pub fn sync_mesh_material(
         return;
     };
 
-    if sync_state.revision == atlas.image_revision
-        && material.base_color_texture.as_ref() == Some(&image)
-    {
+    if sync_state.revision == atlas.image_revision {
         return;
     }
 
     material.base_color = Color::WHITE;
+    // Re-assigning the handle forces Bevy to refresh the material bind group on the GPU
     material.base_color_texture = Some(image);
 
     sync_state.revision = atlas.image_revision;

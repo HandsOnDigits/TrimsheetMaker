@@ -153,6 +153,12 @@ pub struct Atlas {
 }
 
 impl Atlas {
+    /// Call this whenever a material's transform (x, y, width, height, rotation) is modified.
+    pub fn mark_dirty(&mut self) {
+        self.uv_revision = self.uv_revision.wrapping_add(1);
+        self.image_revision = self.image_revision.wrapping_add(1);
+    }
+
     fn find_free_rect(&mut self, width: u32, height: u32) -> (u32, u32) {
         const MIN_SIZE: u32 = 512;
 

@@ -97,10 +97,7 @@ fn drag_material(
 
     // Calculate the requested Transform position directly from
     // the mouse position and the original grab offset.
-    //
-    // This does NOT depend on the material's previous snapped position.
     let desired_x = atlas_position.x - editor_ui.drag_offset.x;
-
     let desired_y = atlas_position.y - editor_ui.drag_offset.y;
 
     super::atlas_snapping::move_material_with_snapping(
@@ -110,6 +107,10 @@ fn drag_material(
         desired_y,
         editor_ui.snap_distance,
     );
+
+    // Mark atlas revisions dirty so Bevy's viewport sync systems rebuild
+    // the packed texture atlas and update mesh UV coordinates in real time.
+    atlas.mark_dirty();
 }
 
 fn atlas_screen_rect(viewport: egui::Rect, editor_ui: &EditorUi, atlas: &Atlas) -> egui::Rect {

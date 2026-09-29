@@ -23,6 +23,8 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
         return;
     };
 
+    let mut transform_changed = false;
+
     {
         let Some(material) = atlas.selected_mut(Some(index)) else {
             editor_ui.selected_material = None;
@@ -45,10 +47,20 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
 
                 ui.horizontal(|ui| {
                     ui.label("X");
-                    ui.add(egui::DragValue::new(&mut material.transform.x).speed(1));
+                    if ui
+                        .add(egui::DragValue::new(&mut material.transform.x).speed(1))
+                        .changed()
+                    {
+                        transform_changed = true;
+                    }
 
                     ui.label("Y");
-                    ui.add(egui::DragValue::new(&mut material.transform.y).speed(1));
+                    if ui
+                        .add(egui::DragValue::new(&mut material.transform.y).speed(1))
+                        .changed()
+                    {
+                        transform_changed = true;
+                    }
                 });
 
                 ui.end_row();
@@ -57,10 +69,20 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
 
                 ui.horizontal(|ui| {
                     ui.label("W");
-                    ui.add(egui::DragValue::new(&mut material.transform.width).speed(1));
+                    if ui
+                        .add(egui::DragValue::new(&mut material.transform.width).speed(1))
+                        .changed()
+                    {
+                        transform_changed = true;
+                    }
 
                     ui.label("H");
-                    ui.add(egui::DragValue::new(&mut material.transform.height).speed(1));
+                    if ui
+                        .add(egui::DragValue::new(&mut material.transform.height).speed(1))
+                        .changed()
+                    {
+                        transform_changed = true;
+                    }
                 });
 
                 ui.end_row();
@@ -70,12 +92,14 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
                 ui.horizontal(|ui| {
                     if ui.button("-90").clicked() {
                         material.transform.rotate_ccw();
+                        transform_changed = true;
                     }
 
                     ui.label(format!("{}°", material.transform.rotation.degrees()));
 
                     if ui.button("+90").clicked() {
                         material.transform.rotate_cw();
+                        transform_changed = true;
                     }
                 });
 
@@ -145,5 +169,9 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
         if let Some(index) = remove_index {
             material.textures.remove(index);
         }
+    }
+
+    if transform_changed {
+        atlas.mark_dirty();
     }
 }
