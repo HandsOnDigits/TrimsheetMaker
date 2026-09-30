@@ -2,8 +2,42 @@ use bevy::{
     camera::RenderTarget,
     input::mouse::{MouseMotion, MouseWheel},
     prelude::*,
-    render::render_resource::{Extent3d, TextureFormat},
+    render::render_resource::{AsBindGroup, Extent3d, TextureFormat},
+    shader::ShaderRef,
 };
+
+#[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
+pub struct MeshPreviewMaterial {
+    #[texture(0)]
+    #[sampler(1)]
+    pub base_color: Handle<Image>,
+
+    #[texture(2)]
+    #[sampler(3)]
+    pub normal: Handle<Image>,
+
+    #[texture(4)]
+    #[sampler(5)]
+    pub height: Handle<Image>,
+
+    #[texture(6)]
+    #[sampler(7)]
+    pub ambient_occlusion: Handle<Image>,
+
+    #[texture(8)]
+    #[sampler(9)]
+    pub roughness: Handle<Image>,
+
+    #[texture(10)]
+    #[sampler(11)]
+    pub metallic: Handle<Image>,
+}
+
+impl Material for MeshPreviewMaterial {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/mesh_preview_material.wgsl".into()
+    }
+}
 
 use super::{
     ImportedMeshPart, ImportedMeshRoot, MeshLight, MeshLightPreset, MeshPrimitiveSelection,
@@ -48,7 +82,7 @@ pub struct MeshPreview {
     pub unwrapped_mesh_id: Option<u64>,
     pub selected_primitive: Option<MeshPrimitiveSelection>,
 
-    pub material: Handle<StandardMaterial>,
+    pub material: Handle<MeshPreviewMaterial>,
     pub uv_revision: u64,
 }
 
@@ -109,7 +143,7 @@ pub struct MeshPreviewRenderTarget {
 fn setup_mesh_preview(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<MeshPreviewMaterial>>,
 ) {
     let width = 1024;
     let height = 1024;
@@ -137,10 +171,18 @@ fn setup_mesh_preview(
         ))
         .id();
 
-    let material = materials.add(StandardMaterial {
-        base_color: Color::WHITE,
-        perceptual_roughness: 0.7,
-        ..default()
+    let white = create_solid_image(&mut images, [255, 255, 255, 255]);
+    let black = create_solid_image(&mut images, [0, 0, 0, 255]);
+
+    let flat_normal = create_solid_image(&mut images, [128, 128, 255, 255]);
+
+    let material = materials.add(MeshPreviewMaterial {
+        base_color: white.clone(),
+        normal: flat_normal,
+        height: black.clone(),
+        ambient_occlusion: white.clone(),
+        roughness: white.clone(),
+        metallic: black,
     });
 
     commands.insert_resource(MeshPreview {
@@ -169,11 +211,28 @@ fn setup_mesh_preview(
     ));
 }
 
+fn create_solid_image(images: &mut Assets<Image>, color: [u8; 4]) -> Handle<Image> {
+    let image = Image::new(
+        Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        bevy::render::render_resource::TextureDimension::D2,
+        color.to_vec(),
+        TextureFormat::Rgba8UnormSrgb,
+        bevy::asset::RenderAssetUsages::default(),
+    );
+
+    images.add(image)
+}
+
 pub struct MeshPreviewPlugin;
 
 impl Plugin for MeshPreviewPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<MeshViewportLayout>()
+        app.add_plugins(MaterialPlugin::<MeshPreviewMaterial>::default())
+            .init_resource::<MeshViewportLayout>()
             .init_resource::<MeshLight>()
             .init_resource::<MeshViewportInput>()
             .init_resource::<MeshSceneState>()
@@ -671,25 +730,23 @@ pub fn orbit_camera(
 
 pub fn sync_mesh_material(
     atlas: Res<Atlas>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<MeshPreviewMaterial>>,
     mesh_preview: Res<MeshPreview>,
     mut sync_state: ResMut<AtlasMaterialSyncState>,
 ) {
-    let Some(image) = atlas.image.clone() else {
+    if sync_state.revision == atlas.image_revision {
         return;
-    };
+    }
 
     let Some(mut material) = materials.get_mut(&mesh_preview.material) else {
         return;
     };
 
-    if sync_state.revision == atlas.image_revision {
+    let Some(image) = atlas.image.clone() else {
         return;
-    }
+    };
 
-    material.base_color = Color::WHITE;
-    // Re-assigning the handle forces Bevy to refresh the material bind group on the GPU
-    material.base_color_texture = Some(image);
+    material.base_color = image;
 
     sync_state.revision = atlas.image_revision;
 }

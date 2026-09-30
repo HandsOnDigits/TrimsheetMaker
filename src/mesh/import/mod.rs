@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use std::path::{Path, PathBuf};
 
 pub mod assimp;
@@ -65,7 +67,7 @@ pub struct MeshPrimitive {
     pub material: Option<MeshMaterialRef>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MeshMaterialRef {
     /// Identifier belonging to the imported scene.
     ///

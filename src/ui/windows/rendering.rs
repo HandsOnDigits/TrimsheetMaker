@@ -255,7 +255,10 @@ impl WidgetValueTrait for RenderingValue {
             RenderingNodeKind::Texture => return Vec::new(),
         };
 
-        ui.label(egui::RichText::new(data_type.name()).small().weak());
+        ui.horizontal(|ui| {
+            ui.label(param_name);
+            ui.label(egui::RichText::new(data_type.name()).small().weak());
+        });
 
         Vec::new()
     }
@@ -281,7 +284,10 @@ impl WidgetValueTrait for RenderingValue {
             RenderingNodeKind::Texture => return Vec::new(),
         };
 
-        ui.label(egui::RichText::new(data_type.name()).small().weak());
+        ui.horizontal(|ui| {
+            ui.label(param_name);
+            ui.label(egui::RichText::new(data_type.name()).small().weak());
+        });
 
         Vec::new()
     }
