@@ -4,14 +4,44 @@ use bevy_egui::egui;
 use egui_node_editor::{
     Graph, GraphEditorState, InputParamKind, NodeId,
     traits::{
-        CategoryTrait, DataTypeTrait, NodeDataTrait, NodeTemplateIter, NodeTemplateTrait,
-        UserResponseTrait, WidgetValueTrait,
+        DataTypeTrait, NodeDataTrait, NodeTemplateIter, NodeTemplateTrait, UserResponseTrait,
+        WidgetValueTrait,
     },
 };
 
-use crate::{data::TextureGroup, ui::EditorUi};
+use crate::{data::TextureGroup, pipeline::RenderingNodeKind, ui::EditorUi};
 
 use super::FloatingWindowInteraction;
+
+fn initialize_pipeline_graph(editor_ui: &mut EditorUi) {
+    let state = &mut editor_ui.rendering_window_state.editor;
+
+    if !state.graph.iter_nodes().next().is_none() {
+        return;
+    }
+
+    let Some(material_output) = editor_ui.rendering_pipeline.material_output() else {
+        return;
+    };
+
+    let node_data = RenderingNodeData {
+        kind: material_output.kind,
+    };
+
+    let node_id = state.graph.add_node(
+        "Material Output".to_string(),
+        node_data.clone(),
+        |graph, node_id| {
+            node_data.build_node(graph, node_id);
+        },
+    );
+
+    state
+        .node_positions
+        .insert(node_id, egui::pos2(500.0, 200.0));
+
+    state.node_order.push(node_id);
+}
 
 // -----------------------------------------------------------------------------
 // Data types
@@ -20,7 +50,6 @@ use super::FloatingWindowInteraction;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RenderingDataType {
     Texture,
-    Color,
     Channel,
 }
 
@@ -28,7 +57,6 @@ impl DataTypeTrait<RenderingGraphState> for RenderingDataType {
     fn data_type_color(&self, _user_state: &mut RenderingGraphState) -> egui::Color32 {
         match self {
             Self::Texture => egui::Color32::from_rgb(180, 180, 180),
-            Self::Color => egui::Color32::from_rgb(220, 170, 80),
             Self::Channel => egui::Color32::from_rgb(120, 180, 220),
         }
     }
@@ -36,7 +64,6 @@ impl DataTypeTrait<RenderingGraphState> for RenderingDataType {
     fn name(&self) -> Cow<'_, str> {
         Cow::Borrowed(match self {
             Self::Texture => "Texture",
-            Self::Color => "Color",
             Self::Channel => "Channel",
         })
     }
@@ -46,16 +73,73 @@ impl DataTypeTrait<RenderingGraphState> for RenderingDataType {
 // Node data
 // -----------------------------------------------------------------------------
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RenderingNodeKind {
-    Texture,
-    SplitChannels,
-    MaterialOutput,
-}
-
 #[derive(Clone, Debug)]
 pub struct RenderingNodeData {
     pub kind: RenderingNodeKind,
+}
+
+impl RenderingNodeData {
+    pub fn build_node(
+        &self,
+        graph: &mut Graph<Self, RenderingDataType, RenderingValue>,
+        node_id: NodeId,
+    ) {
+        match self.kind {
+            RenderingNodeKind::Texture => {
+                graph.add_output_param(node_id, "Texture".to_string(), RenderingDataType::Texture);
+            }
+
+            RenderingNodeKind::SplitChannels => {
+                graph.add_input_param(
+                    node_id,
+                    "Texture".to_string(),
+                    RenderingDataType::Texture,
+                    RenderingValue::None,
+                    InputParamKind::ConnectionOnly,
+                    true,
+                );
+
+                for channel in ["R", "G", "B", "A"] {
+                    graph.add_output_param(
+                        node_id,
+                        channel.to_string(),
+                        RenderingDataType::Channel,
+                    );
+                }
+            }
+
+            RenderingNodeKind::MaterialOutput => {
+                graph.add_input_param(
+                    node_id,
+                    "Base Color".to_string(),
+                    RenderingDataType::Texture,
+                    RenderingValue::None,
+                    InputParamKind::ConnectionOnly,
+                    true,
+                );
+
+                graph.add_input_param(
+                    node_id,
+                    "Normal".to_string(),
+                    RenderingDataType::Texture,
+                    RenderingValue::None,
+                    InputParamKind::ConnectionOnly,
+                    true,
+                );
+
+                for channel in ["Height", "AO", "Roughness", "Metallic"] {
+                    graph.add_input_param(
+                        node_id,
+                        channel.to_string(),
+                        RenderingDataType::Channel,
+                        RenderingValue::None,
+                        InputParamKind::ConnectionOnly,
+                        true,
+                    );
+                }
+            }
+        }
+    }
 }
 
 impl NodeDataTrait for RenderingNodeData {
@@ -63,6 +147,15 @@ impl NodeDataTrait for RenderingNodeData {
     type UserState = RenderingGraphState;
     type DataType = RenderingDataType;
     type ValueType = RenderingValue;
+
+    fn can_delete(
+        &self,
+        _node_id: NodeId,
+        _graph: &Graph<Self, Self::DataType, Self::ValueType>,
+        _user_state: &mut Self::UserState,
+    ) -> bool {
+        self.kind != RenderingNodeKind::MaterialOutput
+    }
 
     fn bottom_ui(
         &self,
@@ -153,7 +246,7 @@ impl WidgetValueTrait for RenderingValue {
             RenderingNodeKind::SplitChannels => RenderingDataType::Texture,
 
             RenderingNodeKind::MaterialOutput => match param_name {
-                "Base Color" => RenderingDataType::Color,
+                "Base Color" => RenderingDataType::Texture,
                 "Normal" => RenderingDataType::Texture,
                 "Height" | "AO" | "Roughness" | "Metallic" => RenderingDataType::Channel,
                 _ => return Vec::new(),
@@ -179,7 +272,7 @@ impl WidgetValueTrait for RenderingValue {
             RenderingNodeKind::SplitChannels => RenderingDataType::Texture,
 
             RenderingNodeKind::MaterialOutput => match param_name {
-                "Base Color" => RenderingDataType::Color,
+                "Base Color" => RenderingDataType::Texture,
                 "Normal" => RenderingDataType::Texture,
                 "Height" | "AO" | "Roughness" | "Metallic" => RenderingDataType::Channel,
                 _ => return Vec::new(),
@@ -210,27 +303,6 @@ pub struct RenderingGraphState {
 }
 
 // -----------------------------------------------------------------------------
-// Categories
-// -----------------------------------------------------------------------------
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RenderingCategory {
-    Input,
-    Processing,
-    Output,
-}
-
-impl CategoryTrait for RenderingCategory {
-    fn name(&self) -> String {
-        match self {
-            Self::Input => "Input".to_string(),
-            Self::Processing => "Processing".to_string(),
-            Self::Output => "Output".to_string(),
-        }
-    }
-}
-
-// -----------------------------------------------------------------------------
 // Node templates
 // -----------------------------------------------------------------------------
 
@@ -238,14 +310,16 @@ impl CategoryTrait for RenderingCategory {
 pub enum RenderingNodeTemplate {
     Texture,
     SplitChannels,
-    MaterialOutput,
 }
 
 impl NodeTemplateIter for RenderingNodeTemplate {
     type Item = Self;
 
-    fn all_kinds(&self) -> Vec<Self> {
-        vec![Self::Texture, Self::SplitChannels, Self::MaterialOutput]
+    fn all_kinds(&self) -> Vec<Self::Item> {
+        vec![
+            RenderingNodeTemplate::Texture,
+            RenderingNodeTemplate::SplitChannels,
+        ]
     }
 }
 
@@ -254,26 +328,21 @@ impl NodeTemplateTrait for RenderingNodeTemplate {
     type DataType = RenderingDataType;
     type ValueType = RenderingValue;
     type UserState = RenderingGraphState;
-    type CategoryType = RenderingCategory;
+    type CategoryType = ();
 
     fn node_finder_label(&self, _user_state: &mut Self::UserState) -> Cow<'_, str> {
         Cow::Borrowed(match self {
             Self::Texture => "Texture",
             Self::SplitChannels => "Split Channels",
-            Self::MaterialOutput => "Material Output",
         })
     }
 
     fn node_finder_categories(&self, _user_state: &mut Self::UserState) -> Vec<Self::CategoryType> {
-        vec![match self {
-            Self::Texture => RenderingCategory::Input,
-            Self::SplitChannels => RenderingCategory::Processing,
-            Self::MaterialOutput => RenderingCategory::Output,
-        }]
+        Vec::new()
     }
 
-    fn node_graph_label(&self, _user_state: &mut Self::UserState) -> String {
-        self.node_finder_label(_user_state).into_owned()
+    fn node_graph_label(&self, user_state: &mut Self::UserState) -> String {
+        self.node_finder_label(user_state).into_owned()
     }
 
     fn user_data(&self, _user_state: &mut Self::UserState) -> Self::NodeData {
@@ -281,7 +350,6 @@ impl NodeTemplateTrait for RenderingNodeTemplate {
             kind: match self {
                 Self::Texture => RenderingNodeKind::Texture,
                 Self::SplitChannels => RenderingNodeKind::SplitChannels,
-                Self::MaterialOutput => RenderingNodeKind::MaterialOutput,
             },
         }
     }
@@ -292,61 +360,14 @@ impl NodeTemplateTrait for RenderingNodeTemplate {
         _user_state: &mut Self::UserState,
         node_id: NodeId,
     ) {
-        match self {
-            Self::Texture => {
-                graph.add_output_param(node_id, "Texture".to_string(), RenderingDataType::Texture);
-            }
+        let node_data = RenderingNodeData {
+            kind: match self {
+                Self::Texture => RenderingNodeKind::Texture,
+                Self::SplitChannels => RenderingNodeKind::SplitChannels,
+            },
+        };
 
-            Self::SplitChannels => {
-                graph.add_input_param(
-                    node_id,
-                    "Texture".to_string(),
-                    RenderingDataType::Texture,
-                    RenderingValue::None,
-                    InputParamKind::ConnectionOnly,
-                    true,
-                );
-
-                for channel in ["R", "G", "B", "A"] {
-                    graph.add_output_param(
-                        node_id,
-                        channel.to_string(),
-                        RenderingDataType::Channel,
-                    );
-                }
-            }
-
-            Self::MaterialOutput => {
-                graph.add_input_param(
-                    node_id,
-                    "Base Color".to_string(),
-                    RenderingDataType::Color,
-                    RenderingValue::None,
-                    InputParamKind::ConnectionOnly,
-                    true,
-                );
-
-                graph.add_input_param(
-                    node_id,
-                    "Normal".to_string(),
-                    RenderingDataType::Texture,
-                    RenderingValue::None,
-                    InputParamKind::ConnectionOnly,
-                    true,
-                );
-
-                for name in ["Height", "AO", "Roughness", "Metallic"] {
-                    graph.add_input_param(
-                        node_id,
-                        name.to_string(),
-                        RenderingDataType::Channel,
-                        RenderingValue::None,
-                        InputParamKind::ConnectionOnly,
-                        true,
-                    );
-                }
-            }
-        }
+        node_data.build_node(graph, node_id);
     }
 }
 
@@ -381,6 +402,8 @@ pub fn rendering_window(ctx: &egui::Context, editor_ui: &mut EditorUi) -> bool {
 
     editor_ui.rendering_window_state.graph_state.texture_groups =
         editor_ui.project_settings.texture_naming.groups.clone();
+
+    initialize_pipeline_graph(editor_ui);
 
     let window_response = egui::Window::new("Rendering")
         .open(&mut open)

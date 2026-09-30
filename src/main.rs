@@ -12,6 +12,7 @@ mod hotkeys;
 use hotkeys::HotkeyPlugin;
 
 mod editor_settings;
+mod pipeline;
 mod project;
 mod project_settings;
 mod transform;
