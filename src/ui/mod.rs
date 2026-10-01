@@ -8,7 +8,7 @@ use crate::{
     editor_settings::EditorSettings,
     hotkeys::{self, EditorAction, EditorActionMessage},
     mesh::{MeshLight, MeshSceneState},
-    pipeline::RenderingPipeline,
+    pipeline::RenderingPipelines,
     project_settings::ProjectSettings,
 };
 
@@ -74,7 +74,7 @@ fn apply_editor_actions(
 pub struct EditorUi {
     pub project_path: Option<std::path::PathBuf>,
 
-    pub rendering_pipeline: RenderingPipeline,
+    pub rendering_pipelines: RenderingPipelines,
 
     pub selected_material: Option<usize>,
     pub selected_mesh: Option<u64>,
@@ -129,7 +129,7 @@ impl Default for EditorUi {
         Self {
             project_path: None,
 
-            rendering_pipeline: RenderingPipeline::new(),
+            rendering_pipelines: RenderingPipelines::default(),
 
             selected_material: None,
             selected_mesh: None,

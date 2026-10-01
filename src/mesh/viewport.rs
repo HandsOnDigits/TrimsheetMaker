@@ -12,30 +12,36 @@ pub struct MeshPreviewMaterial {
     #[sampler(1)]
     pub base_color: Handle<Image>,
 
-    #[texture(2)]
-    #[sampler(3)]
+    #[texture(2, filterable = false)]
     pub normal: Handle<Image>,
 
-    #[texture(4)]
-    #[sampler(5)]
+    #[texture(3, filterable = false)]
     pub height: Handle<Image>,
 
-    #[texture(6)]
-    #[sampler(7)]
+    #[texture(4, filterable = false)]
     pub ambient_occlusion: Handle<Image>,
 
-    #[texture(8)]
-    #[sampler(9)]
+    #[texture(5, filterable = false)]
     pub roughness: Handle<Image>,
 
-    #[texture(10)]
-    #[sampler(11)]
+    #[texture(6, filterable = false)]
     pub metallic: Handle<Image>,
 }
 
 impl Material for MeshPreviewMaterial {
     fn fragment_shader() -> ShaderRef {
         "shaders/mesh_preview_material.wgsl".into()
+    }
+}
+
+#[derive(Resource)]
+pub struct AtlasImageSyncState {
+    pub revision: u64,
+}
+
+impl Default for AtlasImageSyncState {
+    fn default() -> Self {
+        Self { revision: u64::MAX }
     }
 }
 
@@ -48,7 +54,7 @@ use super::{
 use bevy_egui::EguiPrimaryContextPass;
 
 use crate::{
-    data::{Atlas, AtlasMaterial, rebuild_atlas_image},
+    data::{Atlas, AtlasMaterial, rebuild_atlas_maps},
     transform::Rotation,
     ui::EditorUi,
 };
@@ -84,6 +90,14 @@ pub struct MeshPreview {
 
     pub material: Handle<MeshPreviewMaterial>,
     pub uv_revision: u64,
+
+    // Fallback textures
+    pub fallback_base_color: Handle<Image>,
+    pub fallback_normal: Handle<Image>,
+    pub fallback_height: Handle<Image>,
+    pub fallback_ambient_occlusion: Handle<Image>,
+    pub fallback_roughness: Handle<Image>,
+    pub fallback_metallic: Handle<Image>,
 }
 
 #[derive(Resource, Default)]
@@ -108,17 +122,6 @@ impl Default for MeshUvSyncState {
             atlas_revision: u64::MAX,
             uv_mode: MeshUvMode::Imported,
         }
-    }
-}
-
-#[derive(Resource)]
-pub struct AtlasImageSyncState {
-    pub revision: u64,
-}
-
-impl Default for AtlasImageSyncState {
-    fn default() -> Self {
-        Self { revision: u64::MAX }
     }
 }
 
@@ -173,16 +176,15 @@ fn setup_mesh_preview(
 
     let white = create_solid_image(&mut images, [255, 255, 255, 255]);
     let black = create_solid_image(&mut images, [0, 0, 0, 255]);
-
     let flat_normal = create_solid_image(&mut images, [128, 128, 255, 255]);
 
     let material = materials.add(MeshPreviewMaterial {
         base_color: white.clone(),
-        normal: flat_normal,
+        normal: flat_normal.clone(),
         height: black.clone(),
         ambient_occlusion: white.clone(),
         roughness: white.clone(),
-        metallic: black,
+        metallic: black.clone(),
     });
 
     commands.insert_resource(MeshPreview {
@@ -197,7 +199,16 @@ fn setup_mesh_preview(
         selected_mesh_id: None,
         unwrapped_mesh_id: None,
         selected_primitive: None,
+
         material,
+
+        fallback_base_color: white.clone(),
+        fallback_normal: flat_normal,
+        fallback_height: black.clone(),
+        fallback_ambient_occlusion: white.clone(),
+        fallback_roughness: white,
+        fallback_metallic: black,
+
         uv_revision: 0,
     });
 
@@ -254,8 +265,8 @@ impl Plugin for MeshPreviewPlugin {
                     resize_mesh_preview_render_target,
                     sync_mesh_visibility,
                     sync_mesh_uv_mode,
-                    sync_atlas_image,
-                    sync_mesh_material.after(sync_atlas_image),
+                    sync_atlas_images,
+                    sync_mesh_material.after(sync_atlas_images),
                 ),
             );
     }
@@ -742,25 +753,68 @@ pub fn sync_mesh_material(
         return;
     };
 
-    let Some(image) = atlas.image.clone() else {
-        return;
-    };
+    material.base_color = atlas
+        .images
+        .base_color
+        .clone()
+        .unwrap_or_else(|| mesh_preview.fallback_base_color.clone());
 
-    material.base_color = image;
+    material.normal = atlas
+        .images
+        .normal
+        .clone()
+        .unwrap_or_else(|| mesh_preview.fallback_normal.clone());
+
+    material.height = atlas
+        .images
+        .height
+        .clone()
+        .unwrap_or_else(|| mesh_preview.fallback_height.clone());
+
+    material.ambient_occlusion = atlas
+        .images
+        .ambient_occlusion
+        .clone()
+        .unwrap_or_else(|| mesh_preview.fallback_ambient_occlusion.clone());
+
+    material.roughness = atlas
+        .images
+        .roughness
+        .clone()
+        .unwrap_or_else(|| mesh_preview.fallback_roughness.clone());
+
+    material.metallic = atlas
+        .images
+        .metallic
+        .clone()
+        .unwrap_or_else(|| mesh_preview.fallback_metallic.clone());
 
     sync_state.revision = atlas.image_revision;
 }
 
-pub fn sync_atlas_image(
+pub fn sync_atlas_images(
     mut atlas: ResMut<Atlas>,
     mut images: ResMut<Assets<Image>>,
+    editor_ui: Res<EditorUi>,
     mut sync_state: ResMut<AtlasImageSyncState>,
 ) {
     if sync_state.revision == atlas.image_revision {
         return;
     }
 
-    rebuild_atlas_image(&mut atlas, &mut images, Some("base_color"));
+    let revision_before = atlas.image_revision;
+
+    println!(
+        "SYNC ATLAS IMAGES: {} -> {}",
+        sync_state.revision, revision_before
+    );
+
+    rebuild_atlas_maps(&mut atlas, &mut images, &editor_ui.rendering_pipelines);
+
+    println!(
+        "SYNC ATLAS IMAGES AFTER REBUILD: {} -> {}",
+        revision_before, atlas.image_revision
+    );
 
     sync_state.revision = atlas.image_revision;
 }

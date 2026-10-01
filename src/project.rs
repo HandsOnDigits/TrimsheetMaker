@@ -61,6 +61,10 @@ pub struct ProjectFile {
 pub struct ProjectMaterial {
     pub index: usize,
     pub name: String,
+
+    #[serde(default)]
+    pub material_ref: Option<import::MeshMaterialRef>,
+
     pub textures: Vec<ProjectTexture>,
     pub transform: Transform,
 
@@ -112,6 +116,7 @@ impl ProjectFile {
                 .map(|material| ProjectMaterial {
                     index: material.index,
                     name: material.name.clone(),
+                    material_ref: material.material_ref.clone(),
                     textures: material
                         .textures
                         .iter()
@@ -179,6 +184,7 @@ impl ProjectFile {
             .map(|material| AtlasMaterial {
                 index: material.index,
                 name: material.name,
+                material_ref: material.material_ref,
                 textures: material
                     .textures
                     .into_iter()

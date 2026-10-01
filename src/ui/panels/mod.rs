@@ -240,7 +240,7 @@ pub fn editor_ui(
 
     // Rendering
     mesh_input.floating_window_dragging |=
-        windows::rendering::rendering_window(ctx, &mut editor_ui);
+        windows::rendering::rendering_window(ctx, &mut editor_ui, &mut atlas);
 
     Ok(())
 }

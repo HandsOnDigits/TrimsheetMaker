@@ -1,18 +1,26 @@
+use rayon::prelude::*;
+
+use std::{collections::BTreeMap, sync::Arc};
+
 use bevy::{
     asset::RenderAssetUsages,
+    image::ImageSampler,
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
 
 use bevy_egui::egui;
 
-use std::collections::BTreeMap;
-
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
 use crate::transform::{Rotation, Transform};
+
+use super::{
+    mesh::import::MeshMaterialRef,
+    pipeline::{RenderingPipelines, RenderingTextureResult},
+};
 
 #[derive(Clone)]
 pub struct MaterialTexture {
@@ -133,17 +141,251 @@ impl Default for TextureNaming {
     }
 }
 
+#[derive(Clone)]
+struct AtlasSourceImage {
+    format: TextureFormat,
+    width: usize,
+    height: usize,
+    data: Arc<[u8]>,
+}
+
+#[derive(Clone)]
+struct AtlasMaterialBuildInput {
+    transform: Transform,
+    maps: BTreeMap<AtlasMap, AtlasSourceImage>,
+}
+
+struct AtlasBuildInput {
+    width: usize,
+    height: usize,
+    materials: Vec<AtlasMaterialBuildInput>,
+}
+
+fn atlas_source_image_from_image(image: &Image) -> Option<AtlasSourceImage> {
+    let data = image.data.as_ref()?;
+
+    Some(AtlasSourceImage {
+        format: image.texture_descriptor.format,
+        width: image.width() as usize,
+        height: image.height() as usize,
+        data: Arc::from(data.as_slice()),
+    })
+}
+
+fn resolve_rendering_texture(
+    material: &AtlasMaterial,
+    pipeline: &super::pipeline::RenderingPipeline,
+    result: &super::pipeline::RenderingTextureResult,
+    images: &Assets<Image>,
+) -> Option<AtlasSourceImage> {
+    match result {
+        RenderingTextureResult::Texture { source } => {
+            let node = pipeline.node(source.node_id)?;
+
+            let texture_group = node.texture_group.as_deref()?;
+
+            let texture = material
+                .textures
+                .iter()
+                .find(|texture| texture.id == texture_group)?;
+
+            let handle = texture.image.as_ref()?;
+            let image = images.get(handle)?;
+
+            atlas_source_image_from_image(image)
+        }
+
+        RenderingTextureResult::Channel { source, channel } => {
+            let source = resolve_rendering_texture(material, pipeline, source, images)?;
+
+            bake_channel_source(&source, *channel)
+        }
+    }
+}
+
+fn bake_channel_source(
+    source: &AtlasSourceImage,
+    channel: super::pipeline::RenderingOutputSocket,
+) -> Option<AtlasSourceImage> {
+    use super::pipeline::RenderingOutputSocket;
+
+    let channel_index = match channel {
+        RenderingOutputSocket::Red => 0,
+        RenderingOutputSocket::Green => 1,
+        RenderingOutputSocket::Blue => 2,
+        RenderingOutputSocket::Alpha => 3,
+        RenderingOutputSocket::Texture => return None,
+    };
+
+    let pixel_count = source.width.checked_mul(source.height)?;
+    let mut output = vec![0u8; pixel_count.checked_mul(16)?];
+
+    for pixel in 0..pixel_count {
+        let value = match source.format {
+            TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => {
+                let offset = pixel.checked_mul(4)?.checked_add(channel_index)?;
+                *source.data.get(offset)? as f32 / 255.0
+            }
+
+            TextureFormat::R32Float => {
+                if channel_index != 0 {
+                    0.0
+                } else {
+                    let offset = pixel.checked_mul(4)?;
+                    read_f32(&source.data, offset)
+                }
+            }
+
+            TextureFormat::Rgba32Float => {
+                let offset = pixel.checked_mul(16)?.checked_add(channel_index * 4)?;
+
+                read_f32(&source.data, offset)
+            }
+
+            _ => return None,
+        };
+
+        let offset = pixel.checked_mul(16)?;
+
+        for component in 0..3 {
+            output[offset + component * 4..offset + component * 4 + 4]
+                .copy_from_slice(&value.to_le_bytes());
+        }
+
+        output[offset + 12..offset + 16].copy_from_slice(&1.0f32.to_le_bytes());
+    }
+
+    Some(AtlasSourceImage {
+        format: TextureFormat::Rgba32Float,
+        width: source.width,
+        height: source.height,
+        data: Arc::from(output),
+    })
+}
+
+fn create_atlas_build_input(
+    atlas: &Atlas,
+    images: &Assets<Image>,
+    rendering_pipelines: &RenderingPipelines,
+) -> AtlasBuildInput {
+    let materials = atlas
+        .materials
+        .iter()
+        .filter_map(|material| {
+            let material_ref = material.material_ref.as_ref()?;
+
+            let pipeline = rendering_pipelines.pipeline_for(material_ref)?;
+
+            let result = match pipeline.results() {
+                Ok(result) => result,
+                Err(error) => {
+                    error!(
+                        "Failed to evaluate rendering pipeline for material '{}': {:?}",
+                        material.name, error
+                    );
+                    return None;
+                }
+            };
+
+            let mut maps = BTreeMap::new();
+
+            let outputs = [
+                (AtlasMap::BaseColor, result.base_color.as_ref()),
+                (AtlasMap::Normal, result.normal.as_ref()),
+                (AtlasMap::Height, result.height.as_ref()),
+                (
+                    AtlasMap::AmbientOcclusion,
+                    result.ambient_occlusion.as_ref(),
+                ),
+                (AtlasMap::Roughness, result.roughness.as_ref()),
+                (AtlasMap::Metallic, result.metallic.as_ref()),
+            ];
+
+            for (map, output) in outputs {
+                let Some(output) = output else {
+                    continue;
+                };
+
+                let Some(source) = resolve_rendering_texture(material, pipeline, output, images)
+                else {
+                    warn!(
+                        "Failed to resolve {:?} for material '{}'",
+                        map, material.name
+                    );
+                    continue;
+                };
+
+                maps.insert(map, source);
+            }
+
+            Some(AtlasMaterialBuildInput {
+                transform: material.transform,
+                maps,
+            })
+        })
+        .collect();
+
+    AtlasBuildInput {
+        width: atlas.width as usize,
+        height: atlas.height as usize,
+        materials,
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum AtlasMap {
+    BaseColor,
+    Normal,
+    Height,
+    AmbientOcclusion,
+    Roughness,
+    Metallic,
+}
+
+#[derive(Default)]
+pub struct AtlasImages {
+    pub base_color: Option<Handle<Image>>,
+    pub normal: Option<Handle<Image>>,
+    pub height: Option<Handle<Image>>,
+    pub ambient_occlusion: Option<Handle<Image>>,
+    pub roughness: Option<Handle<Image>>,
+    pub metallic: Option<Handle<Image>>,
+}
+
+impl AtlasImages {
+    pub fn get(&self, map: AtlasMap) -> Option<&Handle<Image>> {
+        match map {
+            AtlasMap::BaseColor => self.base_color.as_ref(),
+            AtlasMap::Normal => self.normal.as_ref(),
+            AtlasMap::Height => self.height.as_ref(),
+            AtlasMap::AmbientOcclusion => self.ambient_occlusion.as_ref(),
+            AtlasMap::Roughness => self.roughness.as_ref(),
+            AtlasMap::Metallic => self.metallic.as_ref(),
+        }
+    }
+
+    pub fn get_mut(&mut self, map: AtlasMap) -> &mut Option<Handle<Image>> {
+        match map {
+            AtlasMap::BaseColor => &mut self.base_color,
+            AtlasMap::Normal => &mut self.normal,
+            AtlasMap::Height => &mut self.height,
+            AtlasMap::AmbientOcclusion => &mut self.ambient_occlusion,
+            AtlasMap::Roughness => &mut self.roughness,
+            AtlasMap::Metallic => &mut self.metallic,
+        }
+    }
+}
+
 #[derive(Resource)]
 pub struct Atlas {
     pub width: u32,
     pub height: u32,
-
     pub padding: u32,
 
     pub materials: Vec<AtlasMaterial>,
 
-    /// Runtime GPU texture containing the composed atlas.
-    pub image: Option<Handle<Image>>,
+    /// Runtime GPU textures containing the composed atlas maps.
+    pub images: AtlasImages,
 
     /// Changes that require mesh UVs to be regenerated.
     pub uv_revision: u64,
@@ -153,10 +395,18 @@ pub struct Atlas {
 }
 
 impl Atlas {
+    pub fn mark_uv_dirty(&mut self) {
+        self.uv_revision = self.uv_revision.wrapping_add(1);
+    }
+
+    pub fn mark_image_dirty(&mut self) {
+        self.image_revision = self.image_revision.wrapping_add(1);
+    }
+
     /// Call this whenever a material's transform (x, y, width, height, rotation) is modified.
     pub fn mark_dirty(&mut self) {
-        self.uv_revision = self.uv_revision.wrapping_add(1);
-        self.image_revision = self.image_revision.wrapping_add(1);
+        self.mark_uv_dirty();
+        self.mark_image_dirty();
     }
 
     fn find_free_rect(&mut self, width: u32, height: u32) -> (u32, u32) {
@@ -255,6 +505,7 @@ impl Atlas {
         self.materials.push(AtlasMaterial {
             index,
             name: source.name,
+            material_ref: None,
             textures,
             transform: Transform::default(),
             mesh_assignments: Vec::new(),
@@ -311,6 +562,7 @@ impl Atlas {
         self.materials.push(AtlasMaterial {
             index,
             name: format!("Material {index}"),
+            material_ref: None,
             textures: vec![],
             transform: Transform {
                 x: x as i32,
@@ -338,7 +590,7 @@ impl Atlas {
         }
     }
 
-    pub fn load_textures(&mut self, images: &mut Assets<Image>, preferred_group: Option<&str>) {
+    pub fn load_textures(&mut self, images: &mut Assets<Image>) {
         let mut uv_changed = false;
         let mut image_changed = false;
 
@@ -362,11 +614,7 @@ impl Atlas {
                                 first_size = Some(size);
                             }
 
-                            if preferred_group
-                                .is_some_and(|group| texture.id.eq_ignore_ascii_case(group))
-                            {
-                                preferred_size = Some(size);
-                            }
+                            preferred_size = Some(size);
 
                             texture.image = Some(images.add(image));
 
@@ -431,7 +679,7 @@ impl Default for Atlas {
             padding: 16,
 
             materials: Vec::new(),
-            image: None,
+            images: AtlasImages::default(),
 
             uv_revision: 0,
             image_revision: 0,
@@ -449,9 +697,9 @@ pub struct MaterialMeshAssignment {
 pub struct AtlasMaterial {
     pub index: usize,
     pub name: String,
+    pub material_ref: Option<MeshMaterialRef>,
     pub textures: Vec<MaterialTexture>,
     pub transform: Transform,
-
     pub mesh_assignments: Vec<MaterialMeshAssignment>,
 }
 
@@ -535,80 +783,287 @@ fn float_to_srgb8(value: f32) -> u8 {
     (srgb * 255.0 + 0.5) as u8
 }
 
-pub fn rebuild_atlas_image(
-    atlas: &mut Atlas,
-    images: &mut Assets<Image>,
-    preferred_group: Option<&str>,
-) {
-    println!(
-        "REBUILD: {}x{}, materials={}",
-        atlas.width,
-        atlas.height,
-        atlas.materials.len()
-    );
+fn find_material_texture<'a>(
+    material: &'a AtlasMaterialBuildInput,
+    map: AtlasMap,
+) -> Option<&'a AtlasSourceImage> {
+    material.maps.get(&map)
+}
 
-    let width = atlas.width as usize;
-    let height = atlas.height as usize;
+fn read_f32(source_data: &[u8], offset: usize) -> f32 {
+    f32::from_le_bytes([
+        source_data[offset],
+        source_data[offset + 1],
+        source_data[offset + 2],
+        source_data[offset + 3],
+    ])
+}
 
-    if width == 0 || height == 0 {
-        atlas.image = None;
-        return;
+fn read_source_pixel(image: &AtlasSourceImage, x: usize, y: usize) -> Option<[f32; 4]> {
+    let pixel = y.checked_mul(image.width)?.checked_add(x)?;
+
+    match image.format {
+        TextureFormat::Rgba8UnormSrgb | TextureFormat::Rgba8Unorm => {
+            let offset = pixel.checked_mul(4)?;
+            let end = offset.checked_add(4)?;
+
+            if end > image.data.len() {
+                return None;
+            }
+
+            Some([
+                image.data[offset] as f32 / 255.0,
+                image.data[offset + 1] as f32 / 255.0,
+                image.data[offset + 2] as f32 / 255.0,
+                image.data[offset + 3] as f32 / 255.0,
+            ])
+        }
+
+        TextureFormat::Rgba32Float => {
+            let offset = pixel.checked_mul(16)?;
+            let end = offset.checked_add(16)?;
+
+            if end > image.data.len() {
+                return None;
+            }
+
+            Some([
+                read_f32(&image.data, offset),
+                read_f32(&image.data, offset + 4),
+                read_f32(&image.data, offset + 8),
+                read_f32(&image.data, offset + 12),
+            ])
+        }
+
+        TextureFormat::R32Float => {
+            let offset = pixel.checked_mul(4)?;
+            let end = offset.checked_add(4)?;
+
+            if end > image.data.len() {
+                return None;
+            }
+
+            let value = read_f32(&image.data, offset);
+
+            Some([value, value, value, 1.0])
+        }
+
+        _ => None,
+    }
+}
+
+fn source_coordinates(
+    rotation: Rotation,
+    dst_x: usize,
+    dst_y: usize,
+    dest_width: usize,
+    dest_height: usize,
+    source_width: usize,
+    source_height: usize,
+) -> (usize, usize) {
+    if dest_width == 0 || dest_height == 0 || source_width == 0 || source_height == 0 {
+        return (0, 0);
     }
 
-    let mut atlas_data = vec![0u8; width * height * 4];
+    let x_source = dst_x.saturating_mul(source_width) / dest_width;
 
-    for material in &atlas.materials {
-        // Prefer the classified texture ID, but fall back to the filename
-        // while debugging/import classification.
-        let texture = preferred_group
-            .and_then(|group| {
-                material
-                    .textures
-                    .iter()
-                    .find(|texture| texture.id.eq_ignore_ascii_case(group))
-            })
-            .or_else(|| {
-                material.textures.iter().find(|texture| {
-                    texture
-                        .path
-                        .file_stem()
-                        .and_then(|stem| stem.to_str())
-                        .is_some_and(|stem| {
-                            let stem = stem.to_ascii_lowercase();
+    let y_source = dst_y.saturating_mul(source_height) / dest_height;
 
-                            stem.ends_with("basecolor") || stem.ends_with("base_color")
-                        })
-                })
-            });
+    match rotation {
+        Rotation::Deg0 => (x_source, y_source),
 
-        let Some(texture) = texture else {
-            println!("NO BASE COLOR FOUND: {}", material.name);
-            continue;
-        };
+        Rotation::Deg90 => (
+            dst_y.saturating_mul(source_width) / dest_height,
+            source_height.saturating_sub(1).saturating_sub(x_source),
+        ),
+
+        Rotation::Deg180 => (
+            source_width.saturating_sub(1).saturating_sub(x_source),
+            source_height.saturating_sub(1).saturating_sub(y_source),
+        ),
+
+        Rotation::Deg270 => (
+            source_width
+                .saturating_sub(1)
+                .saturating_sub(dst_y.saturating_mul(source_width) / dest_height),
+            dst_x.saturating_mul(source_height) / dest_width,
+        ),
+    }
+}
+
+fn atlas_destination_rect(transform: Transform) -> Option<(i64, i64, usize, usize)> {
+    let (width, height) = match transform.rotation {
+        Rotation::Deg0 | Rotation::Deg180 => (transform.width, transform.height),
+
+        Rotation::Deg90 | Rotation::Deg270 => (transform.height, transform.width),
+    };
+
+    if width == 0 || height == 0 {
+        return None;
+    }
+
+    Some((
+        transform.x as i64,
+        transform.y as i64,
+        width as usize,
+        height as usize,
+    ))
+}
+
+fn rebuild_atlas_map(input: &AtlasBuildInput, map: AtlasMap) -> Image {
+    println!("REBUILD MAP: {:?}", map);
+
+    for material in &input.materials {
+        let source = find_material_texture(material, map);
+
+        println!("  SOURCE {:?}: found={}", map, source.is_some());
+    }
+
+    let width = input.width;
+    let height = input.height;
+
+    let is_data_map = !matches!(map, AtlasMap::BaseColor);
+
+    if is_data_map {
+        // Four 32-bit floats per pixel.
+        let data_len = width
+            .checked_mul(height)
+            .and_then(|pixels| pixels.checked_mul(16))
+            .expect("atlas dimensions are too large");
+
+        let mut atlas_data = vec![0u8; data_len];
+
+        for material in &input.materials {
+            let Some(image) = find_material_texture(material, map) else {
+                continue;
+            };
+
+            let source_width = image.width;
+            let source_height = image.height;
+
+            if source_width == 0 || source_height == 0 {
+                continue;
+            }
+
+            let transform = material.transform;
+
+            let Some((rect_x, rect_y, dest_width, dest_height)) = atlas_destination_rect(transform)
+            else {
+                continue;
+            };
+
+            for dst_y in 0..dest_height {
+                for dst_x in 0..dest_width {
+                    let (src_x, src_y) = source_coordinates(
+                        transform.rotation,
+                        dst_x,
+                        dst_y,
+                        dest_width,
+                        dest_height,
+                        source_width,
+                        source_height,
+                    );
+
+                    if src_x >= source_width || src_y >= source_height {
+                        continue;
+                    }
+
+                    // Keep atlas coordinates signed until after bounds checking.
+                    let atlas_x = rect_x + dst_x as i64;
+                    let atlas_y = rect_y + dst_y as i64;
+
+                    if atlas_x < 0
+                        || atlas_y < 0
+                        || atlas_x >= width as i64
+                        || atlas_y >= height as i64
+                    {
+                        continue;
+                    }
+
+                    let atlas_x = atlas_x as usize;
+                    let atlas_y = atlas_y as usize;
+
+                    let Some(value) = read_source_pixel(image, src_x, src_y) else {
+                        continue;
+                    };
+
+                    let Some(pixel_index) = atlas_y
+                        .checked_mul(width)
+                        .and_then(|value| value.checked_add(atlas_x))
+                    else {
+                        continue;
+                    };
+
+                    let Some(dst_offset) = pixel_index.checked_mul(16) else {
+                        continue;
+                    };
+
+                    let Some(dst_end) = dst_offset.checked_add(16) else {
+                        continue;
+                    };
+
+                    if dst_end > atlas_data.len() {
+                        continue;
+                    }
+
+                    for channel in 0..4 {
+                        let channel_offset = dst_offset + channel * 4;
+
+                        atlas_data[channel_offset..channel_offset + 4]
+                            .copy_from_slice(&value[channel].to_le_bytes());
+                    }
+                }
+            }
+        }
 
         println!(
-            "USING BASE COLOR: {} -> {}",
-            material.name,
-            texture.path.display()
+            "BASE COLOR: first 32 bytes = {:?}",
+            &atlas_data[..atlas_data.len().min(32)]
         );
 
-        let Some(image_handle) = texture.image.as_ref() else {
-            println!("TEXTURE NOT LOADED: {}", texture.path.display());
+        let non_zero = atlas_data
+            .chunks_exact(4)
+            .filter(|pixel| pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0)
+            .count();
+
+        println!(
+            "BASE COLOR: {} / {} pixels contain non-zero RGB",
+            non_zero,
+            atlas_data.len() / 4
+        );
+
+        let mut image = Image::new(
+            Extent3d {
+                width: input.width as u32,
+                height: input.height as u32,
+                depth_or_array_layers: 1,
+            },
+            TextureDimension::D2,
+            atlas_data,
+            TextureFormat::Rgba32Float,
+            RenderAssetUsages::default(),
+        );
+
+        image.sampler = ImageSampler::nearest();
+
+        return image;
+    }
+
+    // Base color is stored as sRGB8.
+    let data_len = width
+        .checked_mul(height)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .expect("atlas dimensions are too large");
+
+    let mut atlas_data = vec![0u8; data_len];
+
+    for material in &input.materials {
+        let Some(image) = find_material_texture(material, map) else {
             continue;
         };
 
-        let Some(image) = images.get(image_handle) else {
-            println!("IMAGE HANDLE INVALID: {}", texture.path.display());
-            continue;
-        };
-
-        let Some(source_data) = image.data.as_ref() else {
-            println!("IMAGE HAS NO DATA: {}", texture.path.display());
-            continue;
-        };
-
-        let source_width = image.width() as usize;
-        let source_height = image.height() as usize;
+        let source_width = image.width;
+        let source_height = image.height;
 
         if source_width == 0 || source_height == 0 {
             continue;
@@ -616,158 +1071,175 @@ pub fn rebuild_atlas_image(
 
         let transform = material.transform;
 
-        // Retrieve the bounds of the material *after* rotation is applied
-        let (rect_x, rect_y, dest_width, dest_height) = transform.atlas_rect();
-
-        if dest_width == 0 || dest_height == 0 {
-            println!("INVALID REGION: {}", material.name);
+        let Some((rect_x, rect_y, dest_width, dest_height)) = atlas_destination_rect(transform)
+        else {
             continue;
-        }
+        };
 
         for dst_y in 0..dest_height {
             for dst_x in 0..dest_width {
-                // Evaluate destination rotation relative to the rotated bounding box
-                let (src_x, src_y) = match transform.rotation {
-                    Rotation::Deg0 => (
-                        dst_x as usize * source_width / dest_width as usize,
-                        dst_y as usize * source_height / dest_height as usize,
-                    ),
-
-                    Rotation::Deg90 => (
-                        dst_y as usize * source_width / dest_height as usize,
-                        source_height
-                            .saturating_sub(1)
-                            .saturating_sub(dst_x as usize * source_height / dest_width as usize),
-                    ),
-
-                    Rotation::Deg180 => (
-                        source_width
-                            .saturating_sub(1)
-                            .saturating_sub(dst_x as usize * source_width / dest_width as usize),
-                        source_height
-                            .saturating_sub(1)
-                            .saturating_sub(dst_y as usize * source_height / dest_height as usize),
-                    ),
-
-                    Rotation::Deg270 => (
-                        source_width
-                            .saturating_sub(1)
-                            .saturating_sub(dst_y as usize * source_width / dest_height as usize),
-                        dst_x as usize * source_height / dest_width as usize,
-                    ),
-                };
+                let (src_x, src_y) = source_coordinates(
+                    transform.rotation,
+                    dst_x,
+                    dst_y,
+                    dest_width,
+                    dest_height,
+                    source_width,
+                    source_height,
+                );
 
                 if src_x >= source_width || src_y >= source_height {
                     continue;
                 }
 
-                // Apply relative coordinates to the shifted atlas_rect() origin
-                let dst_x_atlas = rect_x as i32 + dst_x as i32;
-                let dst_y_atlas = rect_y as i32 + dst_y as i32;
+                // Keep atlas coordinates signed until after bounds checking.
+                let atlas_x = rect_x + dst_x as i64;
+                let atlas_y = rect_y + dst_y as i64;
 
-                if dst_x_atlas < 0
-                    || dst_y_atlas < 0
-                    || dst_x_atlas >= width as i32
-                    || dst_y_atlas >= height as i32
+                if atlas_x < 0 || atlas_y < 0 || atlas_x >= width as i64 || atlas_y >= height as i64
                 {
                     continue;
                 }
 
-                let dst_index = (dst_y_atlas as usize * width + dst_x_atlas as usize) * 4;
+                let atlas_x = atlas_x as usize;
+                let atlas_y = atlas_y as usize;
 
-                match image.texture_descriptor.format {
-                    TextureFormat::Rgba8UnormSrgb | TextureFormat::Rgba8Unorm => {
-                        let src_index = (src_y * source_width + src_x) * 4;
+                let Some(value) = read_source_pixel(image, src_x, src_y) else {
+                    continue;
+                };
 
-                        atlas_data[dst_index] = source_data[src_index]; // R
-                        atlas_data[dst_index + 1] = source_data[src_index + 1]; // G
-                        atlas_data[dst_index + 2] = source_data[src_index + 2]; // B
-                        atlas_data[dst_index + 3] = source_data[src_index + 3]; // A
-                    }
+                let Some(pixel_index) = atlas_y
+                    .checked_mul(width)
+                    .and_then(|value| value.checked_add(atlas_x))
+                else {
+                    continue;
+                };
 
-                    TextureFormat::Rgba32Float => {
-                        let src_index = (src_y * source_width + src_x) * 16;
+                let Some(dst_offset) = pixel_index.checked_mul(4) else {
+                    continue;
+                };
 
-                        let r = f32::from_le_bytes([
-                            source_data[src_index],
-                            source_data[src_index + 1],
-                            source_data[src_index + 2],
-                            source_data[src_index + 3],
-                        ]);
+                let Some(dst_end) = dst_offset.checked_add(4) else {
+                    continue;
+                };
 
-                        let g = f32::from_le_bytes([
-                            source_data[src_index + 4],
-                            source_data[src_index + 5],
-                            source_data[src_index + 6],
-                            source_data[src_index + 7],
-                        ]);
-
-                        let b = f32::from_le_bytes([
-                            source_data[src_index + 8],
-                            source_data[src_index + 9],
-                            source_data[src_index + 10],
-                            source_data[src_index + 11],
-                        ]);
-
-                        let a = f32::from_le_bytes([
-                            source_data[src_index + 12],
-                            source_data[src_index + 13],
-                            source_data[src_index + 14],
-                            source_data[src_index + 15],
-                        ]);
-
-                        atlas_data[dst_index] = float_to_srgb8(r);
-                        atlas_data[dst_index + 1] = float_to_srgb8(g);
-                        atlas_data[dst_index + 2] = float_to_srgb8(b);
-                        atlas_data[dst_index + 3] = (a.clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
-                    }
-
-                    TextureFormat::R32Float => {
-                        let src_index = (src_y * source_width + src_x) * 4;
-
-                        let value = f32::from_le_bytes([
-                            source_data[src_index],
-                            source_data[src_index + 1],
-                            source_data[src_index + 2],
-                            source_data[src_index + 3],
-                        ]);
-
-                        let value = float_to_srgb8(value);
-
-                        atlas_data[dst_index] = value;
-                        atlas_data[dst_index + 1] = value;
-                        atlas_data[dst_index + 2] = value;
-                        atlas_data[dst_index + 3] = 255;
-                    }
-
-                    format => {
-                        println!("UNSUPPORTED SOURCE FORMAT: {:?}", format);
-                        break;
-                    }
+                if dst_end > atlas_data.len() {
+                    continue;
                 }
+
+                atlas_data[dst_offset] = float_to_srgb8(value[0]);
+                atlas_data[dst_offset + 1] = float_to_srgb8(value[1]);
+                atlas_data[dst_offset + 2] = float_to_srgb8(value[2]);
+                atlas_data[dst_offset + 3] = (value[3].clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
             }
         }
     }
 
-    let image = Image::new(
+    Image::new(
         Extent3d {
-            width: atlas.width,
-            height: atlas.height,
+            width: input.width as u32,
+            height: input.height as u32,
             depth_or_array_layers: 1,
         },
         TextureDimension::D2,
         atlas_data,
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::default(),
+    )
+}
+
+pub fn rebuild_atlas_maps(
+    atlas: &mut Atlas,
+    images: &mut Assets<Image>,
+    rendering_pipelines: &RenderingPipelines,
+) {
+    println!(
+        "REBUILD ATLAS: {}x{}, materials={}",
+        atlas.width,
+        atlas.height,
+        atlas.materials.len()
     );
 
-    if let Some(handle) = atlas.image.clone() {
-        if let Some(mut existing) = images.get_mut(&handle) {
-            *existing = image;
-        } else {
-            atlas.image = Some(images.add(image));
+    let input = create_atlas_build_input(atlas, images, rendering_pipelines);
+
+    println!(
+        "ATLAS INPUT: materials={}, maps={}",
+        input.materials.len(),
+        input
+            .materials
+            .iter()
+            .map(|material| material.maps.len())
+            .sum::<usize>()
+    );
+
+    for material in &input.materials {
+        println!(
+            "  MATERIAL: transform=({}, {}) {}x{} maps={:?}",
+            material.transform.x,
+            material.transform.y,
+            material.transform.width,
+            material.transform.height,
+            material.maps.keys().collect::<Vec<_>>(),
+        );
+    }
+
+    let maps = [
+        AtlasMap::BaseColor,
+        AtlasMap::Normal,
+        AtlasMap::Height,
+        AtlasMap::AmbientOcclusion,
+        AtlasMap::Roughness,
+        AtlasMap::Metallic,
+    ];
+
+    let generated: Vec<(AtlasMap, Image)> = maps
+        .par_iter()
+        .map(|map| (*map, rebuild_atlas_map(&input, *map)))
+        .collect();
+
+    for (map, image) in &generated {
+        println!(
+            "ATLAS GENERATED: {:?} {}x{} data={}",
+            map,
+            image.texture_descriptor.size.width,
+            image.texture_descriptor.size.height,
+            image.data.as_ref().map_or(0, Vec::len),
+        );
+    }
+
+    for (map, image) in generated {
+        let handle = atlas.images.get(map).cloned();
+
+        match handle {
+            Some(handle) => {
+                println!("ATLAS UPDATE: {:?} existing handle {:?}", map, handle);
+
+                if let Some(mut existing) = images.get_mut(&handle) {
+                    println!(
+                        "ATLAS UPDATE: {:?} replacing {} bytes",
+                        map,
+                        image.data.as_ref().map_or(0, Vec::len)
+                    );
+
+                    *existing = image;
+                } else {
+                    println!(
+                        "ATLAS UPDATE: {:?} handle missing from Assets<Image>, creating replacement",
+                        map
+                    );
+
+                    let new_handle = images.add(image);
+                    *atlas.images.get_mut(map) = Some(new_handle);
+                }
+            }
+
+            None => {
+                let new_handle = images.add(image);
+
+                println!("ATLAS CREATE: {:?} -> {:?}", map, new_handle);
+
+                *atlas.images.get_mut(map) = Some(new_handle);
+            }
         }
-    } else {
-        atlas.image = Some(images.add(image));
     }
 }

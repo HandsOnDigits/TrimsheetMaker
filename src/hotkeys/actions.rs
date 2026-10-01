@@ -95,7 +95,7 @@ pub fn execute_action(
         EditorAction::OpenProject => match project::open_project_dialog() {
             Ok(Some(path)) => match project::ProjectFile::load(&path) {
                 Ok((mut loaded_atlas, project_settings, project_meshes)) => {
-                    loaded_atlas.load_textures(images, None);
+                    loaded_atlas.load_textures(images);
 
                     *atlas = loaded_atlas;
                     editor_ui.project_settings = project_settings;

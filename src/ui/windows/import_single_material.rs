@@ -246,10 +246,7 @@ fn import_material(editor_ui: &mut EditorUi, atlas: &mut Atlas, images: &mut Ass
 
     let index = atlas.add_material(source);
 
-    atlas.load_textures(
-        images,
-        editor_ui.project_settings.preview_texture_group.as_deref(),
-    );
+    atlas.load_textures(images);
 
     editor_ui.project_settings.sync_from_atlas(atlas);
 

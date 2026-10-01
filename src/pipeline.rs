@@ -1,12 +1,14 @@
 use std::collections::HashSet;
 
+use bevy::prelude::*;
+
 use serde::{Deserialize, Serialize};
 
 use crate::mesh::import::MeshMaterialRef;
 
 pub type PipelineNodeId = u64;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RenderingConnection {
     pub from: PipelineOutput,
     pub to: PipelineInput,
@@ -72,10 +74,16 @@ impl RenderingPipelines {
         &mut self,
         material: &MeshMaterialRef,
     ) -> Option<&mut RenderingPipeline> {
-        self.materials
+        let entry = self
+            .materials
             .iter_mut()
-            .find(|entry| entry.material.id == material.id)
-            .map(|entry| &mut entry.pipeline)
+            .find(|entry| entry.material.id == material.id)?;
+
+        if entry.pipeline.material_output().is_none() {
+            entry.pipeline.add_node(RenderingNodeKind::MaterialOutput);
+        }
+
+        Some(&mut entry.pipeline)
     }
 
     pub fn add_material(&mut self, material: MeshMaterialRef) -> &mut RenderingPipeline {
@@ -212,7 +220,11 @@ impl RenderingPipeline {
         let id = self.next_node_id;
         self.next_node_id += 1;
 
-        self.nodes.push(RenderingNode { id, kind });
+        self.nodes.push(RenderingNode {
+            id,
+            kind,
+            texture_group: None,
+        });
 
         id
     }
@@ -417,6 +429,9 @@ pub enum RenderingPipelineError {
 pub struct RenderingNode {
     pub id: PipelineNodeId,
     pub kind: RenderingNodeKind,
+
+    // Only used by Texture nodes.
+    pub texture_group: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
