@@ -2,9 +2,49 @@ use bevy::{
     camera::RenderTarget,
     input::mouse::{MouseMotion, MouseWheel},
     prelude::*,
-    render::render_resource::{AsBindGroup, Extent3d, TextureFormat},
+    render::render_resource::{AsBindGroup, Extent3d, ShaderType, TextureFormat},
     shader::ShaderRef,
 };
+
+use crate::pipeline::{RenderingOutputSocket, RenderingPipelines};
+
+#[derive(Clone, Copy, Debug, ShaderType)]
+pub struct MeshPreviewTextureSource {
+    pub channel: u32,
+    pub _padding: Vec3,
+}
+
+impl Default for MeshPreviewTextureSource {
+    fn default() -> Self {
+        Self {
+            channel: 0,
+            _padding: Vec3::ZERO,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, ShaderType)]
+pub struct MeshPreviewGraph {
+    pub base_color: Vec4,
+    pub normal: Vec4,
+    pub height: Vec4,
+    pub ambient_occlusion: Vec4,
+    pub roughness: Vec4,
+    pub metallic: Vec4,
+}
+
+impl Default for MeshPreviewGraph {
+    fn default() -> Self {
+        Self {
+            base_color: Vec4::ZERO,
+            normal: Vec4::ZERO,
+            height: Vec4::ZERO,
+            ambient_occlusion: Vec4::ZERO,
+            roughness: Vec4::ZERO,
+            metallic: Vec4::ZERO,
+        }
+    }
+}
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct MeshPreviewMaterial {
@@ -26,6 +66,9 @@ pub struct MeshPreviewMaterial {
 
     #[texture(6, filterable = false)]
     pub metallic: Handle<Image>,
+
+    #[uniform(7)]
+    pub graph: MeshPreviewGraph,
 }
 
 impl Material for MeshPreviewMaterial {
@@ -127,12 +170,16 @@ impl Default for MeshUvSyncState {
 
 #[derive(Resource)]
 pub struct AtlasMaterialSyncState {
-    pub revision: u64,
+    pub atlas_revision: u64,
+    pub pipeline_revision: u64,
 }
 
 impl Default for AtlasMaterialSyncState {
     fn default() -> Self {
-        Self { revision: u64::MAX }
+        Self {
+            atlas_revision: u64::MAX,
+            pipeline_revision: u64::MAX,
+        }
     }
 }
 
@@ -141,6 +188,10 @@ pub struct MeshPreviewRenderTarget {
     pub image: Handle<Image>,
     pub width: u32,
     pub height: u32,
+}
+
+fn graph_channel(socket: RenderingOutputSocket) -> Vec4 {
+    Vec4::new(output_socket_channel(socket) as f32, 0.0, 0.0, 0.0)
 }
 
 fn setup_mesh_preview(
@@ -185,6 +236,7 @@ fn setup_mesh_preview(
         ambient_occlusion: white.clone(),
         roughness: white.clone(),
         metallic: black.clone(),
+        graph: MeshPreviewGraph::default(),
     });
 
     commands.insert_resource(MeshPreview {
@@ -236,6 +288,79 @@ fn create_solid_image(images: &mut Assets<Image>, color: [u8; 4]) -> Handle<Imag
     );
 
     images.add(image)
+}
+
+fn output_socket_channel(socket: RenderingOutputSocket) -> u32 {
+    match socket {
+        RenderingOutputSocket::Red => 0,
+        RenderingOutputSocket::Green => 1,
+        RenderingOutputSocket::Blue => 2,
+        RenderingOutputSocket::Alpha => 3,
+
+        // A Texture output is not a single channel.
+        // For color/normal inputs the shader uses the complete texture.
+        RenderingOutputSocket::Texture => 0,
+    }
+}
+
+fn texture_for_group(
+    group: &str,
+    atlas: &Atlas,
+    mesh_preview: &MeshPreview,
+) -> Option<Handle<Image>> {
+    let group = group.trim().to_ascii_lowercase();
+
+    match group.as_str() {
+        "base_color" | "basecolor" | "albedo" | "diffuse" | "color" => Some(
+            atlas
+                .images
+                .base_color
+                .clone()
+                .unwrap_or_else(|| mesh_preview.fallback_base_color.clone()),
+        ),
+
+        "normal" | "normal_map" | "normalmap" => Some(
+            atlas
+                .images
+                .normal
+                .clone()
+                .unwrap_or_else(|| mesh_preview.fallback_normal.clone()),
+        ),
+
+        "height" | "height_map" | "heightmap" | "displacement" => Some(
+            atlas
+                .images
+                .height
+                .clone()
+                .unwrap_or_else(|| mesh_preview.fallback_height.clone()),
+        ),
+
+        "ao" | "ambient_occlusion" | "ambientocclusion" | "occlusion" => Some(
+            atlas
+                .images
+                .ambient_occlusion
+                .clone()
+                .unwrap_or_else(|| mesh_preview.fallback_ambient_occlusion.clone()),
+        ),
+
+        "roughness" | "rough" => Some(
+            atlas
+                .images
+                .roughness
+                .clone()
+                .unwrap_or_else(|| mesh_preview.fallback_roughness.clone()),
+        ),
+
+        "metallic" | "metalness" | "metal" => Some(
+            atlas
+                .images
+                .metallic
+                .clone()
+                .unwrap_or_else(|| mesh_preview.fallback_metallic.clone()),
+        ),
+
+        _ => None,
+    }
 }
 
 pub struct MeshPreviewPlugin;
@@ -741,11 +866,18 @@ pub fn orbit_camera(
 
 pub fn sync_mesh_material(
     atlas: Res<Atlas>,
+    rendering_pipelines: Res<RenderingPipelines>,
+    mesh_scene_state: Res<MeshSceneState>,
     mut materials: ResMut<Assets<MeshPreviewMaterial>>,
     mesh_preview: Res<MeshPreview>,
     mut sync_state: ResMut<AtlasMaterialSyncState>,
 ) {
-    if sync_state.revision == atlas.image_revision {
+    let atlas_revision = atlas.image_revision;
+    let pipeline_revision = rendering_pipelines.revision;
+
+    if sync_state.atlas_revision == atlas_revision
+        && sync_state.pipeline_revision == pipeline_revision
+    {
         return;
     }
 
@@ -753,6 +885,9 @@ pub fn sync_mesh_material(
         return;
     };
 
+    /*
+     * Start with safe fallback/semantic bindings.
+     */
     material.base_color = atlas
         .images
         .base_color
@@ -789,13 +924,113 @@ pub fn sync_mesh_material(
         .clone()
         .unwrap_or_else(|| mesh_preview.fallback_metallic.clone());
 
-    sync_state.revision = atlas.image_revision;
+    material.graph = MeshPreviewGraph::default();
+
+    /*
+     * Find the material belonging to the currently selected primitive.
+     */
+    let material_ref = mesh_preview.selected_primitive.and_then(|selection| {
+        let mesh = mesh_scene_state.get(selection.mesh_id)?;
+
+        let object = mesh.scene.objects.get(selection.object_index)?;
+
+        let primitive = object.primitives.get(selection.primitive_index)?;
+
+        primitive.material.as_ref()
+    });
+
+    /*
+     * Evaluate the rendering graph for that material.
+     */
+    if let Some(material_ref) = material_ref {
+        if let Some(pipeline) = rendering_pipelines.pipeline_for(material_ref) {
+            if let Ok(result) = pipeline.evaluate() {
+                apply_rendering_result(&mut material, &result, &atlas, &mesh_preview);
+            }
+        }
+    }
+
+    sync_state.atlas_revision = atlas_revision;
+    sync_state.pipeline_revision = pipeline_revision;
+}
+
+fn apply_rendering_result(
+    material: &mut MeshPreviewMaterial,
+    result: &crate::pipeline::RenderingMaterialResult,
+    atlas: &Atlas,
+    mesh_preview: &MeshPreview,
+) {
+    /*
+     * Base Color
+     */
+    if let Some(group) = result.base_color_group.as_deref() {
+        if let Some(texture) = texture_for_group(group, atlas, mesh_preview) {
+            material.base_color = texture;
+
+            material.graph.base_color = Vec4::ZERO;
+        }
+    }
+
+    /*
+     * Normal
+     */
+    if let Some(group) = result.normal_group.as_deref() {
+        if let Some(texture) = texture_for_group(group, atlas, mesh_preview) {
+            material.normal = texture;
+
+            material.graph.normal = Vec4::ZERO;
+        }
+    }
+
+    /*
+     * Height
+     */
+    if let Some(source) = result.height_group.as_ref() {
+        if let Some(texture) = texture_for_group(&source.texture_group, atlas, mesh_preview) {
+            material.height = texture;
+
+            material.graph.height = graph_channel(source.socket);
+        }
+    }
+
+    /*
+     * Ambient Occlusion
+     */
+    if let Some(source) = result.ao_group.as_ref() {
+        if let Some(texture) = texture_for_group(&source.texture_group, atlas, mesh_preview) {
+            material.ambient_occlusion = texture;
+
+            material.graph.ambient_occlusion = graph_channel(source.socket);
+        }
+    }
+
+    /*
+     * Roughness
+     */
+    if let Some(source) = result.roughness_group.as_ref() {
+        if let Some(texture) = texture_for_group(&source.texture_group, atlas, mesh_preview) {
+            material.roughness = texture;
+
+            material.graph.roughness = graph_channel(source.socket);
+        }
+    }
+
+    /*
+     * Metallic
+     */
+    if let Some(source) = result.metallic_group.as_ref() {
+        if let Some(texture) = texture_for_group(&source.texture_group, atlas, mesh_preview) {
+            material.metallic = texture;
+
+            material.graph.metallic = graph_channel(source.socket);
+        }
+    }
 }
 
 pub fn sync_atlas_images(
     mut atlas: ResMut<Atlas>,
     mut images: ResMut<Assets<Image>>,
-    editor_ui: Res<EditorUi>,
+    mut rendering_pipelines: ResMut<RenderingPipelines>,
     mut sync_state: ResMut<AtlasImageSyncState>,
 ) {
     if sync_state.revision == atlas.image_revision {
@@ -809,7 +1044,7 @@ pub fn sync_atlas_images(
         sync_state.revision, revision_before
     );
 
-    rebuild_atlas_maps(&mut atlas, &mut images, &editor_ui.rendering_pipelines);
+    rebuild_atlas_maps(&mut atlas, &mut images, &mut rendering_pipelines);
 
     println!(
         "SYNC ATLAS IMAGES AFTER REBUILD: {} -> {}",

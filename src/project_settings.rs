@@ -39,4 +39,11 @@ impl ProjectSettings {
         self.atlas_height = atlas.height;
         self.padding = atlas.padding;
     }
+
+    /// Helper to resolve target group with fallback
+    pub fn active_texture_group<'a>(&'a self, fallback_groups: &'a [String]) -> Option<&'a str> {
+        self.preview_texture_group
+            .as_deref()
+            .or_else(|| fallback_groups.first().map(|s| s.as_str()))
+    }
 }

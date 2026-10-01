@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, collections::HashSet};
 
 use bevy_egui::egui;
 
@@ -15,20 +15,192 @@ use crate::{
     mesh::import::MeshMaterialRef,
     pipeline::{
         PipelineInput, PipelineNodeId, PipelineOutput, RenderingConnection, RenderingInputSocket,
-        RenderingNodeKind, RenderingOutputSocket, RenderingPipeline,
+        RenderingNodeKind, RenderingOutputSocket, RenderingPipeline, RenderingPipelines,
     },
     ui::EditorUi,
 };
 
+fn find_output_id(
+    graph: &Graph<RenderingNodeData, RenderingDataType, RenderingValue>,
+    graph_state: &RenderingGraphState,
+    node_id: NodeId,
+    socket: RenderingOutputSocket,
+) -> Option<OutputId> {
+    graph_state
+        .output_sockets
+        .iter()
+        .find(|&(&output_id, &s)| {
+            s == socket
+                && graph
+                    .try_get_output(output_id)
+                    .map_or(false, |out| out.node == node_id)
+        })
+        .map(|(&output_id, _)| output_id)
+}
+
+fn find_input_id(
+    graph: &Graph<RenderingNodeData, RenderingDataType, RenderingValue>,
+    graph_state: &RenderingGraphState,
+    node_id: NodeId,
+    socket: RenderingInputSocket,
+) -> Option<InputId> {
+    graph_state
+        .input_sockets
+        .iter()
+        .find(|&(&input_id, &s)| {
+            s == socket
+                && graph
+                    .try_get_input(input_id)
+                    .map_or(false, |inp| inp.node == node_id)
+        })
+        .map(|(&input_id, _)| input_id)
+}
+
+fn find_output_socket(
+    editor_state: &RenderingWindowState,
+    output_id: OutputId,
+) -> Option<RenderingOutputSocket> {
+    editor_state
+        .graph_state
+        .output_sockets
+        .get(&output_id)
+        .copied()
+}
+
+fn find_input_socket(
+    editor_state: &RenderingWindowState,
+    input_id: InputId,
+) -> Option<RenderingInputSocket> {
+    editor_state
+        .graph_state
+        .input_sockets
+        .get(&input_id)
+        .copied()
+}
+
+pub fn sync_rendering_pipeline(
+    window_state: &mut RenderingWindowState,
+    pipeline: &mut RenderingPipeline,
+) -> bool {
+    let mut changed = false;
+
+    // 1. Sync added nodes (UI graph -> Pipeline)
+    let current_ui_nodes: HashSet<_> = window_state.editor.graph.iter_nodes().collect();
+
+    for &ui_node_id in &current_ui_nodes {
+        if !window_state.pipeline_node_ids.contains_key(&ui_node_id) {
+            let kind = window_state.editor.graph[ui_node_id].user_data.kind;
+            let pipe_node_id = pipeline.add_node(kind);
+            window_state
+                .pipeline_node_ids
+                .insert(ui_node_id, pipe_node_id);
+            changed = true;
+        }
+    }
+
+    // 2. Sync deleted nodes (UI graph -> Pipeline)
+    let removed_ui_nodes: Vec<_> = window_state
+        .pipeline_node_ids
+        .keys()
+        .copied()
+        .filter(|id| !current_ui_nodes.contains(id))
+        .collect();
+
+    for ui_node_id in removed_ui_nodes {
+        if let Some(pipe_node_id) = window_state.pipeline_node_ids.remove(&ui_node_id) {
+            pipeline.remove_node(pipe_node_id);
+            window_state
+                .graph_state
+                .selected_texture_groups
+                .remove(&ui_node_id);
+            changed = true;
+        }
+    }
+
+    // 3. Sync UI node settings (e.g. texture group selection)
+    for (&ui_node_id, &pipeline_node_id) in window_state.pipeline_node_ids.iter() {
+        if let Some(pipeline_node) = pipeline.node_mut(pipeline_node_id) {
+            if pipeline_node.kind == RenderingNodeKind::Texture {
+                let current_group = window_state
+                    .graph_state
+                    .selected_texture_groups
+                    .get(&ui_node_id)
+                    .cloned();
+                if pipeline_node.texture_group != current_group {
+                    pipeline_node.texture_group = current_group;
+                    changed = true;
+                }
+            }
+        }
+    }
+
+    // 4. Reconstruct graph connections
+    let mut new_connections = Vec::new();
+
+    for (input_id, output_id) in window_state.editor.graph.iter_connections() {
+        let Some(input_param) = window_state.editor.graph.try_get_input(input_id) else {
+            continue;
+        };
+        let Some(output_param) = window_state.editor.graph.try_get_output(output_id) else {
+            continue;
+        };
+
+        let from_ui_node = output_param.node;
+        let to_ui_node = input_param.node;
+
+        if let (Some(&from_pipe_id), Some(&to_pipe_id)) = (
+            window_state.pipeline_node_ids.get(&from_ui_node),
+            window_state.pipeline_node_ids.get(&to_ui_node),
+        ) {
+            let from_socket = find_output_socket(window_state, output_id);
+            let to_socket = find_input_socket(window_state, input_id);
+
+            if let (Some(from_socket), Some(to_socket)) = (from_socket, to_socket) {
+                new_connections.push(RenderingConnection {
+                    from: PipelineOutput {
+                        node_id: from_pipe_id,
+                        socket: from_socket,
+                    },
+                    to: PipelineInput {
+                        node_id: to_pipe_id,
+                        socket: to_socket,
+                    },
+                });
+            }
+        }
+    }
+
+    // Deterministic sorting by node ID
+    new_connections.sort_by(|a, b| {
+        a.from
+            .node_id
+            .cmp(&b.from.node_id)
+            .then_with(|| a.to.node_id.cmp(&b.to.node_id))
+    });
+
+    let mut existing_connections = pipeline.connections.clone();
+    existing_connections.sort_by(|a, b| {
+        a.from
+            .node_id
+            .cmp(&b.from.node_id)
+            .then_with(|| a.to.node_id.cmp(&b.to.node_id))
+    });
+
+    if existing_connections != new_connections {
+        pipeline.connections = new_connections;
+        changed = true;
+    }
+
+    changed
+}
+
 fn ensure_material_output_in_graph(state: &mut RenderingWindowState) -> NodeId {
-    // Check if Material Output node already exists in the graph
     for node_id in state.editor.graph.iter_nodes() {
         if state.editor.graph[node_id].user_data.kind == RenderingNodeKind::MaterialOutput {
             return node_id;
         }
     }
 
-    // Spawn a Material Output node if missing
     let node_data = RenderingNodeData {
         kind: RenderingNodeKind::MaterialOutput,
     };
@@ -50,7 +222,11 @@ fn ensure_material_output_in_graph(state: &mut RenderingWindowState) -> NodeId {
     ui_node_id
 }
 
-fn ensure_rendering_graph(editor_ui: &mut EditorUi, atlas: &crate::data::Atlas) -> bool {
+fn ensure_rendering_graph(
+    editor_ui: &mut EditorUi,
+    atlas: &crate::data::Atlas,
+    rendering_pipelines: &mut RenderingPipelines,
+) -> bool {
     let material_ref = editor_ui
         .selected_material
         .and_then(|index| atlas.materials.get(index))
@@ -79,39 +255,42 @@ fn ensure_rendering_graph(editor_ui: &mut EditorUi, atlas: &crate::data::Atlas) 
         });
 
     if material_changed || !has_material_output {
-        rebuild_rendering_graph(editor_ui, material_ref.as_ref());
+        rebuild_rendering_graph(editor_ui, material_ref.as_ref(), rendering_pipelines);
         return true;
     }
 
     false
 }
 
-fn rebuild_rendering_graph(editor_ui: &mut EditorUi, material_ref: Option<&MeshMaterialRef>) {
+fn clear_rendering_graph(state: &mut RenderingWindowState) {
+    state.editor.graph = Default::default();
+    state.editor.node_positions.clear();
+    state.editor.node_order.clear();
+    state.pipeline_node_ids.clear();
+    state.graph_state.input_sockets.clear();
+    state.graph_state.output_sockets.clear();
+    state.graph_state.selected_texture_groups.clear();
+}
+
+fn rebuild_rendering_graph(
+    editor_ui: &mut EditorUi,
+    material_ref: Option<&MeshMaterialRef>,
+    rendering_pipelines: &mut RenderingPipelines,
+) {
     clear_rendering_graph(&mut editor_ui.rendering_window_state);
 
     let Some(material_ref) = material_ref else {
-        // If no material is selected, still spawn a Material Output node so the graph isn't empty
         ensure_material_output_in_graph(&mut editor_ui.rendering_window_state);
         return;
     };
 
-    if let Some(pipeline) = editor_ui.rendering_pipelines.pipeline_for_mut(material_ref) {
-        if pipeline.material_output().is_none() {
-            pipeline.add_node(RenderingNodeKind::MaterialOutput);
-        }
+    let pipeline = rendering_pipelines.add_material(material_ref.clone());
+
+    if pipeline.material_output().is_none() {
+        pipeline.add_node(RenderingNodeKind::MaterialOutput);
     }
 
-    let Some(pipeline) = editor_ui
-        .rendering_pipelines
-        .pipeline_for(material_ref)
-        .cloned()
-    else {
-        // If pipeline storage isn't initialized yet, fallback to spawning Material Output
-        ensure_material_output_in_graph(&mut editor_ui.rendering_window_state);
-        editor_ui.rendering_window_state.loaded_material = Some(material_ref.clone());
-        return;
-    };
-
+    let pipeline = pipeline.clone();
     let mut pipeline_to_ui = HashMap::<PipelineNodeId, NodeId>::new();
 
     for node in &pipeline.nodes {
@@ -229,10 +408,6 @@ fn rebuild_rendering_graph(editor_ui: &mut EditorUi, material_ref: Option<&MeshM
     editor_ui.rendering_window_state.loaded_material = Some(material_ref.clone());
 }
 
-// -----------------------------------------------------------------------------
-// Data types
-// -----------------------------------------------------------------------------
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RenderingDataType {
     Texture,
@@ -254,10 +429,6 @@ impl DataTypeTrait<RenderingGraphState> for RenderingDataType {
         })
     }
 }
-
-// -----------------------------------------------------------------------------
-// Node data
-// -----------------------------------------------------------------------------
 
 #[derive(Clone, Debug)]
 pub struct RenderingNodeData {
@@ -364,7 +535,6 @@ impl NodeDataTrait for RenderingNodeData {
         _graph: &Graph<Self, Self::DataType, Self::ValueType>,
         _user_state: &mut Self::UserState,
     ) -> bool {
-        // Disallow deletion of the Material Output node in the UI
         self.kind != RenderingNodeKind::MaterialOutput
     }
 
@@ -429,99 +599,6 @@ impl NodeDataTrait for RenderingNodeData {
         Vec::new()
     }
 }
-
-fn sync_pipeline_connections(
-    graph: &Graph<RenderingNodeData, RenderingDataType, RenderingValue>,
-    graph_state: &RenderingGraphState,
-    pipeline: &mut RenderingPipeline,
-    node_ids: &HashMap<NodeId, PipelineNodeId>,
-) -> bool {
-    let mut connections = Vec::new();
-
-    for (input_id, output_id) in graph.iter_connections() {
-        let Some(input) = graph.try_get_input(input_id) else {
-            continue;
-        };
-
-        let Some(output) = graph.try_get_output(output_id) else {
-            continue;
-        };
-
-        let Some(&input_node_id) = node_ids.get(&input.node()) else {
-            continue;
-        };
-
-        let Some(&output_node_id) = node_ids.get(&output.node) else {
-            continue;
-        };
-
-        let Some(&input_socket) = graph_state.input_sockets.get(&input_id) else {
-            continue;
-        };
-
-        let Some(&output_socket) = graph_state.output_sockets.get(&output_id) else {
-            continue;
-        };
-
-        connections.push(RenderingConnection {
-            from: PipelineOutput {
-                node_id: output_node_id,
-                socket: output_socket,
-            },
-            to: PipelineInput {
-                node_id: input_node_id,
-                socket: input_socket,
-            },
-        });
-    }
-
-    if pipeline.connections == connections {
-        return false;
-    }
-
-    pipeline.connections = connections;
-
-    true
-}
-
-fn sync_texture_groups(
-    pipeline: &mut RenderingPipeline,
-    node_ids: &HashMap<NodeId, PipelineNodeId>,
-    selected_texture_groups: &HashMap<NodeId, String>,
-) -> bool {
-    let mut changed = false;
-
-    for (&ui_node_id, &pipeline_node_id) in node_ids {
-        let Some(selected_group) = selected_texture_groups.get(&ui_node_id) else {
-            continue;
-        };
-
-        let Some(node) = pipeline.node_mut(pipeline_node_id) else {
-            continue;
-        };
-
-        if node.kind != RenderingNodeKind::Texture {
-            continue;
-        }
-
-        let new_group = if selected_group.is_empty() {
-            None
-        } else {
-            Some(selected_group.clone())
-        };
-
-        if node.texture_group != new_group {
-            node.texture_group = new_group;
-            changed = true;
-        }
-    }
-
-    changed
-}
-
-// -----------------------------------------------------------------------------
-// Values
-// -----------------------------------------------------------------------------
 
 #[derive(Clone, Debug, Default)]
 pub enum RenderingValue {
@@ -598,10 +675,6 @@ pub enum RenderingResponse {}
 
 impl UserResponseTrait for RenderingResponse {}
 
-// -----------------------------------------------------------------------------
-// User state
-// -----------------------------------------------------------------------------
-
 #[derive(Default)]
 pub struct RenderingGraphState {
     pub texture_groups: Vec<TextureGroup>,
@@ -610,10 +683,6 @@ pub struct RenderingGraphState {
     pub input_sockets: HashMap<InputId, RenderingInputSocket>,
     pub output_sockets: HashMap<OutputId, RenderingOutputSocket>,
 }
-
-// -----------------------------------------------------------------------------
-// Node templates
-// -----------------------------------------------------------------------------
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RenderingNodeTemplate {
@@ -625,7 +694,6 @@ impl NodeTemplateIter for RenderingNodeTemplate {
     type Item = Self;
 
     fn all_kinds(&self) -> Vec<Self::Item> {
-        // MaterialOutput is omitted here to prevent creating duplicate Material Output nodes
         vec![
             RenderingNodeTemplate::Texture,
             RenderingNodeTemplate::SplitChannels,
@@ -681,10 +749,6 @@ impl NodeTemplateTrait for RenderingNodeTemplate {
     }
 }
 
-// -----------------------------------------------------------------------------
-// Editor state
-// -----------------------------------------------------------------------------
-
 pub type RenderingEditorState = GraphEditorState<
     RenderingNodeData,
     RenderingDataType,
@@ -692,10 +756,6 @@ pub type RenderingEditorState = GraphEditorState<
     RenderingNodeTemplate,
     RenderingGraphState,
 >;
-
-// -----------------------------------------------------------------------------
-// Window state
-// -----------------------------------------------------------------------------
 
 #[derive(Default)]
 pub struct RenderingWindowState {
@@ -707,108 +767,18 @@ pub struct RenderingWindowState {
     pub loaded_material: Option<MeshMaterialRef>,
 }
 
-// -----------------------------------------------------------------------------
-// Window
-// -----------------------------------------------------------------------------
-
-fn sync_pipeline_nodes(
-    editor_state: &mut RenderingEditorState,
-    pipeline: &mut RenderingPipeline,
-    node_ids: &mut HashMap<NodeId, PipelineNodeId>,
-    graph_state: &mut RenderingGraphState,
-) -> bool {
-    let mut changed = false;
-
-    // 1. Remove non-MaterialOutput pipeline nodes whose UI nodes no longer exist
-    let existing_nodes: Vec<NodeId> = editor_state.graph.iter_nodes().collect();
-
-    let stale_nodes: Vec<(NodeId, PipelineNodeId)> = node_ids
-        .iter()
-        .filter_map(|(&ui_node_id, &pipeline_node_id)| {
-            if existing_nodes.contains(&ui_node_id) {
-                None
-            } else {
-                Some((ui_node_id, pipeline_node_id))
-            }
-        })
-        .collect();
-
-    for (ui_node_id, pipeline_node_id) in stale_nodes {
-        node_ids.remove(&ui_node_id);
-
-        pipeline.nodes.retain(|node| {
-            node.id != pipeline_node_id || node.kind == RenderingNodeKind::MaterialOutput
-        });
-
-        graph_state.selected_texture_groups.remove(&ui_node_id);
-        changed = true;
-    }
-
-    // 2. Add pipeline nodes for newly spawned UI nodes
-    for ui_node_id in editor_state.graph.iter_nodes() {
-        if node_ids.contains_key(&ui_node_id) {
-            continue;
-        }
-
-        let node = &editor_state.graph[ui_node_id];
-
-        if node.user_data.kind == RenderingNodeKind::MaterialOutput {
-            if let Some(mo) = pipeline.material_output() {
-                node_ids.insert(ui_node_id, mo.id);
-            }
-            continue;
-        }
-
-        let pipeline_node_id = pipeline.add_node(node.user_data.kind);
-        node_ids.insert(ui_node_id, pipeline_node_id);
-        changed = true;
-    }
-
-    // 3. Guarantee that Material Output always exists in both pipeline and UI graph
-    let mo_pipeline_id = match pipeline.material_output() {
-        Some(mo) => mo.id,
-        None => pipeline.add_node(RenderingNodeKind::MaterialOutput),
-    };
-
-    let mo_ui_exists = node_ids
-        .iter()
-        .any(|(&ui_id, &pipe_id)| pipe_id == mo_pipeline_id && existing_nodes.contains(&ui_id));
-
-    if !mo_ui_exists {
-        let node_data = RenderingNodeData {
-            kind: RenderingNodeKind::MaterialOutput,
-        };
-
-        let ui_node_id = editor_state.graph.add_node(
-            "Material Output".to_string(),
-            node_data.clone(),
-            |graph, node_id| {
-                node_data.build_node(graph, node_id, graph_state);
-            },
-        );
-
-        node_ids.insert(ui_node_id, mo_pipeline_id);
-        editor_state
-            .node_positions
-            .insert(ui_node_id, egui::pos2(500.0, 200.0));
-        editor_state.node_order.push(ui_node_id);
-        changed = true;
-    }
-
-    changed
-}
-
 pub fn rendering_window(
     ctx: &egui::Context,
     editor_ui: &mut EditorUi,
     atlas: &mut crate::data::Atlas,
+    rendering_pipelines: &mut RenderingPipelines,
 ) -> bool {
     let mut open = editor_ui.show_rendering_window;
 
     editor_ui.rendering_window_state.graph_state.texture_groups =
         editor_ui.project_settings.texture_naming.groups.clone();
 
-    let rebuilt = ensure_rendering_graph(editor_ui, atlas);
+    let rebuilt = ensure_rendering_graph(editor_ui, atlas, rendering_pipelines);
 
     let window_response = egui::Window::new("Rendering")
         .open(&mut open)
@@ -838,16 +808,11 @@ pub fn rendering_window(
 
             if let Some(material_ref) = material_ref {
                 if !rebuilt {
-                    let editor_state = &mut editor_ui.rendering_window_state.editor;
-                    let graph_state = &mut editor_ui.rendering_window_state.graph_state;
-                    let node_ids = &mut editor_ui.rendering_window_state.pipeline_node_ids;
-
-                    if let Some(pipeline) = editor_ui
-                        .rendering_pipelines
-                        .pipeline_for_mut(&material_ref)
-                    {
-                        if sync_rendering_pipeline(editor_state, graph_state, pipeline, node_ids) {
-                            atlas.mark_image_dirty();
+                    if let Some(pipeline) = rendering_pipelines.pipeline_for_mut(&material_ref) {
+                        if sync_rendering_pipeline(&mut editor_ui.rendering_window_state, pipeline)
+                        {
+                            rendering_pipelines.revision =
+                                rendering_pipelines.revision.wrapping_add(1);
                         }
                     }
                 }
@@ -858,68 +823,7 @@ pub fn rendering_window(
 
     editor_ui.show_rendering_window = open;
 
-    // Access .response inside InnerResponse to check if pointer is over the window
     window_response
         .map(|inner_response| inner_response.response.contains_pointer())
         .unwrap_or(false)
-}
-
-fn sync_rendering_pipeline(
-    editor_state: &mut RenderingEditorState,
-    graph_state: &mut RenderingGraphState,
-    pipeline: &mut RenderingPipeline,
-    node_ids: &mut HashMap<NodeId, PipelineNodeId>,
-) -> bool {
-    let mut changed = false;
-
-    if sync_pipeline_nodes(editor_state, pipeline, node_ids, graph_state) {
-        changed = true;
-    }
-
-    if sync_texture_groups(pipeline, node_ids, &graph_state.selected_texture_groups) {
-        changed = true;
-    }
-
-    if sync_pipeline_connections(&editor_state.graph, graph_state, pipeline, node_ids) {
-        changed = true;
-    }
-
-    changed
-}
-
-fn clear_rendering_graph(state: &mut RenderingWindowState) {
-    state.editor.graph = Graph::default();
-
-    state.editor.node_positions.clear();
-    state.editor.node_order.clear();
-
-    state.graph_state.selected_texture_groups.clear();
-    state.graph_state.input_sockets.clear();
-    state.graph_state.output_sockets.clear();
-
-    state.pipeline_node_ids.clear();
-
-    state.loaded_material = None;
-}
-
-fn find_output_id(
-    graph: &Graph<RenderingNodeData, RenderingDataType, RenderingValue>,
-    graph_state: &RenderingGraphState,
-    node_id: NodeId,
-    socket: RenderingOutputSocket,
-) -> Option<OutputId> {
-    graph[node_id]
-        .output_ids()
-        .find(|output_id| graph_state.output_sockets.get(output_id) == Some(&socket))
-}
-
-fn find_input_id(
-    graph: &Graph<RenderingNodeData, RenderingDataType, RenderingValue>,
-    graph_state: &RenderingGraphState,
-    node_id: NodeId,
-    socket: RenderingInputSocket,
-) -> Option<InputId> {
-    graph[node_id]
-        .input_ids()
-        .find(|input_id| graph_state.input_sockets.get(input_id) == Some(&socket))
 }

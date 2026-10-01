@@ -6,6 +6,7 @@ use bevy_egui::egui;
 use crate::{
     data::Atlas,
     mesh::{MeshLight, MeshSceneState, viewport::MeshPreview},
+    pipeline::RenderingPipelines,
     project,
     project_settings::ProjectSettings,
     ui::EditorUi,
@@ -64,10 +65,13 @@ pub fn execute_action(
     mesh_scene_state: &mut MeshSceneState,
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
+    rendering_pipelines: &mut RenderingPipelines,
 ) {
     match action {
         EditorAction::NewAtlas => {
             *atlas = Atlas::default();
+            *rendering_pipelines = RenderingPipelines::default();
+
             editor_ui.selected_material = None;
             editor_ui.selected_mesh = None;
 
@@ -94,10 +98,16 @@ pub fn execute_action(
 
         EditorAction::OpenProject => match project::open_project_dialog() {
             Ok(Some(path)) => match project::ProjectFile::load(&path) {
-                Ok((mut loaded_atlas, project_settings, project_meshes)) => {
+                Ok((
+                    mut loaded_atlas,
+                    project_settings,
+                    project_meshes,
+                    loaded_rendering_pipelines,
+                )) => {
                     loaded_atlas.load_textures(images);
 
                     *atlas = loaded_atlas;
+                    *rendering_pipelines = loaded_rendering_pipelines;
                     editor_ui.project_settings = project_settings;
                     editor_ui.project_path = Some(path.clone());
 
@@ -154,6 +164,7 @@ pub fn execute_action(
                     atlas,
                     &editor_ui.project_settings,
                     mesh_scene_state,
+                    rendering_pipelines,
                 ) {
                     Ok(()) => {
                         info!("Project saved: {}", path.display());
@@ -168,6 +179,7 @@ pub fn execute_action(
                     atlas,
                     &editor_ui.project_settings,
                     mesh_scene_state,
+                    rendering_pipelines,
                 ) {
                     Ok(Some(path)) => {
                         info!("Project saved: {}", path.display());
@@ -190,6 +202,7 @@ pub fn execute_action(
                 atlas,
                 &editor_ui.project_settings,
                 mesh_scene_state,
+                rendering_pipelines,
             ) {
                 Ok(Some(path)) => {
                     info!("Project saved: {}", path.display());

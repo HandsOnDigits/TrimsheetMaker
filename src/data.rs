@@ -1,6 +1,6 @@
 use rayon::prelude::*;
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 use bevy::{
     asset::RenderAssetUsages,
@@ -19,7 +19,7 @@ use crate::transform::{Rotation, Transform};
 
 use super::{
     mesh::import::MeshMaterialRef,
-    pipeline::{RenderingPipelines, RenderingTextureResult},
+    pipeline::{RenderingOutputSocket, RenderingPipelines},
 };
 
 #[derive(Clone)]
@@ -85,7 +85,7 @@ impl TextureNaming {
     }
 
     pub fn group_for_filename(&self, filename: &str) -> Option<String> {
-        let stem = std::path::Path::new(filename)
+        let stem = Path::new(filename)
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or(filename);
@@ -174,33 +174,18 @@ fn atlas_source_image_from_image(image: &Image) -> Option<AtlasSourceImage> {
 
 fn resolve_rendering_texture(
     material: &AtlasMaterial,
-    pipeline: &super::pipeline::RenderingPipeline,
-    result: &super::pipeline::RenderingTextureResult,
+    group_name: &str,
     images: &Assets<Image>,
 ) -> Option<AtlasSourceImage> {
-    match result {
-        RenderingTextureResult::Texture { source } => {
-            let node = pipeline.node(source.node_id)?;
+    let texture = material
+        .textures
+        .iter()
+        .find(|texture| texture.id == group_name)?;
 
-            let texture_group = node.texture_group.as_deref()?;
+    let handle = texture.image.as_ref()?;
+    let image = images.get(handle)?;
 
-            let texture = material
-                .textures
-                .iter()
-                .find(|texture| texture.id == texture_group)?;
-
-            let handle = texture.image.as_ref()?;
-            let image = images.get(handle)?;
-
-            atlas_source_image_from_image(image)
-        }
-
-        RenderingTextureResult::Channel { source, channel } => {
-            let source = resolve_rendering_texture(material, pipeline, source, images)?;
-
-            bake_channel_source(&source, *channel)
-        }
-    }
+    atlas_source_image_from_image(image)
 }
 
 fn bake_channel_source(
@@ -272,11 +257,20 @@ fn create_atlas_build_input(
         .materials
         .iter()
         .filter_map(|material| {
-            let material_ref = material.material_ref.as_ref()?;
+            let Some(material_ref) = material.material_ref.as_ref() else {
+                warn!("Atlas material '{}' has no MeshMaterialRef", material.name);
+                return None;
+            };
 
-            let pipeline = rendering_pipelines.pipeline_for(material_ref)?;
+            let Some(pipeline) = rendering_pipelines.pipeline_for(material_ref) else {
+                warn!(
+                    "Atlas material '{}' has no rendering pipeline for {:?}",
+                    material.name, material_ref
+                );
+                return None;
+            };
 
-            let result = match pipeline.results() {
+            let result = match pipeline.evaluate() {
                 Ok(result) => result,
                 Err(error) => {
                     error!(
@@ -290,23 +284,56 @@ fn create_atlas_build_input(
             let mut maps = BTreeMap::new();
 
             let outputs = [
-                (AtlasMap::BaseColor, result.base_color.as_ref()),
-                (AtlasMap::Normal, result.normal.as_ref()),
-                (AtlasMap::Height, result.height.as_ref()),
+                (
+                    AtlasMap::BaseColor,
+                    result
+                        .base_color_group
+                        .as_ref()
+                        .map(|g| (g.as_str(), RenderingOutputSocket::Texture)),
+                ),
+                (
+                    AtlasMap::Normal,
+                    result
+                        .normal_group
+                        .as_ref()
+                        .map(|g| (g.as_str(), RenderingOutputSocket::Texture)),
+                ),
+                (
+                    AtlasMap::Height,
+                    result
+                        .height_group
+                        .as_ref()
+                        .map(|c| (c.texture_group.as_str(), c.socket)),
+                ),
                 (
                     AtlasMap::AmbientOcclusion,
-                    result.ambient_occlusion.as_ref(),
+                    result
+                        .ao_group
+                        .as_ref()
+                        .map(|c| (c.texture_group.as_str(), c.socket)),
                 ),
-                (AtlasMap::Roughness, result.roughness.as_ref()),
-                (AtlasMap::Metallic, result.metallic.as_ref()),
+                (
+                    AtlasMap::Roughness,
+                    result
+                        .roughness_group
+                        .as_ref()
+                        .map(|c| (c.texture_group.as_str(), c.socket)),
+                ),
+                (
+                    AtlasMap::Metallic,
+                    result
+                        .metallic_group
+                        .as_ref()
+                        .map(|c| (c.texture_group.as_str(), c.socket)),
+                ),
             ];
 
-            for (map, output) in outputs {
-                let Some(output) = output else {
+            for (map, target) in outputs {
+                let Some((group_name, socket)) = target else {
                     continue;
                 };
 
-                let Some(source) = resolve_rendering_texture(material, pipeline, output, images)
+                let Some(mut source) = resolve_rendering_texture(material, group_name, images)
                 else {
                     warn!(
                         "Failed to resolve {:?} for material '{}'",
@@ -314,6 +341,17 @@ fn create_atlas_build_input(
                     );
                     continue;
                 };
+
+                if socket != RenderingOutputSocket::Texture {
+                    let Some(baked) = bake_channel_source(&source, socket) else {
+                        warn!(
+                            "Failed to bake channel {:?} for material '{}'",
+                            socket, material.name
+                        );
+                        continue;
+                    };
+                    source = baked;
+                }
 
                 maps.insert(map, source);
             }

@@ -1,5 +1,14 @@
 #import bevy_pbr::forward_io::VertexOutput
 
+struct MeshPreviewGraph {
+    base_color: vec4<f32>,
+    normal: vec4<f32>,
+    height: vec4<f32>,
+    ambient_occlusion: vec4<f32>,
+    roughness: vec4<f32>,
+    metallic: vec4<f32>,
+};
+
 @group(#{MATERIAL_BIND_GROUP}) @binding(0)
 var base_color_texture: texture_2d<f32>;
 
@@ -21,6 +30,34 @@ var roughness_texture: texture_2d<f32>;
 @group(#{MATERIAL_BIND_GROUP}) @binding(6)
 var metallic_texture: texture_2d<f32>;
 
+@group(#{MATERIAL_BIND_GROUP}) @binding(7)
+var<uniform> graph: MeshPreviewGraph;
+
+
+fn read_channel(
+    value: vec4<f32>,
+    channel: u32,
+) -> f32 {
+    switch channel {
+        case 0u: {
+            return value.r;
+        }
+
+        case 1u: {
+            return value.g;
+        }
+
+        case 2u: {
+            return value.b;
+        }
+
+        default: {
+            return value.a;
+        }
+    }
+}
+
+
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let uv = in.uv;
@@ -33,8 +70,8 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // Convert normalized UV coordinates to atlas texel coordinates.
     //
-    // This is temporary; these dimensions should eventually come
-    // from the material/atlas rather than being hard-coded.
+    // Temporary hard-coded dimensions. These should eventually be
+    // supplied as part of the material/atlas data.
     let atlas_size = vec2<f32>(544.0, 3616.0);
 
     let pixel = vec2<i32>(
@@ -51,29 +88,50 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
         0,
     );
 
-    let height = textureLoad(
+    let height_sample = textureLoad(
         height_texture,
         pixel,
         0,
-    ).r;
+    );
 
-    let ambient_occlusion = textureLoad(
+    let ambient_occlusion_sample = textureLoad(
         ambient_occlusion_texture,
         pixel,
         0,
-    ).r;
+    );
 
-    let roughness = textureLoad(
+    let roughness_sample = textureLoad(
         roughness_texture,
         pixel,
         0,
-    ).r;
+    );
 
-    let metallic = textureLoad(
+    let metallic_sample = textureLoad(
         metallic_texture,
         pixel,
         0,
-    ).r;
+    );
+
+    // The graph determines which channel supplies each scalar value.
+    let height = read_channel(
+        height_sample,
+        u32(graph.height.x),
+    );
+    
+    let ambient_occlusion = read_channel(
+        ambient_occlusion_sample,
+        u32(graph.ambient_occlusion.x),
+    );
+    
+    let roughness = read_channel(
+        roughness_sample,
+        u32(graph.roughness.x),
+    );
+    
+    let metallic = read_channel(
+        metallic_sample,
+        u32(graph.metallic.x),
+    );
 
     // Convert the normal texture from [0, 1] to [-1, 1].
     let normal = normalize(
@@ -101,8 +159,10 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
         base_color.rgb *
         (lighting * diffuse_factor + metallic);
 
-    let _roughness = roughness;
+    // These are currently evaluated so the graph is functional,
+    // but height/roughness are not yet affecting the lighting model.
     let _height = height;
+    let _roughness = roughness;
 
     return vec4<f32>(
         color,

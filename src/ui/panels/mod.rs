@@ -27,6 +27,7 @@ use crate::{
         MeshLight, MeshSceneState,
         viewport::{MeshPreview, MeshViewportInput, MeshViewportLayout},
     },
+    pipeline::RenderingPipelines,
     ui::windows,
 };
 
@@ -44,6 +45,7 @@ pub fn editor_ui(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut mesh_scene_state: ResMut<MeshSceneState>,
+    mut rendering_pipelines: ResMut<RenderingPipelines>,
 ) -> Result {
     mesh_input.pointer_over_ui = false;
     mesh_input.floating_window_dragging = false;
@@ -89,6 +91,7 @@ pub fn editor_ui(
                 &mut mesh_scene_state,
                 &mut commands,
                 &mut meshes,
+                &mut rendering_pipelines,
             );
         });
 
@@ -239,8 +242,12 @@ pub fn editor_ui(
     );
 
     // Rendering
-    mesh_input.floating_window_dragging |=
-        windows::rendering::rendering_window(ctx, &mut editor_ui, &mut atlas);
+    mesh_input.floating_window_dragging |= windows::rendering::rendering_window(
+        ctx,
+        &mut editor_ui,
+        &mut atlas,
+        &mut rendering_pipelines,
+    );
 
     Ok(())
 }

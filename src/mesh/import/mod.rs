@@ -67,7 +67,7 @@ pub struct MeshPrimitive {
     pub material: Option<MeshMaterialRef>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MeshMaterialRef {
     /// Identifier belonging to the imported scene.
     ///

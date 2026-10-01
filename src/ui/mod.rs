@@ -20,6 +20,7 @@ pub struct EditorUiPlugin;
 impl Plugin for EditorUiPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<EditorUi>()
+            .init_resource::<RenderingPipelines>()
             .init_resource::<data::Atlas>()
             .add_systems(Startup, (setup, load_editor_settings))
             .add_systems(
@@ -54,6 +55,7 @@ fn apply_editor_actions(
     mut mesh_scene_state: ResMut<MeshSceneState>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut rendering_pipelines: ResMut<RenderingPipelines>,
 ) {
     for message in messages.read() {
         hotkeys::execute_action(
@@ -66,6 +68,7 @@ fn apply_editor_actions(
             &mut mesh_scene_state,
             &mut commands,
             &mut meshes,
+            &mut rendering_pipelines,
         );
     }
 }
@@ -73,8 +76,6 @@ fn apply_editor_actions(
 #[derive(Resource)]
 pub struct EditorUi {
     pub project_path: Option<std::path::PathBuf>,
-
-    pub rendering_pipelines: RenderingPipelines,
 
     pub selected_material: Option<usize>,
     pub selected_mesh: Option<u64>,
@@ -128,8 +129,6 @@ impl Default for EditorUi {
     fn default() -> Self {
         Self {
             project_path: None,
-
-            rendering_pipelines: RenderingPipelines::default(),
 
             selected_material: None,
             selected_mesh: None,

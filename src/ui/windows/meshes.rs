@@ -196,11 +196,23 @@ pub fn meshes_window(
                                 .iter_mut()
                                 .find(|material| material.index == material_index)
                             {
-                                material.unassign_mesh(
+                                let material_ref = mesh_scene_state
+                                    .get(selection.mesh_id)
+                                    .and_then(|mesh| mesh.scene.objects.get(selection.object_index))
+                                    .and_then(|object| {
+                                        object.primitives.get(selection.primitive_index)
+                                    })
+                                    .and_then(|primitive| primitive.material.clone());
+
+                                material.assign_mesh(
                                     selection.mesh_id,
                                     selection.object_index,
                                     selection.primitive_index,
                                 );
+
+                                if material.material_ref.is_none() {
+                                    material.material_ref = material_ref;
+                                }
                             }
                         }
                     }
@@ -219,9 +231,9 @@ pub fn meshes_window(
                                     selection.object_index,
                                     selection.primitive_index,
                                 );
-
-                                atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
                             }
+
+                            atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
 
                             // Assign it to the selected material.
                             if let Some(material) = atlas

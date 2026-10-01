@@ -1,5 +1,5 @@
 pub mod import;
-use import::MeshScene;
+use import::{MeshMaterialRef, MeshScene};
 
 pub mod unwrap;
 
@@ -17,6 +17,7 @@ pub struct ImportedMeshPart {
     pub part_index: usize,
     pub primitive_index: Option<usize>,
     pub source_mesh: Option<Handle<Mesh>>,
+    pub material: Option<MeshMaterialRef>,
 }
 
 #[derive(Debug, Clone)]
@@ -302,6 +303,7 @@ pub fn spawn_mesh_scene(
                     part_index,
                     primitive_index: None,
                     source_mesh: None,
+                    material: None,
                 },
             ))
             .id();
@@ -331,6 +333,7 @@ pub fn spawn_mesh_scene(
                         part_index,
                         primitive_index: Some(primitive_index),
                         source_mesh: Some(mesh_handle),
+                        material: primitive.material.clone(),
                     },
                 ));
             });
