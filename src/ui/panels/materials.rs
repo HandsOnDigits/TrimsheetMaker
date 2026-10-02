@@ -5,10 +5,10 @@ use super::EditorUi;
 use crate::data::{Atlas, AtlasMaterial};
 
 pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
-    ui.heading("Materials");
+    ui.heading("Atlas Regions");
 
     ui.horizontal(|ui| {
-        ui.label(format!("{} materials", atlas.materials.len()));
+        ui.label(format!("{} regions", atlas.materials.len()));
     });
 
     ui.separator();
@@ -126,6 +126,7 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
             .texture_naming
             .groups
             .remove(index);
+
         editor_ui.suffix_inputs.remove(&removed_id);
 
         if editor_ui.project_settings.preview_texture_group.as_deref() == Some(removed_id.as_str())
@@ -161,25 +162,25 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
     egui::ScrollArea::vertical()
         .id_salt("materials_scroll")
         .show(ui, |ui| {
-            let mut clicked = None;
+            let mut inspected = None;
 
-            for material in &atlas.materials {
-                let selected = editor_ui.selected_material == Some(material.index);
+            for atlas_material in &atlas.materials {
+                let active = editor_ui.inspected_atlas_region == Some(atlas_material.index);
 
                 if material_row(
                     ui,
-                    material,
-                    selected,
+                    atlas_material,
+                    active,
                     editor_ui.project_settings.preview_texture_group.as_deref(),
                 )
                 .clicked()
                 {
-                    clicked = Some(material.index);
+                    inspected = Some(atlas_material.index);
                 }
             }
 
-            if let Some(index) = clicked {
-                editor_ui.selected_material = Some(index);
+            if let Some(index) = inspected {
+                editor_ui.inspected_atlas_region = Some(index);
             }
         });
 
@@ -188,19 +189,20 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
     if ui
         .add_sized(
             [ui.available_width(), 32.0],
-            egui::Button::new("+ Add Material"),
+            egui::Button::new("+ Add Atlas Region"),
         )
         .clicked()
     {
         let index = atlas.add_placeholder();
-        editor_ui.selected_material = Some(index);
+
+        editor_ui.inspected_atlas_region = Some(index);
     }
 }
 
 fn material_row(
     ui: &mut egui::Ui,
     material: &AtlasMaterial,
-    selected: bool,
+    active: bool,
     preview_texture_group: Option<&str>,
 ) -> egui::Response {
     let height = 48.0;
@@ -208,7 +210,7 @@ fn material_row(
 
     let (rect, response) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
 
-    if selected {
+    if active {
         ui.painter()
             .rect_filled(rect, 4.0, ui.visuals().selection.bg_fill);
     } else if response.hovered() {
@@ -216,17 +218,14 @@ fn material_row(
             .rect_filled(rect, 4.0, ui.visuals().widgets.hovered.bg_fill);
     }
 
-    // Thumbnail
     let thumbnail_rect = egui::Rect::from_min_size(
         rect.left_top() + egui::vec2(6.0, 6.0),
         egui::vec2(36.0, 36.0),
     );
 
-    // Background behind the preview.
     ui.painter()
         .rect_filled(thumbnail_rect, 3.0, egui::Color32::from_gray(55));
 
-    // Find the texture belonging to the selected preview group.
     let preview_texture = preview_texture_group.and_then(|group_id| {
         material
             .textures
@@ -243,7 +242,6 @@ fn material_row(
             egui::Color32::WHITE,
         );
     } else {
-        // No texture for this material/group.
         ui.painter().text(
             thumbnail_rect.center(),
             egui::Align2::CENTER_CENTER,

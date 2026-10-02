@@ -142,42 +142,48 @@ pub fn meshes_window(
 
             ui.separator();
 
-            let can_assign =
-                editor_ui.selected_material.is_some() && mesh_preview.selected_primitive.is_some();
+            /*
+             * Atlas assignment
+             *
+             * The selected mesh primitive is independent from the atlas
+             * region being inspected. The inspected atlas region is the
+             * target of an assignment; it is not a material selection.
+             */
+            let selected_primitive = mesh_preview.selected_primitive;
 
-            if let Some(material_index) = editor_ui.selected_material {
-                if let Some(material) = atlas
-                    .materials
-                    .iter()
-                    .find(|material| material.index == material_index)
-                {
-                    ui.label(format!("Material: {}", material.name));
-                }
-            } else {
-                ui.label("Select a material first");
-            }
-
-            if mesh_preview.selected_primitive.is_none() {
-                ui.label("Select a mesh first");
-            }
-
-            let is_assigned = if let (Some(material_index), Some(selection)) =
-                (editor_ui.selected_material, mesh_preview.selected_primitive)
-            {
+            let inspected_region = editor_ui.inspected_atlas_region.and_then(|index| {
                 atlas
                     .materials
                     .iter()
-                    .find(|material| material.index == material_index)
-                    .is_some_and(|material| {
-                        material.has_mesh_assignment(
-                            selection.mesh_id,
-                            selection.object_index,
-                            selection.primitive_index,
-                        )
-                    })
+                    .find(|material| material.index == index)
+            });
+
+            if let Some(region) = inspected_region {
+                ui.label(format!("Atlas Region: {}", region.name));
             } else {
-                false
-            };
+                ui.label("Inspect an atlas region first");
+            }
+
+            if selected_primitive.is_none() {
+                ui.label("Select a mesh primitive");
+            }
+
+            let can_assign = inspected_region.is_some() && selected_primitive.is_some();
+
+            /*
+             * Determine whether the selected primitive is currently
+             * assigned to the inspected atlas region.
+             */
+            let is_assigned =
+                if let (Some(region), Some(selection)) = (inspected_region, selected_primitive) {
+                    region.has_mesh_assignment(
+                        selection.mesh_id,
+                        selection.object_index,
+                        selection.primitive_index,
+                    )
+                } else {
+                    false
+                };
 
             ui.horizontal(|ui| {
                 if is_assigned {
@@ -188,83 +194,66 @@ pub fn meshes_window(
                     );
 
                     if ui.button("Unassign").clicked() {
-                        if let (Some(material_index), Some(selection)) =
-                            (editor_ui.selected_material, mesh_preview.selected_primitive)
-                        {
-                            if let Some(material) = atlas
-                                .materials
-                                .iter_mut()
-                                .find(|material| material.index == material_index)
-                            {
-                                material.unassign_mesh(
-                                    selection.mesh_id,
-                                    selection.object_index,
-                                    selection.primitive_index,
-                                );
+                        if let Some(selection) = selected_primitive {
+                            if let Some(region_index) = editor_ui.inspected_atlas_region {
+                                if let Some(region) = atlas
+                                    .materials
+                                    .iter_mut()
+                                    .find(|region| region.index == region_index)
+                                {
+                                    region.unassign_mesh(
+                                        selection.mesh_id,
+                                        selection.object_index,
+                                        selection.primitive_index,
+                                    );
 
-                                // If this was the last mesh using this atlas material,
-                                // the material no longer has a mesh-material reference.
-                                if material.mesh_assignments.is_empty() {
-                                    material.material_ref = None;
+                                    atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
                                 }
-
-                                atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
                             }
                         }
                     }
                 } else {
                     let response =
-                        ui.add_enabled(can_assign, egui::Button::new("Assign to Material"));
+                        ui.add_enabled(can_assign, egui::Button::new("Assign to Atlas Region"));
 
                     if response.clicked() {
-                        if let (Some(material_index), Some(selection)) =
-                            (editor_ui.selected_material, mesh_preview.selected_primitive)
+                        let Some(selection) = selected_primitive else {
+                            return;
+                        };
+
+                        let Some(region_index) = editor_ui.inspected_atlas_region else {
+                            return;
+                        };
+
+                        /*
+                         * Remove this primitive from every atlas region
+                         * before assigning it to the new region.
+                         *
+                         * This maintains the invariant that a primitive
+                         * has at most one atlas assignment.
+                         */
+                        for region in &mut atlas.materials {
+                            region.unassign_mesh(
+                                selection.mesh_id,
+                                selection.object_index,
+                                selection.primitive_index,
+                            );
+                        }
+
+                        /*
+                         * Assign the primitive to the inspected atlas
+                         * region.
+                         */
+                        if let Some(region) = atlas
+                            .materials
+                            .iter_mut()
+                            .find(|region| region.index == region_index)
                         {
-                            /*
-                             * Get the source MeshMaterialRef from the selected
-                             * mesh primitive BEFORE mutably borrowing the atlas.
-                             */
-                            let material_ref = mesh_scene_state
-                                .get(selection.mesh_id)
-                                .and_then(|mesh| mesh.scene.objects.get(selection.object_index))
-                                .and_then(|object| object.primitives.get(selection.primitive_index))
-                                .and_then(|primitive| primitive.material.clone());
-
-                            /*
-                             * Remove this primitive from every existing atlas material.
-                             */
-                            for material in &mut atlas.materials {
-                                material.unassign_mesh(
-                                    selection.mesh_id,
-                                    selection.object_index,
-                                    selection.primitive_index,
-                                );
-                            }
-
-                            /*
-                             * Assign it to the selected atlas material.
-                             */
-                            if let Some(material) = atlas
-                                .materials
-                                .iter_mut()
-                                .find(|material| material.index == material_index)
-                            {
-                                material.assign_mesh(
-                                    selection.mesh_id,
-                                    selection.object_index,
-                                    selection.primitive_index,
-                                );
-
-                                /*
-                                 * The atlas material represents this source mesh
-                                 * material. Preserve the first MeshMaterialRef for
-                                 * the atlas material so the rendering pipeline can
-                                 * be resolved later.
-                                 */
-                                if material.material_ref.is_none() {
-                                    material.material_ref = material_ref;
-                                }
-                            }
+                            region.assign_mesh(
+                                selection.mesh_id,
+                                selection.object_index,
+                                selection.primitive_index,
+                            );
 
                             atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
                         }
@@ -290,8 +279,15 @@ pub fn meshes_window(
                         }
                     }
 
-                    for material in &mut atlas.materials {
-                        material
+                    /*
+                     * Remove assignments belonging to the deleted mesh.
+                     *
+                     * Do not modify AtlasMaterial::material_ref here.
+                     * The source material/pipeline identity is independent
+                     * from whether a mesh currently uses the atlas region.
+                     */
+                    for region in &mut atlas.materials {
+                        region
                             .mesh_assignments
                             .retain(|assignment| assignment.mesh_id != selected_id);
                     }

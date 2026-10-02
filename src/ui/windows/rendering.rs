@@ -1,5 +1,6 @@
 use std::{borrow::Cow, collections::HashMap, collections::HashSet};
 
+use bevy::prelude::*;
 use bevy_egui::egui;
 
 use egui_node_editor::{
@@ -11,8 +12,8 @@ use egui_node_editor::{
 };
 
 use crate::{
-    data::TextureGroup,
-    mesh::import::MeshMaterialRef,
+    data::{Atlas, TextureGroup},
+    mesh::{MeshPrimitiveSelection, MeshSceneState, import::MeshMaterialRef},
     pipeline::{
         PipelineInput, PipelineNodeId, PipelineOutput, RenderingConnection, RenderingInputSocket,
         RenderingNodeKind, RenderingOutputSocket, RenderingPipeline, RenderingPipelines,
@@ -224,31 +225,25 @@ fn ensure_material_output_in_graph(state: &mut RenderingWindowState) -> NodeId {
 
 fn ensure_rendering_graph(
     editor_ui: &mut EditorUi,
-    atlas: &crate::data::Atlas,
+    mesh_scene_state: &MeshSceneState,
+    selection: Option<MeshPrimitiveSelection>,
     rendering_pipelines: &mut RenderingPipelines,
 ) -> bool {
-    let material_ref = editor_ui
-        .selected_material
-        .and_then(|index| atlas.materials.get(index))
-        .and_then(|material| material.material_ref.clone());
+    let material_ref =
+        selection.and_then(|selection| primitive_material_ref(mesh_scene_state, selection));
 
-    let material_changed = match (
-        &editor_ui.rendering_window_state.loaded_material,
-        &material_ref,
-    ) {
-        (Some(loaded), Some(current)) => loaded.id != current.id,
-        (None, Some(_)) => true,
-        (Some(_), None) => true,
-        (None, None) => false,
-    };
+    let loaded_material_ref = editor_ui
+        .rendering_window_state
+        .loaded_material_ref
+        .as_ref();
 
-    if material_changed {
-        rebuild_rendering_graph(editor_ui, material_ref.as_ref(), rendering_pipelines);
-
-        return true;
+    if loaded_material_ref == material_ref.as_ref() {
+        return false;
     }
 
-    false
+    rebuild_rendering_graph(editor_ui, material_ref.as_ref(), rendering_pipelines);
+
+    true
 }
 
 fn clear_rendering_graph(state: &mut RenderingWindowState) {
@@ -270,17 +265,15 @@ fn rebuild_rendering_graph(
 
     let Some(material_ref) = material_ref else {
         ensure_material_output_in_graph(&mut editor_ui.rendering_window_state);
-        editor_ui.rendering_window_state.loaded_material = None;
+
+        editor_ui.rendering_window_state.loaded_material_ref = None;
+
         return;
     };
 
-    let pipeline = rendering_pipelines.add_material(material_ref.clone());
-
-    if pipeline.material_output().is_none() {
-        pipeline.add_node(RenderingNodeKind::MaterialOutput);
-    }
-
-    let pipeline = pipeline.clone();
+    let pipeline = rendering_pipelines
+        .add_material(material_ref.clone())
+        .clone();
 
     let mut pipeline_to_ui = HashMap::<PipelineNodeId, NodeId>::new();
 
@@ -394,7 +387,7 @@ fn rebuild_rendering_graph(
             .add_connection(output_id, input_id);
     }
 
-    editor_ui.rendering_window_state.loaded_material = Some(material_ref.clone());
+    editor_ui.rendering_window_state.loaded_material_ref = Some(material_ref.clone());
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -753,13 +746,26 @@ pub struct RenderingWindowState {
 
     pub pipeline_node_ids: HashMap<NodeId, PipelineNodeId>,
 
-    pub loaded_material: Option<MeshMaterialRef>,
+    pub loaded_material_ref: Option<MeshMaterialRef>,
+}
+
+pub fn primitive_material_ref(
+    scene_state: &MeshSceneState,
+    selection: MeshPrimitiveSelection,
+) -> Option<MeshMaterialRef> {
+    let mesh = scene_state.get(selection.mesh_id)?;
+    let object = mesh.scene.objects.get(selection.object_index)?;
+    let primitive = object.primitives.get(selection.primitive_index)?;
+
+    primitive.material.clone()
 }
 
 pub fn rendering_window(
     ctx: &egui::Context,
     editor_ui: &mut EditorUi,
-    atlas: &mut crate::data::Atlas,
+    mesh_scene_state: &MeshSceneState,
+    mesh_preview: &crate::mesh::viewport::MeshPreview,
+    atlas: &mut Atlas,
     rendering_pipelines: &mut RenderingPipelines,
 ) -> bool {
     let mut open = editor_ui.show_rendering_window;
@@ -767,7 +773,10 @@ pub fn rendering_window(
     editor_ui.rendering_window_state.graph_state.texture_groups =
         editor_ui.project_settings.texture_naming.groups.clone();
 
-    let rebuilt = ensure_rendering_graph(editor_ui, atlas, rendering_pipelines);
+    let selection = mesh_preview.selected_primitive;
+
+    let rebuilt =
+        ensure_rendering_graph(editor_ui, mesh_scene_state, selection, rendering_pipelines);
 
     let window_response = egui::Window::new("Rendering")
         .open(&mut open)
@@ -783,32 +792,33 @@ pub fn rendering_window(
 
             ui.separator();
 
-            let response = editor_ui.rendering_window_state.editor.draw_graph_editor(
+            let _ = editor_ui.rendering_window_state.editor.draw_graph_editor(
                 ui,
                 RenderingNodeTemplate::Texture,
                 &mut editor_ui.rendering_window_state.graph_state,
                 Vec::new(),
             );
+        });
 
-            let material_ref = editor_ui
-                .selected_material
-                .and_then(|index| atlas.materials.get(index))
-                .and_then(|material| material.material_ref.clone());
+    // The graph editor has now processed this frame's edits.
+    //
+    // Do not sync the UI graph back into the pipeline during the
+    // same frame in which the graph was rebuilt from the pipeline.
+    if !rebuilt {
+        if let Some(material_ref) =
+            selection.and_then(|selection| primitive_material_ref(mesh_scene_state, selection))
+        {
+            if let Some(pipeline) = rendering_pipelines.pipeline_for_mut(&material_ref) {
+                if sync_rendering_pipeline(&mut editor_ui.rendering_window_state, pipeline) {
+                    rendering_pipelines.mark_changed();
 
-            if let Some(material_ref) = material_ref {
-                if !rebuilt {
-                    if let Some(pipeline) = rendering_pipelines.pipeline_for_mut(&material_ref) {
-                        if sync_rendering_pipeline(&mut editor_ui.rendering_window_state, pipeline)
-                        {
-                            rendering_pipelines.revision =
-                                rendering_pipelines.revision.wrapping_add(1);
-                        }
-                    }
+                    // The rendering graph determines which source textures
+                    // are baked into the semantic atlas maps.
+                    atlas.mark_image_dirty();
                 }
             }
-
-            let _ = response;
-        });
+        }
+    }
 
     editor_ui.show_rendering_window = open;
 

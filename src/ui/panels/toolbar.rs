@@ -180,11 +180,11 @@ pub fn toolbar(
             if menu_action_button(
                 ui,
                 hotkeys,
-                EditorAction::RemoveSelectedMaterial,
+                EditorAction::RemoveAtlasRegion,
                 "Remove Selected",
             ) {
                 execute_action(
-                    EditorAction::RemoveSelectedMaterial,
+                    EditorAction::RemoveAtlasRegion,
                     editor_ui,
                     atlas,
                     images,

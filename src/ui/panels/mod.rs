@@ -245,6 +245,8 @@ pub fn editor_ui(
     mesh_input.floating_window_dragging |= windows::rendering::rendering_window(
         ctx,
         &mut editor_ui,
+        &mesh_scene_state,
+        &mesh_preview,
         &mut atlas,
         &mut rendering_pipelines,
     );

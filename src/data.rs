@@ -534,8 +534,6 @@ impl Atlas {
             mesh_assignments: Vec::new(),
         });
 
-        self.uv_revision = self.uv_revision.wrapping_add(1);
-
         index
     }
 
@@ -934,12 +932,8 @@ fn atlas_destination_rect(transform: Transform) -> Option<(i64, i64, usize, usiz
 }
 
 fn rebuild_atlas_map(input: &AtlasBuildInput, map: AtlasMap) -> Image {
-    println!("REBUILD MAP: {:?}", map);
-
     for material in &input.materials {
         let source = find_material_texture(material, map);
-
-        println!("  SOURCE {:?}: found={}", map, source.is_some());
     }
 
     let width = input.width;
@@ -1039,23 +1033,10 @@ fn rebuild_atlas_map(input: &AtlasBuildInput, map: AtlasMap) -> Image {
             }
         }
 
-        println!(
-            "{:?}: first 32 bytes = {:?}",
-            map,
-            &atlas_data[..atlas_data.len().min(32)]
-        );
-
         let non_zero = atlas_data
             .chunks_exact(16)
             .filter(|pixel| pixel[..12].iter().any(|&byte| byte != 0))
             .count();
-
-        println!(
-            "{:?}: {} / {} pixels contain non-zero RGB",
-            map,
-            non_zero,
-            atlas_data.len() / 16
-        );
 
         let mut image = Image::new(
             Extent3d {
@@ -1178,35 +1159,7 @@ pub fn rebuild_atlas_maps(
     images: &mut Assets<Image>,
     rendering_pipelines: &RenderingPipelines,
 ) {
-    println!(
-        "REBUILD ATLAS: {}x{}, materials={}",
-        atlas.width,
-        atlas.height,
-        atlas.materials.len()
-    );
-
     let input = create_atlas_build_input(atlas, images, rendering_pipelines);
-
-    println!(
-        "ATLAS INPUT: materials={}, maps={}",
-        input.materials.len(),
-        input
-            .materials
-            .iter()
-            .map(|material| material.maps.len())
-            .sum::<usize>()
-    );
-
-    for material in &input.materials {
-        println!(
-            "  MATERIAL: transform=({}, {}) {}x{} maps={:?}",
-            material.transform.x,
-            material.transform.y,
-            material.transform.width,
-            material.transform.height,
-            material.maps.keys().collect::<Vec<_>>(),
-        );
-    }
 
     let maps = [
         AtlasMap::BaseColor,
@@ -1222,37 +1175,14 @@ pub fn rebuild_atlas_maps(
         .map(|map| (*map, rebuild_atlas_map(&input, *map)))
         .collect();
 
-    for (map, image) in &generated {
-        println!(
-            "ATLAS GENERATED: {:?} {}x{} data={}",
-            map,
-            image.texture_descriptor.size.width,
-            image.texture_descriptor.size.height,
-            image.data.as_ref().map_or(0, Vec::len),
-        );
-    }
-
     for (map, image) in generated {
         let handle = atlas.images.get(map).cloned();
 
         match handle {
             Some(handle) => {
-                println!("ATLAS UPDATE: {:?} existing handle {:?}", map, handle);
-
                 if let Some(mut existing) = images.get_mut(&handle) {
-                    println!(
-                        "ATLAS UPDATE: {:?} replacing {} bytes",
-                        map,
-                        image.data.as_ref().map_or(0, Vec::len)
-                    );
-
                     *existing = image;
                 } else {
-                    println!(
-                        "ATLAS UPDATE: {:?} handle missing from Assets<Image>, creating replacement",
-                        map
-                    );
-
                     let new_handle = images.add(image);
                     *atlas.images.get_mut(map) = Some(new_handle);
                 }
@@ -1260,8 +1190,6 @@ pub fn rebuild_atlas_maps(
 
             None => {
                 let new_handle = images.add(image);
-
-                println!("ATLAS CREATE: {:?} -> {:?}", map, new_handle);
 
                 *atlas.images.get_mut(map) = Some(new_handle);
             }

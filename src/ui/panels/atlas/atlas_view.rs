@@ -1,8 +1,7 @@
 use bevy::{input::ButtonInput, prelude::KeyCode};
+use bevy_egui::egui;
 
 use super::atlas_interaction;
-
-use bevy_egui::egui;
 
 use crate::{
     data::{Atlas, AtlasMaterial},
@@ -53,14 +52,14 @@ pub fn atlas_view(
     let (viewport_rect, response) =
         ui.allocate_exact_size(available, egui::Sense::click_and_drag());
 
-    // Middle/right mouse button panning
+    // Middle/right mouse button panning.
     if response.dragged_by(egui::PointerButton::Middle)
         || response.dragged_by(egui::PointerButton::Secondary)
     {
         editor_ui.atlas_pan += response.drag_delta();
     }
 
-    // Mouse wheel scrolling / Ctrl + vertical wheel zoom
+    // Mouse wheel scrolling / Ctrl + vertical wheel zoom.
     if response.hovered() {
         let ctrl =
             keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight);
@@ -126,28 +125,24 @@ fn draw_atlas(
 
     let preview_group = editor_ui.project_settings.preview_texture_group.as_deref();
 
-    // Draw material textures first.
-    for material in &atlas.materials {
-        let rect = atlas_material_rect(material, atlas_rect, zoom);
+    /*
+     * Draw every atlas region.
+     *
+     * There is no selected material. An AtlasMaterial is simply
+     * an atlas region with a transform and mesh assignments.
+     */
+    for atlas_material in &atlas.materials {
+        let rect = atlas_material_rect(atlas_material, atlas_rect, zoom);
 
-        let selected = editor_ui.selected_material == Some(material.index);
+        draw_material_region(painter, rect, atlas_material, preview_group);
 
-        draw_material_region(painter, rect, material, selected, preview_group);
-    }
-
-    // Draw assigned mesh UVs on top of the atlas.
-    if let Some(selected_index) = editor_ui.selected_material {
-        if let Some(material) = atlas.materials.iter().find(|m| m.index == selected_index) {
-            let material_rect = atlas_material_rect(material, atlas_rect, zoom);
-
-            draw_uv_overlay(
-                painter,
-                material_rect,
-                material,
-                mesh_preview,
-                mesh_scene_state,
-            );
-        }
+        draw_uv_overlay(
+            painter,
+            rect,
+            atlas_material,
+            mesh_preview,
+            mesh_scene_state,
+        );
     }
 }
 
@@ -155,6 +150,7 @@ fn draw_checkerboard(painter: &egui::Painter, rect: egui::Rect, zoom: f32) {
     let checker_size = (16.0 * zoom).max(4.0);
 
     let columns = (rect.width() / checker_size).ceil() as i32;
+
     let rows = (rect.height() / checker_size).ceil() as i32;
 
     let light = egui::Color32::from_gray(58);
@@ -182,14 +178,14 @@ fn draw_material_region(
     painter: &egui::Painter,
     rect: egui::Rect,
     material: &AtlasMaterial,
-    selected: bool,
     preview_group: Option<&str>,
 ) {
-    let fill = if selected {
-        egui::Color32::from_rgba_unmultiplied(80, 140, 255, 40)
-    } else {
-        egui::Color32::from_rgba_unmultiplied(120, 120, 120, 10)
-    };
+    /*
+     * Every AtlasMaterial is an atlas region.
+     *
+     * There is deliberately no "selected" state here.
+     */
+    let fill = egui::Color32::from_rgba_unmultiplied(120, 120, 120, 10);
 
     painter.rect_filled(rect, 0.0, fill);
 
@@ -203,11 +199,7 @@ fn draw_material_region(
         draw_rotated_texture(painter, rect, texture_id, material.transform.rotation);
     }
 
-    let stroke = if selected {
-        egui::Stroke::new(2.0, egui::Color32::from_rgb(80, 170, 255))
-    } else {
-        egui::Stroke::new(1.0, egui::Color32::from_rgb(170, 170, 170))
-    };
+    let stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(170, 170, 170));
 
     painter.rect_stroke(rect, 0.0, stroke, egui::StrokeKind::Inside);
 }
@@ -315,7 +307,6 @@ fn draw_uv_overlay(
             continue;
         };
 
-        // Use the imported primitive by default.
         let (uvs, indices): (&[[f32; 2]], &[u32]) = if mesh_preview.uv_mode
             == crate::mesh::unwrap::MeshUvMode::Unwrapped
             && mesh_preview.unwrapped_mesh_id == Some(assignment.mesh_id)
@@ -353,11 +344,15 @@ fn draw_uv_overlay(
             };
 
             let a = transform_material_uv(a, material.transform.rotation);
+
             let b = transform_material_uv(b, material.transform.rotation);
+
             let c = transform_material_uv(c, material.transform.rotation);
 
             let a = material_uv_to_screen(a, material_rect);
+
             let b = material_uv_to_screen(b, material_rect);
+
             let c = material_uv_to_screen(c, material_rect);
 
             painter.line_segment([a, b], stroke);
@@ -377,11 +372,8 @@ fn material_uv_to_screen(uv: [f32; 2], material_rect: egui::Rect) -> egui::Pos2 
 fn transform_material_uv(uv: [f32; 2], rotation: Rotation) -> [f32; 2] {
     match rotation {
         Rotation::Deg0 => uv,
-
         Rotation::Deg90 => [uv[1], 1.0 - uv[0]],
-
         Rotation::Deg180 => [1.0 - uv[0], 1.0 - uv[1]],
-
         Rotation::Deg270 => [1.0 - uv[1], uv[0]],
     }
 }

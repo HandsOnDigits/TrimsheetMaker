@@ -77,7 +77,6 @@ fn apply_editor_actions(
 pub struct EditorUi {
     pub project_path: Option<std::path::PathBuf>,
 
-    pub selected_material: Option<usize>,
     pub selected_mesh: Option<u64>,
 
     pub expanded_meshes: std::collections::BTreeSet<u64>,
@@ -110,7 +109,18 @@ pub struct EditorUi {
     pub single_material_name: String,
     pub single_material_textures: BTreeMap<String, Option<std::path::PathBuf>>,
 
-    pub dragging_material: Option<usize>,
+    /// Atlas region currently being inspected by the UI.
+    ///
+    /// This is not a material selection. It identifies which
+    /// `AtlasMaterial` is shown in the inspector.
+    pub inspected_atlas_region: Option<usize>,
+
+    /// Atlas region currently being dragged by the mouse.
+    ///
+    /// This is transient interaction state and is independent
+    /// from the inspector target.
+    pub dragging_atlas_region: Option<usize>,
+
     pub drag_offset: egui::Vec2,
 
     pub snap_distance: f32,
@@ -130,7 +140,6 @@ impl Default for EditorUi {
         Self {
             project_path: None,
 
-            selected_material: None,
             selected_mesh: None,
 
             expanded_meshes: std::collections::BTreeSet::new(),
@@ -144,7 +153,9 @@ impl Default for EditorUi {
             single_material_textures: BTreeMap::new(),
             mesh_import_paths: Vec::new(),
 
-            dragging_material: None,
+            inspected_atlas_region: None,
+
+            dragging_atlas_region: None,
             drag_offset: egui::Vec2::ZERO,
 
             snap_distance: 8.0,
@@ -173,6 +184,7 @@ impl Default for EditorUi {
 
             atlas_zoom: 1.0,
             atlas_pan: egui::Vec2::ZERO,
+
             show_materials: true,
             show_inspector: true,
             show_status: true,

@@ -14,7 +14,7 @@ pub fn status_bar(ui: &mut egui::Ui, editor_ui: &EditorUi, atlas: &Atlas) {
 
         ui.label(format!("{} materials", atlas.materials.len()));
 
-        if let Some(index) = editor_ui.selected_material {
+        if let Some(index) = editor_ui.inspected_atlas_region {
             ui.separator();
 
             ui.label(format!("Selected: #{}", index));

@@ -28,7 +28,7 @@ pub enum EditorAction {
     Undo,
     Redo,
 
-    RemoveSelectedMaterial,
+    RemoveAtlasRegion,
     PackAtlas,
 
     ResetViewport,
@@ -72,14 +72,14 @@ pub fn execute_action(
             *atlas = Atlas::default();
             *rendering_pipelines = RenderingPipelines::default();
 
-            editor_ui.selected_material = None;
+            editor_ui.inspected_atlas_region = None;
+            editor_ui.dragging_atlas_region = None;
+            editor_ui.drag_offset = egui::Vec2::ZERO;
+
             editor_ui.selected_mesh = None;
 
             editor_ui.project_settings = ProjectSettings::default();
             editor_ui.project_path = None;
-
-            editor_ui.dragging_material = None;
-            editor_ui.drag_offset = egui::Vec2::ZERO;
 
             editor_ui.atlas_zoom = 1.0;
             editor_ui.atlas_pan = egui::Vec2::ZERO;
@@ -94,6 +94,7 @@ pub fn execute_action(
             mesh_preview.target_distance = 4.0;
             mesh_preview.yaw = 0.0;
             mesh_preview.pitch = 0.3;
+            mesh_preview.selected_primitive = None;
         }
 
         EditorAction::OpenProject => match project::open_project_dialog() {
@@ -108,18 +109,23 @@ pub fn execute_action(
 
                     *atlas = loaded_atlas;
                     *rendering_pipelines = loaded_rendering_pipelines;
+
                     editor_ui.project_settings = project_settings;
                     editor_ui.project_path = Some(path.clone());
 
-                    editor_ui.selected_material = None;
-                    editor_ui.dragging_material = None;
+                    editor_ui.inspected_atlas_region = None;
+                    editor_ui.dragging_atlas_region = None;
                     editor_ui.drag_offset = egui::Vec2::ZERO;
+
+                    editor_ui.selected_mesh = None;
 
                     editor_ui.atlas_zoom = 1.0;
                     editor_ui.atlas_pan = egui::Vec2::ZERO;
 
                     editor_ui.mesh_import_path = None;
                     editor_ui.mesh_import_paths.clear();
+
+                    mesh_preview.selected_primitive = None;
 
                     match project::load_project_meshes(
                         &path,
@@ -137,7 +143,7 @@ pub fn execute_action(
                         Err(error) => {
                             error!(
                                 "Project opened, but some saved meshes \
-                                         could not be loaded: {error}"
+                                 could not be loaded: {error}"
                             );
                         }
                     }
@@ -243,10 +249,16 @@ pub fn execute_action(
             editor_ui.show_import_mesh_window = true;
         }
 
-        EditorAction::RemoveSelectedMaterial => {
-            if let Some(index) = editor_ui.selected_material {
+        EditorAction::RemoveAtlasRegion => {
+            if let Some(index) = editor_ui.inspected_atlas_region {
                 atlas.remove(index);
-                editor_ui.selected_material = None;
+
+                editor_ui.inspected_atlas_region = None;
+
+                if editor_ui.dragging_atlas_region == Some(index) {
+                    editor_ui.dragging_atlas_region = None;
+                    editor_ui.drag_offset = egui::Vec2::ZERO;
+                }
             }
         }
 

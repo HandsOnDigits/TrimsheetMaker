@@ -69,11 +69,10 @@ pub struct MeshPrimitive {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MeshMaterialRef {
-    /// Identifier belonging to the imported scene.
-    ///
-    /// This is deliberately NOT an AtlasMaterial index.
+    /// Stable identifier of the imported mesh/material.
     pub id: usize,
 
+    /// Human-readable material name.
     pub name: String,
 }
 

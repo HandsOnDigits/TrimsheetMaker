@@ -507,9 +507,12 @@ impl RenderingPipelines {
     }
 
     pub fn add_material(&mut self, material: MeshMaterialRef) -> &mut RenderingPipeline {
-        self.pipelines.entry(material).or_default()
-    }
+        let pipeline = self.pipelines.entry(material).or_default();
 
+        pipeline.add_node(RenderingNodeKind::MaterialOutput);
+
+        pipeline
+    }
     pub fn mark_changed(&mut self) {
         self.revision = self.revision.wrapping_add(1);
     }

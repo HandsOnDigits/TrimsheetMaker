@@ -9,15 +9,15 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
 
     ui.separator();
 
-    let Some(index) = editor_ui.selected_material else {
+    let Some(index) = editor_ui.dragging_atlas_region else {
         ui.vertical_centered(|ui| {
             ui.add_space(16.0);
 
-            ui.label(egui::RichText::new("Nothing selected").weak().size(15.0));
+            ui.label(egui::RichText::new("Nothing active").weak().size(15.0));
 
             ui.add_space(4.0);
 
-            ui.label(egui::RichText::new("Select a material from the list.").weak());
+            ui.label(egui::RichText::new("Interact with an atlas region to inspect it.").weak());
         });
 
         return;
@@ -26,27 +26,34 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
     let mut transform_changed = false;
 
     {
-        let Some(material) = atlas.selected_mut(Some(index)) else {
-            editor_ui.selected_material = None;
+        let Some(material) = atlas
+            .materials
+            .iter_mut()
+            .find(|material| material.index == index)
+        else {
+            editor_ui.dragging_atlas_region = None;
             return;
         };
 
-        ui.label(egui::RichText::new(format!("Material #{}", material.index)).strong());
+        ui.label(egui::RichText::new(format!("Atlas Region #{}", material.index)).strong());
 
         ui.add_space(8.0);
 
-        egui::Grid::new("material_properties")
+        egui::Grid::new("atlas_region_properties")
             .num_columns(2)
             .spacing([12.0, 8.0])
             .show(ui, |ui| {
                 ui.label("Name");
+
                 ui.text_edit_singleline(&mut material.name);
+
                 ui.end_row();
 
                 ui.label("Position");
 
                 ui.horizontal(|ui| {
                     ui.label("X");
+
                     if ui
                         .add(egui::DragValue::new(&mut material.transform.x).speed(1))
                         .changed()
@@ -55,6 +62,7 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
                     }
 
                     ui.label("Y");
+
                     if ui
                         .add(egui::DragValue::new(&mut material.transform.y).speed(1))
                         .changed()
@@ -69,6 +77,7 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
 
                 ui.horizontal(|ui| {
                     ui.label("W");
+
                     if ui
                         .add(egui::DragValue::new(&mut material.transform.width).speed(1))
                         .changed()
@@ -77,6 +86,7 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
                     }
 
                     ui.label("H");
+
                     if ui
                         .add(egui::DragValue::new(&mut material.transform.height).speed(1))
                         .changed()
@@ -102,8 +112,6 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
                         transform_changed = true;
                     }
                 });
-
-                ui.end_row();
 
                 ui.end_row();
             });
@@ -155,11 +163,7 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
 
                     let path = texture.path.display().to_string();
 
-                    ui.add(
-                        egui::TextEdit::singleline(&mut path.clone())
-                            .desired_width(f32::INFINITY)
-                            .interactive(false),
-                    );
+                    ui.add(egui::TextEdit::singleline(&mut path.clone()).interactive(false));
                 });
             });
 

@@ -140,13 +140,12 @@ impl HotkeyManager {
         self.bindings
             .insert(EditorAction::Redo, Hotkey::ctrl_shift(KeyCode::KeyZ));
 
-        // Materials
+        // Atlas
         self.bindings.insert(
-            EditorAction::RemoveSelectedMaterial,
+            EditorAction::RemoveAtlasRegion,
             Hotkey::plain(KeyCode::Delete),
         );
 
-        // Atlas
         self.bindings
             .insert(EditorAction::PackAtlas, Hotkey::plain(KeyCode::KeyP));
 
