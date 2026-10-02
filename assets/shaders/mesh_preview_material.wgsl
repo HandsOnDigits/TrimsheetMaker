@@ -60,80 +60,81 @@ fn read_channel(
 
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
-    let uv = in.uv;
+    let uv = clamp(
+        in.uv,
+        vec2<f32>(0.0),
+        vec2<f32>(1.0),
+    );
 
+    // Base color can use the filtering sampler.
     let base_color = textureSample(
         base_color_texture,
         base_color_sampler,
         uv,
     );
 
-    // Convert normalized UV coordinates to atlas texel coordinates.
-    //
-    // Temporary hard-coded dimensions. These should eventually be
-    // supplied as part of the material/atlas data.
-    let atlas_size = vec2<f32>(544.0, 3616.0);
+    // Data textures are non-filterable, so read their exact texel.
+    let atlas_size = textureDimensions(
+        normal_texture,
+        0,
+    );
 
-    let pixel = vec2<i32>(
-        clamp(
-            uv * atlas_size,
-            vec2<f32>(0.0),
-            atlas_size - vec2<f32>(1.0),
-        )
+    let pixel = min(
+        vec2<u32>(uv * vec2<f32>(atlas_size)),
+        atlas_size - vec2<u32>(1u),
     );
 
     let normal_sample = textureLoad(
         normal_texture,
-        pixel,
+        vec2<i32>(pixel),
         0,
     );
 
     let height_sample = textureLoad(
         height_texture,
-        pixel,
+        vec2<i32>(pixel),
         0,
     );
 
     let ambient_occlusion_sample = textureLoad(
         ambient_occlusion_texture,
-        pixel,
+        vec2<i32>(pixel),
         0,
     );
 
     let roughness_sample = textureLoad(
         roughness_texture,
-        pixel,
+        vec2<i32>(pixel),
         0,
     );
 
     let metallic_sample = textureLoad(
         metallic_texture,
-        pixel,
+        vec2<i32>(pixel),
         0,
     );
 
-    // The graph determines which channel supplies each scalar value.
     let height = read_channel(
         height_sample,
         u32(graph.height.x),
     );
-    
+
     let ambient_occlusion = read_channel(
         ambient_occlusion_sample,
         u32(graph.ambient_occlusion.x),
     );
-    
+
     let roughness = read_channel(
         roughness_sample,
         u32(graph.roughness.x),
     );
-    
+
     let metallic = read_channel(
         metallic_sample,
         u32(graph.metallic.x),
     );
 
-    // Convert the normal texture from [0, 1] to [-1, 1].
+    // Diagnostic lighting.
     let normal = normalize(
         normal_sample.xyz * 2.0 - vec3<f32>(1.0)
     );
@@ -147,10 +148,8 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
         0.0
     );
 
-    let ambient = 0.15;
-
     let lighting =
-        ambient * ambient_occlusion +
+        0.15 * ambient_occlusion +
         diffuse;
 
     let diffuse_factor = 1.0 - metallic;
@@ -159,8 +158,6 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
         base_color.rgb *
         (lighting * diffuse_factor + metallic);
 
-    // These are currently evaluated so the graph is functional,
-    // but height/roughness are not yet affecting the lighting model.
     let _height = height;
     let _roughness = roughness;
 

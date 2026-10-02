@@ -19,7 +19,7 @@ use crate::transform::{Rotation, Transform};
 
 use super::{
     mesh::import::MeshMaterialRef,
-    pipeline::{RenderingOutputSocket, RenderingPipelines},
+    pipeline::{RenderingPipelines, TextureChannel},
 };
 
 #[derive(Clone)]
@@ -36,6 +36,7 @@ pub struct MaterialTexture {
 
 pub struct MaterialSource {
     pub name: String,
+    pub material_ref: Option<MeshMaterialRef>,
     pub textures: Vec<MaterialTexture>,
 }
 
@@ -190,16 +191,13 @@ fn resolve_rendering_texture(
 
 fn bake_channel_source(
     source: &AtlasSourceImage,
-    channel: super::pipeline::RenderingOutputSocket,
+    channel: TextureChannel,
 ) -> Option<AtlasSourceImage> {
-    use super::pipeline::RenderingOutputSocket;
-
     let channel_index = match channel {
-        RenderingOutputSocket::Red => 0,
-        RenderingOutputSocket::Green => 1,
-        RenderingOutputSocket::Blue => 2,
-        RenderingOutputSocket::Alpha => 3,
-        RenderingOutputSocket::Texture => return None,
+        TextureChannel::Red => 0,
+        TextureChannel::Green => 1,
+        TextureChannel::Blue => 2,
+        TextureChannel::Alpha => 3,
     };
 
     let pixel_count = source.width.checked_mul(source.height)?;
@@ -270,11 +268,11 @@ fn create_atlas_build_input(
                 return None;
             };
 
-            let result = match pipeline.evaluate() {
+            let bindings = match pipeline.compile() {
                 Ok(result) => result,
                 Err(error) => {
                     error!(
-                        "Failed to evaluate rendering pipeline for material '{}': {:?}",
+                        "Failed to evaluate rendering pipeline for material '{}': {}",
                         material.name, error
                     );
                     return None;
@@ -283,75 +281,62 @@ fn create_atlas_build_input(
 
             let mut maps = BTreeMap::new();
 
-            let outputs = [
-                (
-                    AtlasMap::BaseColor,
-                    result
-                        .base_color_group
-                        .as_ref()
-                        .map(|g| (g.as_str(), RenderingOutputSocket::Texture)),
-                ),
-                (
-                    AtlasMap::Normal,
-                    result
-                        .normal_group
-                        .as_ref()
-                        .map(|g| (g.as_str(), RenderingOutputSocket::Texture)),
-                ),
-                (
-                    AtlasMap::Height,
-                    result
-                        .height_group
-                        .as_ref()
-                        .map(|c| (c.texture_group.as_str(), c.socket)),
-                ),
+            if let Some(binding) = &bindings.base_color {
+                if let Some(source) =
+                    resolve_rendering_texture(material, &binding.texture_group, images)
+                {
+                    maps.insert(AtlasMap::BaseColor, source);
+                } else {
+                    warn!(
+                        "Failed to resolve base color texture group '{}' for material '{}'",
+                        binding.texture_group, material.name
+                    );
+                }
+            }
+
+            if let Some(binding) = &bindings.normal {
+                if let Some(source) =
+                    resolve_rendering_texture(material, &binding.texture_group, images)
+                {
+                    maps.insert(AtlasMap::Normal, source);
+                } else {
+                    warn!(
+                        "Failed to resolve normal texture group '{}' for material '{}'",
+                        binding.texture_group, material.name
+                    );
+                }
+            }
+
+            for (map, binding) in [
+                (AtlasMap::Height, bindings.height.as_ref()),
                 (
                     AtlasMap::AmbientOcclusion,
-                    result
-                        .ao_group
-                        .as_ref()
-                        .map(|c| (c.texture_group.as_str(), c.socket)),
+                    bindings.ambient_occlusion.as_ref(),
                 ),
-                (
-                    AtlasMap::Roughness,
-                    result
-                        .roughness_group
-                        .as_ref()
-                        .map(|c| (c.texture_group.as_str(), c.socket)),
-                ),
-                (
-                    AtlasMap::Metallic,
-                    result
-                        .metallic_group
-                        .as_ref()
-                        .map(|c| (c.texture_group.as_str(), c.socket)),
-                ),
-            ];
-
-            for (map, target) in outputs {
-                let Some((group_name, socket)) = target else {
+                (AtlasMap::Roughness, bindings.roughness.as_ref()),
+                (AtlasMap::Metallic, bindings.metallic.as_ref()),
+            ] {
+                let Some(binding) = binding else {
                     continue;
                 };
 
-                let Some(mut source) = resolve_rendering_texture(material, group_name, images)
+                let Some(source) =
+                    resolve_rendering_texture(material, &binding.texture_group, images)
                 else {
                     warn!(
-                        "Failed to resolve {:?} for material '{}'",
-                        map, material.name
+                        "Failed to resolve {:?} texture group '{}' for material '{}'",
+                        map, binding.texture_group, material.name
                     );
                     continue;
                 };
 
-                if socket != RenderingOutputSocket::Texture {
-                    let Some(baked) = bake_channel_source(&source, socket) else {
-                        warn!(
-                            "Failed to bake channel {:?} for material '{}'",
-                            socket, material.name
-                        );
-                        continue;
-                    };
-                    source = baked;
-                }
+                let Some(source) = bake_channel_source(&source, binding.channel) else {
+                    warn!(
+                        "Failed to bake {:?} channel {:?} for material '{}'",
+                        binding.channel, map, material.name
+                    );
+                    continue;
+                };
 
                 maps.insert(map, source);
             }
@@ -543,7 +528,7 @@ impl Atlas {
         self.materials.push(AtlasMaterial {
             index,
             name: source.name,
-            material_ref: None,
+            material_ref: source.material_ref,
             textures,
             transform: Transform::default(),
             mesh_assignments: Vec::new(),
@@ -1055,19 +1040,21 @@ fn rebuild_atlas_map(input: &AtlasBuildInput, map: AtlasMap) -> Image {
         }
 
         println!(
-            "BASE COLOR: first 32 bytes = {:?}",
+            "{:?}: first 32 bytes = {:?}",
+            map,
             &atlas_data[..atlas_data.len().min(32)]
         );
 
         let non_zero = atlas_data
-            .chunks_exact(4)
-            .filter(|pixel| pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0)
+            .chunks_exact(16)
+            .filter(|pixel| pixel[..12].iter().any(|&byte| byte != 0))
             .count();
 
         println!(
-            "BASE COLOR: {} / {} pixels contain non-zero RGB",
+            "{:?}: {} / {} pixels contain non-zero RGB",
+            map,
             non_zero,
-            atlas_data.len() / 4
+            atlas_data.len() / 16
         );
 
         let mut image = Image::new(

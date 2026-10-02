@@ -1,10 +1,38 @@
 use bevy::prelude::*;
-
 use serde::{Deserialize, Serialize};
-
 use std::{collections::HashMap, fmt};
 
 use crate::mesh::import::MeshMaterialRef;
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RenderingMaterialBindings {
+    pub base_color: Option<TextureBinding>,
+    pub normal: Option<TextureBinding>,
+
+    pub height: Option<ChannelBinding>,
+    pub ambient_occlusion: Option<ChannelBinding>,
+    pub roughness: Option<ChannelBinding>,
+    pub metallic: Option<ChannelBinding>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TextureBinding {
+    pub texture_group: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChannelBinding {
+    pub texture_group: String,
+    pub channel: TextureChannel,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TextureChannel {
+    Red,
+    Green,
+    Blue,
+    Alpha,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct PipelineNodeId(pub u64);
@@ -16,32 +44,13 @@ pub enum RenderingNodeKind {
     MaterialOutput,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ChannelSource {
-    pub texture_group: String,
-    pub socket: RenderingOutputSocket,
-}
-
-pub struct ResolvedTextureSource {
-    pub image: Handle<Image>,
-    pub channel: RenderingOutputSocket,
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct RenderingMaterialResult {
-    pub base_color_group: Option<String>,
-    pub normal_group: Option<String>,
-    pub height_group: Option<ChannelSource>,
-    pub ao_group: Option<ChannelSource>,
-    pub roughness_group: Option<ChannelSource>,
-    pub metallic_group: Option<ChannelSource>,
-}
-
 impl RenderingNodeKind {
     pub fn input_sockets(self) -> &'static [RenderingInputSocket] {
         match self {
             Self::Texture => &[],
+
             Self::SplitChannels => &[RenderingInputSocket::Texture],
+
             Self::MaterialOutput => &[
                 RenderingInputSocket::BaseColor,
                 RenderingInputSocket::Normal,
@@ -56,20 +65,31 @@ impl RenderingNodeKind {
     pub fn output_sockets(self) -> &'static [RenderingOutputSocket] {
         match self {
             Self::Texture => &[RenderingOutputSocket::Texture],
+
             Self::SplitChannels => &[
                 RenderingOutputSocket::Red,
                 RenderingOutputSocket::Green,
                 RenderingOutputSocket::Blue,
                 RenderingOutputSocket::Alpha,
             ],
+
             Self::MaterialOutput => &[],
         }
+    }
+
+    pub fn accepts_input(self, socket: RenderingInputSocket) -> bool {
+        self.input_sockets().contains(&socket)
+    }
+
+    pub fn provides_output(self, socket: RenderingOutputSocket) -> bool {
+        self.output_sockets().contains(&socket)
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum RenderingInputSocket {
     Texture,
+
     BaseColor,
     Normal,
     Height,
@@ -78,13 +98,55 @@ pub enum RenderingInputSocket {
     Metallic,
 }
 
+impl RenderingInputSocket {
+    pub fn material_outputs() -> &'static [Self] {
+        &[
+            Self::BaseColor,
+            Self::Normal,
+            Self::Height,
+            Self::AmbientOcclusion,
+            Self::Roughness,
+            Self::Metallic,
+        ]
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum RenderingValueType {
+    Texture,
+    Channel,
+}
+
+impl RenderingInputSocket {
+    pub fn value_type(self) -> RenderingValueType {
+        match self {
+            Self::Texture | Self::BaseColor | Self::Normal => RenderingValueType::Texture,
+
+            Self::Height | Self::AmbientOcclusion | Self::Roughness | Self::Metallic => {
+                RenderingValueType::Channel
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum RenderingOutputSocket {
     Texture,
+
     Red,
     Green,
     Blue,
     Alpha,
+}
+
+impl RenderingOutputSocket {
+    pub fn value_type(self) -> RenderingValueType {
+        match self {
+            Self::Texture => RenderingValueType::Texture,
+
+            Self::Red | Self::Green | Self::Blue | Self::Alpha => RenderingValueType::Channel,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -109,142 +171,320 @@ pub struct RenderingConnection {
 pub struct PipelineNode {
     pub id: PipelineNodeId,
     pub kind: RenderingNodeKind,
+
+    /// Used by Texture nodes.
     pub texture_group: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+enum ResolvedValue {
+    Texture(String),
+    Channel(ChannelBinding),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct RenderingPipeline {
     pub nodes: Vec<PipelineNode>,
     pub connections: Vec<RenderingConnection>,
+
+    #[serde(default)]
     next_node_id: u64,
 }
 
 impl RenderingPipeline {
+    // -------------------------------------------------------------------------
+    // Nodes
+    // -------------------------------------------------------------------------
+
     pub fn add_node(&mut self, kind: RenderingNodeKind) -> PipelineNodeId {
-        self.next_node_id += 1;
+        if kind == RenderingNodeKind::MaterialOutput {
+            if let Some(existing) = self
+                .nodes
+                .iter()
+                .find(|node| node.kind == RenderingNodeKind::MaterialOutput)
+            {
+                return existing.id;
+            }
+        }
+
         let id = PipelineNodeId(self.next_node_id);
+        self.next_node_id += 1;
+
         self.nodes.push(PipelineNode {
             id,
             kind,
             texture_group: None,
         });
+
         id
     }
 
-    pub fn remove_node(&mut self, id: PipelineNodeId) {
-        self.nodes.retain(|n| n.id != id);
+    pub fn remove_node(&mut self, id: PipelineNodeId) -> bool {
+        let old_len = self.nodes.len();
+
+        self.nodes.retain(|node| node.id != id);
+
         self.connections
-            .retain(|c| c.from.node_id != id && c.to.node_id != id);
+            .retain(|connection| connection.from.node_id != id && connection.to.node_id != id);
+
+        self.nodes.len() != old_len
     }
 
     pub fn node(&self, id: PipelineNodeId) -> Option<&PipelineNode> {
-        self.nodes.iter().find(|n| n.id == id)
+        self.nodes.iter().find(|node| node.id == id)
     }
 
     pub fn node_mut(&mut self, id: PipelineNodeId) -> Option<&mut PipelineNode> {
-        self.nodes.iter_mut().find(|n| n.id == id)
+        self.nodes.iter_mut().find(|node| node.id == id)
     }
 
     pub fn material_output(&self) -> Option<&PipelineNode> {
         self.nodes
             .iter()
-            .find(|n| n.kind == RenderingNodeKind::MaterialOutput)
+            .find(|node| node.kind == RenderingNodeKind::MaterialOutput)
     }
 
-    pub fn connect(&mut self, from: PipelineOutput, to: PipelineInput) -> bool {
-        self.disconnect(&to);
-        self.connections.push(RenderingConnection { from, to });
-        true
-    }
+    // -------------------------------------------------------------------------
+    // Connections
+    // -------------------------------------------------------------------------
 
-    pub fn disconnect(&mut self, to: &PipelineInput) -> bool {
-        let len_before = self.connections.len();
-        self.connections.retain(|c| &c.to != to);
-        self.connections.len() < len_before
-    }
-
-    pub fn disconnect_output(&mut self, from: &PipelineOutput) -> usize {
-        let len_before = self.connections.len();
-        self.connections.retain(|c| &c.from != from);
-        len_before - self.connections.len()
-    }
-
-    pub fn connection_to(&self, input: &PipelineInput) -> Option<&RenderingConnection> {
-        self.connections.iter().find(|c| &c.to == input)
-    }
-
-    pub fn evaluate(&self) -> Result<RenderingMaterialResult, RenderingPipelineError> {
-        let material_node = self
-            .material_output()
+    pub fn connect(
+        &mut self,
+        from: PipelineOutput,
+        to: PipelineInput,
+    ) -> Result<(), RenderingPipelineError> {
+        let source = self
+            .node(from.node_id)
             .ok_or(RenderingPipelineError::MissingNode {
-                node_id: PipelineNodeId(0),
+                node_id: from.node_id,
             })?;
 
-        let mut result = RenderingMaterialResult::default();
+        let target = self
+            .node(to.node_id)
+            .ok_or(RenderingPipelineError::MissingNode {
+                node_id: to.node_id,
+            })?;
 
-        for &socket in RenderingNodeKind::MaterialOutput.input_sockets() {
-            let input = PipelineInput {
-                node_id: material_node.id,
-                socket,
-            };
+        if !source.kind.provides_output(from.socket) {
+            return Err(RenderingPipelineError::InvalidOutput {
+                node_id: from.node_id,
+                socket: from.socket,
+            });
+        }
 
-            if let Some(conn) = self.connection_to(&input) {
-                let source_node =
-                    self.node(conn.from.node_id)
-                        .ok_or(RenderingPipelineError::MissingNode {
-                            node_id: conn.from.node_id,
-                        })?;
+        if !target.kind.accepts_input(to.socket) {
+            return Err(RenderingPipelineError::InvalidInput {
+                node_id: to.node_id,
+                socket: to.socket,
+            });
+        }
 
-                let (source_group, source_socket) = match source_node.kind {
-                    RenderingNodeKind::Texture => {
-                        (source_node.texture_group.clone(), conn.from.socket)
-                    }
-                    RenderingNodeKind::SplitChannels => {
-                        let split_input = PipelineInput {
-                            node_id: source_node.id,
-                            socket: RenderingInputSocket::Texture,
-                        };
-                        let group = if let Some(tex_conn) = self.connection_to(&split_input) {
-                            self.node(tex_conn.from.node_id)
-                                .and_then(|n| n.texture_group.clone())
-                        } else {
-                            None
-                        };
-                        (group, conn.from.socket)
-                    }
-                    RenderingNodeKind::MaterialOutput => (None, conn.from.socket),
-                };
+        if self.would_create_cycle(from.node_id, to.node_id) {
+            return Err(RenderingPipelineError::Cycle {
+                node_id: to.node_id,
+            });
+        }
 
-                if let Some(group) = source_group {
-                    let channel_src = ChannelSource {
-                        texture_group: group.clone(),
-                        socket: source_socket,
-                    };
-                    match socket {
-                        RenderingInputSocket::BaseColor => result.base_color_group = Some(group),
-                        RenderingInputSocket::Normal => result.normal_group = Some(group),
-                        RenderingInputSocket::Height => result.height_group = Some(channel_src),
-                        RenderingInputSocket::AmbientOcclusion => {
-                            result.ao_group = Some(channel_src)
-                        }
-                        RenderingInputSocket::Roughness => {
-                            result.roughness_group = Some(channel_src)
-                        }
-                        RenderingInputSocket::Metallic => result.metallic_group = Some(channel_src),
-                        RenderingInputSocket::Texture => {}
-                    }
+        self.disconnect(to);
+
+        self.connections.push(RenderingConnection { from, to });
+
+        Ok(())
+    }
+
+    pub fn disconnect(&mut self, input: PipelineInput) -> bool {
+        let old_len = self.connections.len();
+
+        self.connections.retain(|connection| connection.to != input);
+
+        self.connections.len() != old_len
+    }
+
+    pub fn disconnect_output(&mut self, output: PipelineOutput) -> usize {
+        let old_len = self.connections.len();
+
+        self.connections
+            .retain(|connection| connection.from != output);
+
+        old_len - self.connections.len()
+    }
+
+    pub fn connection_to(&self, input: PipelineInput) -> Option<&RenderingConnection> {
+        self.connections
+            .iter()
+            .find(|connection| connection.to == input)
+    }
+
+    fn would_create_cycle(&self, from: PipelineNodeId, to: PipelineNodeId) -> bool {
+        if from == to {
+            return true;
+        }
+
+        let mut stack = vec![to];
+        let mut visited = Vec::new();
+
+        while let Some(node_id) = stack.pop() {
+            if node_id == from {
+                return true;
+            }
+
+            if visited.contains(&node_id) {
+                continue;
+            }
+
+            visited.push(node_id);
+
+            for connection in &self.connections {
+                if connection.from.node_id == node_id {
+                    stack.push(connection.to.node_id);
                 }
             }
         }
 
-        Ok(result)
+        false
+    }
+
+    // -------------------------------------------------------------------------
+    // Compilation
+    // -------------------------------------------------------------------------
+
+    pub fn compile(&self) -> Result<RenderingMaterialBindings, RenderingPipelineError> {
+        let output = self
+            .material_output()
+            .ok_or(RenderingPipelineError::MissingMaterialOutput)?;
+
+        let mut bindings = RenderingMaterialBindings::default();
+
+        for socket in RenderingInputSocket::material_outputs() {
+            let input = PipelineInput {
+                node_id: output.id,
+                socket: *socket,
+            };
+
+            let Some(connection) = self.connection_to(input) else {
+                continue;
+            };
+
+            let value = self.resolve_output(connection.from)?;
+
+            match (socket, value) {
+                (RenderingInputSocket::BaseColor, ResolvedValue::Texture(texture_group)) => {
+                    bindings.base_color = Some(TextureBinding { texture_group });
+                }
+
+                (RenderingInputSocket::Normal, ResolvedValue::Texture(texture_group)) => {
+                    bindings.normal = Some(TextureBinding { texture_group });
+                }
+
+                (RenderingInputSocket::Height, ResolvedValue::Channel(channel)) => {
+                    bindings.height = Some(channel);
+                }
+
+                (RenderingInputSocket::AmbientOcclusion, ResolvedValue::Channel(channel)) => {
+                    bindings.ambient_occlusion = Some(channel);
+                }
+
+                (RenderingInputSocket::Roughness, ResolvedValue::Channel(channel)) => {
+                    bindings.roughness = Some(channel);
+                }
+
+                (RenderingInputSocket::Metallic, ResolvedValue::Channel(channel)) => {
+                    bindings.metallic = Some(channel);
+                }
+
+                (socket, value) => {
+                    return Err(RenderingPipelineError::InvalidConnection {
+                        message: format!("Invalid value {:?} connected to {:?}", value, socket),
+                    });
+                }
+            }
+        }
+
+        Ok(bindings)
+    }
+
+    fn resolve_output(
+        &self,
+        output: PipelineOutput,
+    ) -> Result<ResolvedValue, RenderingPipelineError> {
+        let node = self
+            .node(output.node_id)
+            .ok_or(RenderingPipelineError::MissingNode {
+                node_id: output.node_id,
+            })?;
+
+        if !node.kind.provides_output(output.socket) {
+            return Err(RenderingPipelineError::InvalidOutput {
+                node_id: node.id,
+                socket: output.socket,
+            });
+        }
+
+        match node.kind {
+            RenderingNodeKind::Texture => {
+                let texture_group =
+                    node.texture_group
+                        .clone()
+                        .ok_or(RenderingPipelineError::MissingInput {
+                            node_id: node.id,
+                            socket: RenderingInputSocket::Texture,
+                        })?;
+
+                Ok(ResolvedValue::Texture(texture_group))
+            }
+
+            RenderingNodeKind::SplitChannels => {
+                let input = PipelineInput {
+                    node_id: node.id,
+                    socket: RenderingInputSocket::Texture,
+                };
+
+                let connection =
+                    self.connection_to(input)
+                        .ok_or(RenderingPipelineError::MissingInput {
+                            node_id: node.id,
+                            socket: RenderingInputSocket::Texture,
+                        })?;
+
+                let value = self.resolve_output(connection.from)?;
+
+                let ResolvedValue::Texture(texture_group) = value else {
+                    return Err(RenderingPipelineError::InvalidConnection {
+                        message: "Split Channels requires a texture input".into(),
+                    });
+                };
+
+                let channel = match output.socket {
+                    RenderingOutputSocket::Red => TextureChannel::Red,
+                    RenderingOutputSocket::Green => TextureChannel::Green,
+                    RenderingOutputSocket::Blue => TextureChannel::Blue,
+                    RenderingOutputSocket::Alpha => TextureChannel::Alpha,
+
+                    RenderingOutputSocket::Texture => {
+                        return Err(RenderingPipelineError::InvalidOutput {
+                            node_id: node.id,
+                            socket: output.socket,
+                        });
+                    }
+                };
+
+                Ok(ResolvedValue::Channel(ChannelBinding {
+                    texture_group,
+                    channel,
+                }))
+            }
+
+            RenderingNodeKind::MaterialOutput => Err(RenderingPipelineError::InvalidOutput {
+                node_id: node.id,
+                socket: output.socket,
+            }),
+        }
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct RenderingPipelineResults {
-    pub materials: HashMap<MeshMaterialRef, RenderingMaterialResult>,
-}
+// =============================================================================
+// Pipeline collection
+// =============================================================================
 
 #[derive(Resource, Clone, Debug, Default, Serialize, Deserialize)]
 pub struct RenderingPipelines {
@@ -270,33 +510,47 @@ impl RenderingPipelines {
         self.pipelines.entry(material).or_default()
     }
 
-    pub fn results(&self) -> Result<RenderingPipelineResults, RenderingPipelineError> {
-        let mut results = RenderingPipelineResults::default();
-        for (mat_ref, pipeline) in &self.pipelines {
-            let res = pipeline.evaluate()?;
-            results.materials.insert(mat_ref.clone(), res);
-        }
-        Ok(results)
+    pub fn mark_changed(&mut self) {
+        self.revision = self.revision.wrapping_add(1);
     }
 }
 
-#[allow(dead_code)]
+// =============================================================================
+// Errors
+// =============================================================================
+
 #[derive(Clone, Debug)]
 pub enum RenderingPipelineError {
+    MissingMaterialOutput,
+
     MissingNode {
         node_id: PipelineNodeId,
     },
+
     MissingInput {
         node_id: PipelineNodeId,
         socket: RenderingInputSocket,
     },
+
+    InvalidInput {
+        node_id: PipelineNodeId,
+        socket: RenderingInputSocket,
+    },
+
     InvalidOutput {
         node_id: PipelineNodeId,
         socket: RenderingOutputSocket,
     },
+
+    TypeMismatch {
+        input: PipelineInput,
+        output: PipelineOutput,
+    },
+
     InvalidConnection {
         message: String,
     },
+
     Cycle {
         node_id: PipelineNodeId,
     },
@@ -305,7 +559,14 @@ pub enum RenderingPipelineError {
 impl fmt::Display for RenderingPipelineError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingNode { node_id } => write!(f, "Missing node {:?}", node_id),
+            Self::MissingMaterialOutput => {
+                write!(f, "Missing material output node")
+            }
+
+            Self::MissingNode { node_id } => {
+                write!(f, "Missing node {:?}", node_id)
+            }
+
             Self::MissingInput { node_id, socket } => {
                 write!(
                     f,
@@ -313,6 +574,15 @@ impl fmt::Display for RenderingPipelineError {
                     node_id, socket
                 )
             }
+
+            Self::InvalidInput { node_id, socket } => {
+                write!(
+                    f,
+                    "Invalid input on node {:?}, socket {:?}",
+                    node_id, socket
+                )
+            }
+
             Self::InvalidOutput { node_id, socket } => {
                 write!(
                     f,
@@ -320,17 +590,24 @@ impl fmt::Display for RenderingPipelineError {
                     node_id, socket
                 )
             }
-            Self::InvalidConnection { message } => write!(f, "Invalid connection: {}", message),
-            Self::Cycle { node_id } => write!(f, "Cycle detected at node {:?}", node_id),
+
+            Self::TypeMismatch { input, output } => {
+                write!(
+                    f,
+                    "Type mismatch: {:?} cannot connect to {:?}",
+                    output, input
+                )
+            }
+
+            Self::InvalidConnection { message } => {
+                write!(f, "Invalid connection: {}", message)
+            }
+
+            Self::Cycle { node_id } => {
+                write!(f, "Cycle detected at node {:?}", node_id)
+            }
         }
     }
 }
 
 impl std::error::Error for RenderingPipelineError {}
-
-#[allow(dead_code)]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum RenderingConnectionError {
-    InvalidSocket,
-    CycleDetected,
-}

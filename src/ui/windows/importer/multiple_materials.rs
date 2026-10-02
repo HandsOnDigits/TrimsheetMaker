@@ -37,7 +37,14 @@ pub fn scan(root: &Path) -> io::Result<MaterialScan> {
 
         let textures = classify_textures(texture_paths, &detected_naming);
 
-        materials.insert(name.clone(), MaterialSource { name, textures });
+        materials.insert(
+            name.clone(),
+            MaterialSource {
+                name,
+                material_ref: None,
+                textures,
+            },
+        );
     }
 
     Ok(MaterialScan {

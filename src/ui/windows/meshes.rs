@@ -196,23 +196,19 @@ pub fn meshes_window(
                                 .iter_mut()
                                 .find(|material| material.index == material_index)
                             {
-                                let material_ref = mesh_scene_state
-                                    .get(selection.mesh_id)
-                                    .and_then(|mesh| mesh.scene.objects.get(selection.object_index))
-                                    .and_then(|object| {
-                                        object.primitives.get(selection.primitive_index)
-                                    })
-                                    .and_then(|primitive| primitive.material.clone());
-
-                                material.assign_mesh(
+                                material.unassign_mesh(
                                     selection.mesh_id,
                                     selection.object_index,
                                     selection.primitive_index,
                                 );
 
-                                if material.material_ref.is_none() {
-                                    material.material_ref = material_ref;
+                                // If this was the last mesh using this atlas material,
+                                // the material no longer has a mesh-material reference.
+                                if material.mesh_assignments.is_empty() {
+                                    material.material_ref = None;
                                 }
+
+                                atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
                             }
                         }
                     }
@@ -224,7 +220,19 @@ pub fn meshes_window(
                         if let (Some(material_index), Some(selection)) =
                             (editor_ui.selected_material, mesh_preview.selected_primitive)
                         {
-                            // Remove this primitive from any previous material.
+                            /*
+                             * Get the source MeshMaterialRef from the selected
+                             * mesh primitive BEFORE mutably borrowing the atlas.
+                             */
+                            let material_ref = mesh_scene_state
+                                .get(selection.mesh_id)
+                                .and_then(|mesh| mesh.scene.objects.get(selection.object_index))
+                                .and_then(|object| object.primitives.get(selection.primitive_index))
+                                .and_then(|primitive| primitive.material.clone());
+
+                            /*
+                             * Remove this primitive from every existing atlas material.
+                             */
                             for material in &mut atlas.materials {
                                 material.unassign_mesh(
                                     selection.mesh_id,
@@ -233,9 +241,9 @@ pub fn meshes_window(
                                 );
                             }
 
-                            atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
-
-                            // Assign it to the selected material.
+                            /*
+                             * Assign it to the selected atlas material.
+                             */
                             if let Some(material) = atlas
                                 .materials
                                 .iter_mut()
@@ -246,6 +254,16 @@ pub fn meshes_window(
                                     selection.object_index,
                                     selection.primitive_index,
                                 );
+
+                                /*
+                                 * The atlas material represents this source mesh
+                                 * material. Preserve the first MeshMaterialRef for
+                                 * the atlas material so the rendering pipeline can
+                                 * be resolved later.
+                                 */
+                                if material.material_ref.is_none() {
+                                    material.material_ref = material_ref;
+                                }
                             }
 
                             atlas.uv_revision = atlas.uv_revision.wrapping_add(1);

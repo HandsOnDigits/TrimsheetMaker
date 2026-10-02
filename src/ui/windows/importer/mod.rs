@@ -4,7 +4,10 @@ pub mod single_material;
 
 use std::path::PathBuf;
 
-use crate::data::{MaterialSource, MaterialTexture, TextureNaming};
+use crate::{
+    data::{MaterialSource, MaterialTexture, TextureNaming},
+    mesh::import::MeshMaterialRef,
+};
 
 pub fn classify_textures(paths: Vec<PathBuf>, naming: &TextureNaming) -> Vec<MaterialTexture> {
     paths
@@ -25,6 +28,7 @@ pub fn classify_textures(paths: Vec<PathBuf>, naming: &TextureNaming) -> Vec<Mat
 
 pub fn material_source_from_paths(
     name: String,
+    material_ref: Option<MeshMaterialRef>,
     textures: impl IntoIterator<Item = (String, PathBuf)>,
 ) -> MaterialSource {
     let textures = textures
@@ -37,5 +41,9 @@ pub fn material_source_from_paths(
         })
         .collect();
 
-    MaterialSource { name, textures }
+    MaterialSource {
+        name,
+        material_ref,
+        textures,
+    }
 }

@@ -6,7 +6,7 @@ use bevy::{
     shader::ShaderRef,
 };
 
-use crate::pipeline::{RenderingOutputSocket, RenderingPipelines};
+use crate::pipeline::{RenderingPipelines, TextureChannel};
 
 #[derive(Clone, Copy, Debug, ShaderType)]
 pub struct MeshPreviewTextureSource {
@@ -190,10 +190,6 @@ pub struct MeshPreviewRenderTarget {
     pub height: u32,
 }
 
-fn graph_channel(socket: RenderingOutputSocket) -> Vec4 {
-    Vec4::new(output_socket_channel(socket) as f32, 0.0, 0.0, 0.0)
-}
-
 fn setup_mesh_preview(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
@@ -290,17 +286,15 @@ fn create_solid_image(images: &mut Assets<Image>, color: [u8; 4]) -> Handle<Imag
     images.add(image)
 }
 
-fn output_socket_channel(socket: RenderingOutputSocket) -> u32 {
-    match socket {
-        RenderingOutputSocket::Red => 0,
-        RenderingOutputSocket::Green => 1,
-        RenderingOutputSocket::Blue => 2,
-        RenderingOutputSocket::Alpha => 3,
+fn graph_channel(channel: TextureChannel) -> Vec4 {
+    let channel_index = match channel {
+        TextureChannel::Red => 0,
+        TextureChannel::Green => 1,
+        TextureChannel::Blue => 2,
+        TextureChannel::Alpha => 3,
+    };
 
-        // A Texture output is not a single channel.
-        // For color/normal inputs the shader uses the complete texture.
-        RenderingOutputSocket::Texture => 0,
-    }
+    Vec4::new(channel_index as f32, 0.0, 0.0, 0.0)
 }
 
 fn texture_for_group(
@@ -308,10 +302,10 @@ fn texture_for_group(
     atlas: &Atlas,
     mesh_preview: &MeshPreview,
 ) -> Option<Handle<Image>> {
-    let group = group.trim().to_ascii_lowercase();
+    let group = group.trim();
 
-    match group.as_str() {
-        "base_color" | "basecolor" | "albedo" | "diffuse" | "color" => Some(
+    match group {
+        "base_color" => Some(
             atlas
                 .images
                 .base_color
@@ -319,7 +313,7 @@ fn texture_for_group(
                 .unwrap_or_else(|| mesh_preview.fallback_base_color.clone()),
         ),
 
-        "normal" | "normal_map" | "normalmap" => Some(
+        "normal" => Some(
             atlas
                 .images
                 .normal
@@ -327,7 +321,7 @@ fn texture_for_group(
                 .unwrap_or_else(|| mesh_preview.fallback_normal.clone()),
         ),
 
-        "height" | "height_map" | "heightmap" | "displacement" => Some(
+        "height" => Some(
             atlas
                 .images
                 .height
@@ -335,7 +329,7 @@ fn texture_for_group(
                 .unwrap_or_else(|| mesh_preview.fallback_height.clone()),
         ),
 
-        "ao" | "ambient_occlusion" | "ambientocclusion" | "occlusion" => Some(
+        "ambient_occlusion" => Some(
             atlas
                 .images
                 .ambient_occlusion
@@ -343,7 +337,7 @@ fn texture_for_group(
                 .unwrap_or_else(|| mesh_preview.fallback_ambient_occlusion.clone()),
         ),
 
-        "roughness" | "rough" => Some(
+        "roughness" => Some(
             atlas
                 .images
                 .roughness
@@ -351,7 +345,7 @@ fn texture_for_group(
                 .unwrap_or_else(|| mesh_preview.fallback_roughness.clone()),
         ),
 
-        "metallic" | "metalness" | "metal" => Some(
+        "metallic" => Some(
             atlas
                 .images
                 .metallic
@@ -940,12 +934,12 @@ pub fn sync_mesh_material(
     });
 
     /*
-     * Evaluate the rendering graph for that material.
+     * Compile the rendering graph into semantic material bindings.
      */
     if let Some(material_ref) = material_ref {
         if let Some(pipeline) = rendering_pipelines.pipeline_for(material_ref) {
-            if let Ok(result) = pipeline.evaluate() {
-                apply_rendering_result(&mut material, &result, &atlas, &mesh_preview);
+            if let Ok(bindings) = pipeline.compile() {
+                apply_rendering_bindings(&mut material, &bindings, &atlas, &mesh_preview);
             }
         }
     }
@@ -954,19 +948,18 @@ pub fn sync_mesh_material(
     sync_state.pipeline_revision = pipeline_revision;
 }
 
-fn apply_rendering_result(
+fn apply_rendering_bindings(
     material: &mut MeshPreviewMaterial,
-    result: &crate::pipeline::RenderingMaterialResult,
+    bindings: &crate::pipeline::RenderingMaterialBindings,
     atlas: &Atlas,
     mesh_preview: &MeshPreview,
 ) {
     /*
      * Base Color
      */
-    if let Some(group) = result.base_color_group.as_deref() {
-        if let Some(texture) = texture_for_group(group, atlas, mesh_preview) {
+    if let Some(binding) = &bindings.base_color {
+        if let Some(texture) = texture_for_group(&binding.texture_group, atlas, mesh_preview) {
             material.base_color = texture;
-
             material.graph.base_color = Vec4::ZERO;
         }
     }
@@ -974,10 +967,9 @@ fn apply_rendering_result(
     /*
      * Normal
      */
-    if let Some(group) = result.normal_group.as_deref() {
-        if let Some(texture) = texture_for_group(group, atlas, mesh_preview) {
+    if let Some(binding) = &bindings.normal {
+        if let Some(texture) = texture_for_group(&binding.texture_group, atlas, mesh_preview) {
             material.normal = texture;
-
             material.graph.normal = Vec4::ZERO;
         }
     }
@@ -985,44 +977,40 @@ fn apply_rendering_result(
     /*
      * Height
      */
-    if let Some(source) = result.height_group.as_ref() {
-        if let Some(texture) = texture_for_group(&source.texture_group, atlas, mesh_preview) {
+    if let Some(binding) = &bindings.height {
+        if let Some(texture) = texture_for_group(&binding.texture_group, atlas, mesh_preview) {
             material.height = texture;
-
-            material.graph.height = graph_channel(source.socket);
+            material.graph.height = graph_channel(binding.channel);
         }
     }
 
     /*
      * Ambient Occlusion
      */
-    if let Some(source) = result.ao_group.as_ref() {
-        if let Some(texture) = texture_for_group(&source.texture_group, atlas, mesh_preview) {
+    if let Some(binding) = &bindings.ambient_occlusion {
+        if let Some(texture) = texture_for_group(&binding.texture_group, atlas, mesh_preview) {
             material.ambient_occlusion = texture;
-
-            material.graph.ambient_occlusion = graph_channel(source.socket);
+            material.graph.ambient_occlusion = graph_channel(binding.channel);
         }
     }
 
     /*
      * Roughness
      */
-    if let Some(source) = result.roughness_group.as_ref() {
-        if let Some(texture) = texture_for_group(&source.texture_group, atlas, mesh_preview) {
+    if let Some(binding) = &bindings.roughness {
+        if let Some(texture) = texture_for_group(&binding.texture_group, atlas, mesh_preview) {
             material.roughness = texture;
-
-            material.graph.roughness = graph_channel(source.socket);
+            material.graph.roughness = graph_channel(binding.channel);
         }
     }
 
     /*
      * Metallic
      */
-    if let Some(source) = result.metallic_group.as_ref() {
-        if let Some(texture) = texture_for_group(&source.texture_group, atlas, mesh_preview) {
+    if let Some(binding) = &bindings.metallic {
+        if let Some(texture) = texture_for_group(&binding.texture_group, atlas, mesh_preview) {
             material.metallic = texture;
-
-            material.graph.metallic = graph_channel(source.socket);
+            material.graph.metallic = graph_channel(binding.channel);
         }
     }
 }

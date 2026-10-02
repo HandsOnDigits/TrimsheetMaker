@@ -242,20 +242,9 @@ fn ensure_rendering_graph(
         (None, None) => false,
     };
 
-    let has_material_output = editor_ui
-        .rendering_window_state
-        .editor
-        .graph
-        .iter_nodes()
-        .any(|id| {
-            editor_ui.rendering_window_state.editor.graph[id]
-                .user_data
-                .kind
-                == RenderingNodeKind::MaterialOutput
-        });
-
-    if material_changed || !has_material_output {
+    if material_changed {
         rebuild_rendering_graph(editor_ui, material_ref.as_ref(), rendering_pipelines);
+
         return true;
     }
 
@@ -281,6 +270,7 @@ fn rebuild_rendering_graph(
 
     let Some(material_ref) = material_ref else {
         ensure_material_output_in_graph(&mut editor_ui.rendering_window_state);
+        editor_ui.rendering_window_state.loaded_material = None;
         return;
     };
 
@@ -291,6 +281,7 @@ fn rebuild_rendering_graph(
     }
 
     let pipeline = pipeline.clone();
+
     let mut pipeline_to_ui = HashMap::<PipelineNodeId, NodeId>::new();
 
     for node in &pipeline.nodes {
@@ -349,8 +340,6 @@ fn rebuild_rendering_graph(
             .node_positions
             .insert(ui_node_id, position);
     }
-
-    ensure_material_output_in_graph(&mut editor_ui.rendering_window_state);
 
     let material_output_ui_node = pipeline
         .material_output()

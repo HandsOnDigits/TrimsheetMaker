@@ -242,7 +242,7 @@ fn import_material(editor_ui: &mut EditorUi, atlas: &mut Atlas, images: &mut Ass
         return;
     }
 
-    let source = material_source_from_paths(name, textures);
+    let source = material_source_from_paths(name, None, textures);
 
     let index = atlas.add_material(source);
 
