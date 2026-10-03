@@ -43,40 +43,22 @@ var normal_texture: texture_2d<f32>;
 var normal_sampler: sampler;
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(104)
-var height_texture: texture_2d<f32>;
-
-@group(#{MATERIAL_BIND_GROUP}) @binding(105)
-var height_sampler: sampler;
-
-@group(#{MATERIAL_BIND_GROUP}) @binding(106)
 var ambient_occlusion_texture: texture_2d<f32>;
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(107)
+@group(#{MATERIAL_BIND_GROUP}) @binding(105)
 var ambient_occlusion_sampler: sampler;
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(108)
+@group(#{MATERIAL_BIND_GROUP}) @binding(106)
 var roughness_texture: texture_2d<f32>;
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(109)
+@group(#{MATERIAL_BIND_GROUP}) @binding(107)
 var roughness_sampler: sampler;
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(110)
+@group(#{MATERIAL_BIND_GROUP}) @binding(108)
 var metallic_texture: texture_2d<f32>;
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(111)
+@group(#{MATERIAL_BIND_GROUP}) @binding(109)
 var metallic_sampler: sampler;
-
-
-// -----------------------------------------------------------------------------
-// Height
-// -----------------------------------------------------------------------------
-
-struct MeshPreviewHeight {
-    scale: f32,
-};
-
-@group(#{MATERIAL_BIND_GROUP}) @binding(112)
-var<uniform> height: MeshPreviewHeight;
 
 
 // -----------------------------------------------------------------------------
@@ -89,10 +71,11 @@ fn fragment(
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
 
-    // Let Bevy construct the complete PBR input.
     var pbr_input =
-        pbr_input_from_standard_material(in, is_front);
-
+        pbr_input_from_standard_material(
+            in,
+            is_front,
+        );
 
     #ifdef VERTEX_UVS
 
@@ -108,30 +91,30 @@ fn fragment(
         );
 
 
-   // -------------------------------------------------------------------------
-   // Normal
-   //
-   // Follow Bevy 0.19.1's MikkTSpace normal mapping.
-   // -------------------------------------------------------------------------
-   
-   #ifndef LOAD_PREPASS_NORMALS
-   #ifdef VERTEX_UVS
-   #ifdef VERTEX_TANGENTS
-   
-   let normal_sample =
+    // -------------------------------------------------------------------------
+    // Normal
+    //
+    // Geometry displacement has already happened in the compute stage.
+    // The normal map is applied here using the displaced mesh tangent basis.
+    // -------------------------------------------------------------------------
+
+    #ifndef LOAD_PREPASS_NORMALS
+    #ifdef VERTEX_TANGENTS
+
+    let normal_sample =
         textureSample(
-        normal_texture,
-        normal_sampler,
-        in.uv,
-   ).rgb;
-   
-   let tbn =
+            normal_texture,
+            normal_sampler,
+            in.uv,
+        ).rgb;
+
+    let tbn =
         pbr_functions::calculate_tbn_mikktspace(
-        pbr_input.world_normal,
-        in.world_tangent,
-   );
-   
-   pbr_input.N =
+            pbr_input.world_normal,
+            in.world_tangent,
+        );
+
+    pbr_input.N =
         pbr_functions::apply_normal_mapping(
             pbr_input.flags,
             tbn,
@@ -139,13 +122,12 @@ fn fragment(
             is_front,
             normal_sample,
         );
-   
-   pbr_input.clearcoat_N =
-   pbr_input.N;
-   
-   #endif
-   #endif
-   #endif
+
+    pbr_input.clearcoat_N =
+        pbr_input.N;
+
+    #endif
+    #endif
 
 
     // -------------------------------------------------------------------------

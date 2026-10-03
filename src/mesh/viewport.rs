@@ -5,7 +5,7 @@ use bevy::{
     pbr::{ExtendedMaterial, MaterialExtension, StandardMaterial},
     prelude::*,
     render::render_resource::{
-        AsBindGroup, Extent3d, ShaderType, TextureDimension, TextureFormat, TextureUsages,
+        AsBindGroup, Extent3d, TextureDimension, TextureFormat, TextureUsages,
     },
     shader::ShaderRef,
 };
@@ -24,15 +24,9 @@ use crate::{
     ui::EditorUi,
 };
 
-#[derive(Clone, Copy, Debug, ShaderType)]
-pub struct MeshPreviewHeight {
-    pub scale: f32,
-}
-
-impl Default for MeshPreviewHeight {
-    fn default() -> Self {
-        Self { scale: 0.0 }
-    }
+#[derive(Resource, Default)]
+pub struct AtlasRefresh {
+    pub requested: bool,
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone, Default)]
@@ -47,22 +41,15 @@ pub struct MeshPreviewExtension {
 
     #[texture(104)]
     #[sampler(105)]
-    pub height_texture: Option<Handle<Image>>,
+    pub ambient_occlusion_texture: Option<Handle<Image>>,
 
     #[texture(106)]
     #[sampler(107)]
-    pub ambient_occlusion_texture: Option<Handle<Image>>,
+    pub roughness_texture: Option<Handle<Image>>,
 
     #[texture(108)]
     #[sampler(109)]
-    pub roughness_texture: Option<Handle<Image>>,
-
-    #[texture(110)]
-    #[sampler(111)]
     pub metallic_texture: Option<Handle<Image>>,
-
-    #[uniform(112)]
-    pub height: MeshPreviewHeight,
 }
 
 impl MaterialExtension for MeshPreviewExtension {
@@ -112,6 +99,7 @@ pub struct MeshPreview {
     pub target_distance: f32,
     pub yaw: f32,
     pub pitch: f32,
+
     pub uv_mode: MeshUvMode,
     pub unwrapped_scene: Option<UnwrappedMeshScene>,
     pub selected_mesh_id: Option<u64>,
@@ -161,13 +149,14 @@ pub struct MeshPreviewPlugin;
 
 impl Plugin for MeshPreviewPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(MaterialPlugin::<MeshPreviewMaterial>::default())
+        app.add_plugins((MaterialPlugin::<MeshPreviewMaterial>::default(),))
             .init_resource::<MeshViewportLayout>()
             .init_resource::<MeshLight>()
             .init_resource::<MeshViewportInput>()
             .init_resource::<MeshSceneState>()
             .init_resource::<MeshUvSyncState>()
             .init_resource::<AtlasImageSyncState>()
+            .init_resource::<AtlasRefresh>()
             .add_systems(Startup, (setup_mesh_preview, spawn_mesh_viewport).chain())
             .add_systems(
                 EguiPrimaryContextPass,
@@ -209,7 +198,6 @@ pub fn sync_atlas_to_mesh_preview_material(
 
         material.extension.base_color_texture = atlas.images.base_color.clone();
         material.extension.normal_texture = atlas.images.normal.clone();
-        material.extension.height_texture = atlas.images.height.clone();
         material.extension.ambient_occlusion_texture = atlas.images.ambient_occlusion.clone();
         material.extension.roughness_texture = atlas.images.roughness.clone();
         material.extension.metallic_texture = atlas.images.metallic.clone();
@@ -268,12 +256,9 @@ fn setup_mesh_preview(
         extension: MeshPreviewExtension {
             base_color_texture: Some(white),
             normal_texture: Some(flat_normal),
-            height_texture: Some(black.clone()),
             ambient_occlusion_texture: Some(white_data.clone()),
             roughness_texture: Some(white_data.clone()),
             metallic_texture: Some(black),
-
-            height: MeshPreviewHeight { scale: 0.03 },
         },
     });
 
@@ -284,11 +269,13 @@ fn setup_mesh_preview(
         target_distance: 4.0,
         yaw: 0.0,
         pitch: 0.3,
+
         uv_mode: MeshUvMode::Imported,
         unwrapped_scene: None,
         selected_mesh_id: None,
         unwrapped_mesh_id: None,
         selected_primitive: None,
+
         material,
         uv_revision: 0,
     });
@@ -464,7 +451,7 @@ fn transform_material_uv(uv: [f32; 2], rotation: Rotation) -> [f32; 2] {
     }
 }
 
-fn atlas_uv(uv: [f32; 2], material: &AtlasMaterial, atlas: &Atlas) -> [f32; 2] {
+pub(crate) fn atlas_uv(uv: [f32; 2], material: &AtlasMaterial, atlas: &Atlas) -> [f32; 2] {
     let uv = transform_material_uv(uv, material.transform.rotation);
 
     let atlas_width = atlas.width as f32;
@@ -485,7 +472,7 @@ fn atlas_uv(uv: [f32; 2], material: &AtlasMaterial, atlas: &Atlas) -> [f32; 2] {
     ]
 }
 
-fn material_uvs(
+pub(crate) fn material_uvs(
     uvs: &[[f32; 2]],
     material: Option<&AtlasMaterial>,
     atlas: &Atlas,
@@ -689,10 +676,12 @@ pub fn sync_atlas_images(
     editor_ui: Res<EditorUi>,
     mut images: ResMut<Assets<Image>>,
     mut sync_state: ResMut<AtlasImageSyncState>,
+    mut refresh: ResMut<AtlasRefresh>,
 ) {
     let rendering_revision = editor_ui.rendering_revision;
 
-    if sync_state.atlas_uv_revision == atlas.uv_revision
+    if !refresh.requested
+        && sync_state.atlas_uv_revision == atlas.uv_revision
         && sync_state.rendering_revision == rendering_revision
     {
         return;
@@ -706,6 +695,9 @@ pub fn sync_atlas_images(
 
     sync_state.atlas_uv_revision = atlas.uv_revision;
     sync_state.rendering_revision = rendering_revision;
+    refresh.requested = false;
+
+    atlas.image_revision = atlas.image_revision.wrapping_add(1);
 }
 
 pub fn resize_mesh_preview_render_target(

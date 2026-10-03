@@ -159,9 +159,11 @@ impl ProjectFile {
 
     pub fn load(
         path: impl AsRef<Path>,
+        images: &mut Assets<Image>,
     ) -> Result<(Atlas, ProjectSettings, Vec<ProjectMesh>), Box<dyn std::error::Error>> {
-        let contents = fs::read_to_string(path)?;
+        let path = path.as_ref();
 
+        let contents = fs::read_to_string(path)?;
         let project: Self = ron::from_str(&contents)?;
 
         if project.format_version != PROJECT_FORMAT_VERSION {
@@ -171,6 +173,8 @@ impl ProjectFile {
             )
             .into());
         }
+
+        let project_dir = path.parent().unwrap_or_else(|| Path::new("."));
 
         let mut atlas = Atlas::default();
 
@@ -185,14 +189,23 @@ impl ProjectFile {
                 index: material.index,
                 name: material.name,
                 material_ref: material.material_ref,
+
                 textures: material
                     .textures
                     .into_iter()
-                    .map(|texture| MaterialTexture {
-                        id: texture.id,
-                        path: texture.path,
-                        image: None,
-                        egui_texture: None,
+                    .map(|texture| {
+                        let resolved_path = if texture.path.is_absolute() {
+                            texture.path
+                        } else {
+                            project_dir.join(texture.path)
+                        };
+
+                        MaterialTexture {
+                            id: texture.id,
+                            path: resolved_path,
+                            image: None,
+                            egui_texture: None,
+                        }
                     })
                     .collect(),
 
@@ -209,6 +222,8 @@ impl ProjectFile {
                     .collect(),
             })
             .collect();
+
+        atlas.load_textures(images);
 
         Ok((atlas, project.settings, project.meshes))
     }

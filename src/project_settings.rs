@@ -8,8 +8,10 @@ pub struct ProjectSettings {
     pub atlas_height: u32,
     pub padding: u32,
 
+    #[serde(default)]
     pub texture_naming: TextureNaming,
 
+    #[serde(default)]
     pub preview_texture_group: Option<String>,
 }
 

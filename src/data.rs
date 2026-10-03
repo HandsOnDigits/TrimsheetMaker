@@ -45,6 +45,7 @@ pub struct TextureGroup {
     pub name: String,
     pub suffixes: Vec<String>,
 
+    #[serde(default)]
     pub rendering: RenderingMaterialBindings,
 }
 
@@ -61,6 +62,7 @@ impl Default for TextureGroup {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TextureNaming {
+    #[serde(default)]
     pub groups: Vec<TextureGroup>,
 }
 
@@ -534,6 +536,18 @@ impl Atlas {
             transform: Transform::default(),
             mesh_assignments: Vec::new(),
         });
+
+        index
+    }
+
+    pub fn add_material_and_load(
+        &mut self,
+        source: MaterialSource,
+        images: &mut Assets<Image>,
+    ) -> usize {
+        let index = self.add_material(source);
+
+        self.load_textures(images);
 
         index
     }

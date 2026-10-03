@@ -244,7 +244,7 @@ fn import_material(editor_ui: &mut EditorUi, atlas: &mut Atlas, images: &mut Ass
 
     let source = material_source_from_paths(name, None, textures);
 
-    let index = atlas.add_material(source);
+    let index = atlas.add_material_and_load(source, images);
 
     atlas.load_textures(images);
 

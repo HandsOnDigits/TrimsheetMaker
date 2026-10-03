@@ -75,11 +75,21 @@ impl MaterialInput {
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct RenderingMaterialBindings {
+    #[serde(default)]
     pub base_color: bool,
+
+    #[serde(default)]
     pub normal: bool,
 
+    #[serde(default)]
     pub height: Option<ChannelSource>,
+
+    #[serde(default)]
     pub ambient_occlusion: Option<ChannelSource>,
+
+    #[serde(default)]
     pub roughness: Option<ChannelSource>,
+
+    #[serde(default)]
     pub metallic: Option<ChannelSource>,
 }
