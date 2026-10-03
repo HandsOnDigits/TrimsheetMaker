@@ -219,22 +219,6 @@ fn texture_source_image(
     atlas_source_image_from_image(image)
 }
 
-fn resolve_rendering_texture(
-    material: &AtlasMaterial,
-    group_name: &str,
-    images: &Assets<Image>,
-) -> Option<AtlasSourceImage> {
-    let texture = material
-        .textures
-        .iter()
-        .find(|texture| texture.id == group_name)?;
-
-    let handle = texture.image.as_ref()?;
-    let image = images.get(handle)?;
-
-    atlas_source_image_from_image(image)
-}
-
 fn read_f32(source_data: &[u8], offset: usize) -> Option<f32> {
     let bytes = source_data.get(offset..offset + 4)?;
 

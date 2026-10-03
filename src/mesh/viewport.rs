@@ -24,27 +24,14 @@ use crate::{
     ui::EditorUi,
 };
 
-#[derive(Clone, Copy, Debug, Default, ShaderType)]
-pub struct MeshPreviewMaps {
-    pub base_color: Vec4,
-    pub normal: Vec4,
-    pub height: Vec4,
-    pub ambient_occlusion: Vec4,
-    pub roughness: Vec4,
-    pub metallic: Vec4,
+#[derive(Clone, Copy, Debug, ShaderType)]
+pub struct MeshPreviewHeight {
+    pub scale: f32,
 }
 
-impl MeshPreviewMaps {
-    pub fn base_color(enabled: bool) -> Vec4 {
-        if enabled { Vec4::ONE } else { Vec4::ZERO }
-    }
-
-    pub fn normal(enabled: bool) -> Vec4 {
-        if enabled { Vec4::ONE } else { Vec4::ZERO }
-    }
-
-    pub fn scalar(enabled: bool) -> Vec4 {
-        if enabled { Vec4::ONE } else { Vec4::ZERO }
+impl Default for MeshPreviewHeight {
+    fn default() -> Self {
+        Self { scale: 0.0 }
     }
 }
 
@@ -75,12 +62,16 @@ pub struct MeshPreviewExtension {
     pub metallic_texture: Option<Handle<Image>>,
 
     #[uniform(112)]
-    pub maps: MeshPreviewMaps,
+    pub height: MeshPreviewHeight,
 }
 
 impl MaterialExtension for MeshPreviewExtension {
     fn fragment_shader() -> ShaderRef {
         "shaders/mesh_preview_material.wgsl".into()
+    }
+
+    fn enable_shadows() -> bool {
+        true
     }
 }
 
@@ -222,21 +213,6 @@ pub fn sync_atlas_to_mesh_preview_material(
         material.extension.ambient_occlusion_texture = atlas.images.ambient_occlusion.clone();
         material.extension.roughness_texture = atlas.images.roughness.clone();
         material.extension.metallic_texture = atlas.images.metallic.clone();
-
-        material.extension.maps.base_color =
-            MeshPreviewMaps::base_color(atlas.images.base_color.is_some());
-
-        material.extension.maps.normal = MeshPreviewMaps::normal(atlas.images.normal.is_some());
-
-        material.extension.maps.height = MeshPreviewMaps::scalar(atlas.images.height.is_some());
-
-        material.extension.maps.ambient_occlusion =
-            MeshPreviewMaps::scalar(atlas.images.ambient_occlusion.is_some());
-
-        material.extension.maps.roughness =
-            MeshPreviewMaps::scalar(atlas.images.roughness.is_some());
-
-        material.extension.maps.metallic = MeshPreviewMaps::scalar(atlas.images.metallic.is_some());
     }
 }
 
@@ -281,16 +257,23 @@ fn setup_mesh_preview(
     let white_data =
         create_solid_image(&mut images, [255, 255, 255, 255], TextureFormat::Rgba8Unorm);
 
+    use bevy::material::OpaqueRendererMethod;
+
     let material = materials.add(ExtendedMaterial {
-        base: StandardMaterial::default(),
+        base: StandardMaterial {
+            opaque_render_method: OpaqueRendererMethod::Forward,
+            ..default()
+        },
+
         extension: MeshPreviewExtension {
             base_color_texture: Some(white),
             normal_texture: Some(flat_normal),
             height_texture: Some(black.clone()),
             ambient_occlusion_texture: Some(white_data.clone()),
-            roughness_texture: Some(white_data),
+            roughness_texture: Some(white_data.clone()),
             metallic_texture: Some(black),
-            maps: MeshPreviewMaps::default(),
+
+            height: MeshPreviewHeight { scale: 0.03 },
         },
     });
 

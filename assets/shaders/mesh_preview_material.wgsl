@@ -3,28 +3,30 @@
     pbr_functions::{
         apply_pbr_lighting,
         main_pass_post_lighting_processing,
-    }
+    },
 }
 
 #ifdef PREPASS_PIPELINE
 #import bevy_pbr::{
-    prepass_io::{VertexOutput, FragmentOutput},
+    prepass_io::{
+        VertexOutput,
+        FragmentOutput,
+    },
     pbr_deferred_functions::deferred_output,
 }
 #else
 #import bevy_pbr::{
-    forward_io::{VertexOutput, FragmentOutput},
+    forward_io::{
+        VertexOutput,
+        FragmentOutput,
+    },
 }
 #endif
 
-struct MeshPreviewMaps {
-    base_color: vec4<f32>,
-    normal: vec4<f32>,
-    height: vec4<f32>,
-    ambient_occlusion: vec4<f32>,
-    roughness: vec4<f32>,
-    metallic: vec4<f32>,
-}
+
+// -----------------------------------------------------------------------------
+// Mesh Preview Extension
+// -----------------------------------------------------------------------------
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(100)
 var base_color_texture: texture_2d<f32>;
@@ -62,96 +64,137 @@ var metallic_texture: texture_2d<f32>;
 @group(#{MATERIAL_BIND_GROUP}) @binding(111)
 var metallic_sampler: sampler;
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(112)
-var<uniform> maps: MeshPreviewMaps;
 
+// -----------------------------------------------------------------------------
+// Height
+// -----------------------------------------------------------------------------
+
+struct MeshPreviewHeight {
+    scale: f32,
+};
+
+@group(#{MATERIAL_BIND_GROUP}) @binding(112)
+var<uniform> height: MeshPreviewHeight;
+
+
+// -----------------------------------------------------------------------------
+// Fragment
+// -----------------------------------------------------------------------------
 
 @fragment
 fn fragment(
     in: VertexOutput,
     @builtin(front_facing) is_front: bool,
 ) -> FragmentOutput {
-    var pbr_input = pbr_input_from_standard_material(in, is_front);
 
-    // Base Color
-    if maps.base_color.x > 0.5 {
-        pbr_input.material.base_color =
-            textureSample(
-                base_color_texture,
-                base_color_sampler,
-                in.uv,
-            );
-    }
+    // Let Bevy construct the complete PBR input.
+    var pbr_input =
+        pbr_input_from_standard_material(in, is_front);
 
-    // Normal
-    if maps.normal.x > 0.5 {
-        let tangent_normal =
-            textureSample(
-                normal_texture,
-                normal_sampler,
-                in.uv,
-            ).rgb * 2.0 - 1.0;
 
-        let N = normalize(in.world_normal);
-        let T = normalize(in.world_tangent.xyz);
-        let B = normalize(cross(N, T) * in.world_tangent.w);
+    // -------------------------------------------------------------------------
+    // Custom atlas material
+    //
+    // Start without parallax. This is deliberately the simplest possible
+    // modification to Bevy's PBR input.
+    // -------------------------------------------------------------------------
 
-        let TBN = mat3x3<f32>(T, B, N);
+    #ifdef VERTEX_UVS
 
-        pbr_input.N = normalize(TBN * tangent_normal);
-    }
+    pbr_input.material.base_color =
+        textureSample(
+            base_color_texture,
+            base_color_sampler,
+            in.uv,
+        );
 
-    // Roughness
-    if maps.roughness.x > 0.5 {
-        pbr_input.material.perceptual_roughness =
-            textureSample(
-                roughness_texture,
-                roughness_sampler,
-                in.uv,
-            ).r;
-    }
 
-    // Metallic
-    if maps.metallic.x > 0.5 {
-        pbr_input.material.metallic =
-            textureSample(
-                metallic_texture,
-                metallic_sampler,
-                in.uv,
-            ).r;
-    }
+    let normal =
+        textureSample(
+            normal_texture,
+            normal_sampler,
+            in.uv,
+        );
 
-    // Ambient Occlusion
-    if maps.ambient_occlusion.x > 0.5 {
-        let ao =
-            textureSample(
-                ambient_occlusion_texture,
-                ambient_occlusion_sampler,
-                in.uv,
-            ).r;
+    // Bevy's StandardMaterial normal-map path expects the sampled value
+    // in [0, 1]. Do NOT convert it to [-1, 1] here.
+    //
+    // We are intentionally leaving pbr_input.N alone for this first
+    // working version. This proves that the custom atlas textures can
+    // coexist with Bevy's normal/light/shadow pipeline.
 
-        pbr_input.diffuse_occlusion = vec3<f32>(ao);
-    }
 
-    // Height is currently not used directly by the PBR shader.
-    // It is available as an atlas map for future parallax/displacement support.
+    let ambient_occlusion =
+        textureSample(
+            ambient_occlusion_texture,
+            ambient_occlusion_sampler,
+            in.uv,
+        ).r;
 
-#ifdef PREPASS_PIPELINE
+    let roughness =
+        textureSample(
+            roughness_texture,
+            roughness_sampler,
+            in.uv,
+        ).r;
 
-    return deferred_output(in, pbr_input);
+    let metallic =
+        textureSample(
+            metallic_texture,
+            metallic_sampler,
+            in.uv,
+        ).r;
 
-#else
+
+    pbr_input.diffuse_occlusion =
+        vec3<f32>(ambient_occlusion);
+
+    pbr_input.material.perceptual_roughness =
+        roughness;
+
+    pbr_input.material.metallic =
+        metallic;
+
+    #endif
+
+
+    // -------------------------------------------------------------------------
+    // Forward / deferred
+    // -------------------------------------------------------------------------
+
+    #ifdef PREPASS_PIPELINE
+
+    // In deferred mode lighting happens later in the deferred lighting pass.
+    return deferred_output(
+        in,
+        pbr_input,
+    );
+
+    #else
 
     var out: FragmentOutput;
 
-    out.color = apply_pbr_lighting(pbr_input);
+    // Bevy performs:
+    //
+    //   directional lights
+    //   point lights
+    //   spot lights
+    //   PBR BRDF
+    //   shadows
+    //   ambient lighting
+    //
+    out.color =
+        apply_pbr_lighting(
+            pbr_input,
+        );
 
-    out.color = main_pass_post_lighting_processing(
-        pbr_input,
-        out.color,
-    );
+    out.color =
+        main_pass_post_lighting_processing(
+            pbr_input,
+            out.color,
+        );
 
     return out;
 
-#endif
+    #endif
 }
