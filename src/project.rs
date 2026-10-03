@@ -16,7 +16,6 @@ use crate::{
         viewport::MeshPreview,
     },
     project_settings::ProjectSettings,
-    rendering::RenderingMaterialBindings,
     transform::Transform,
     ui::EditorUi,
 };
@@ -68,9 +67,6 @@ pub struct ProjectMaterial {
 
     pub textures: Vec<ProjectTexture>,
     pub transform: Transform,
-
-    #[serde(default)]
-    pub rendering: RenderingMaterialBindings,
 
     #[serde(default)]
     pub mesh_assignments: Vec<ProjectMaterialMeshAssignment>,
@@ -127,8 +123,6 @@ impl ProjectFile {
                         .map(ProjectTexture::from_texture)
                         .collect(),
                     transform: material.transform.clone(),
-
-                    rendering: material.rendering.clone(),
 
                     mesh_assignments: material
                         .mesh_assignments
@@ -201,8 +195,6 @@ impl ProjectFile {
                         egui_texture: None,
                     })
                     .collect(),
-
-                rendering: material.rendering,
 
                 transform: material.transform,
 

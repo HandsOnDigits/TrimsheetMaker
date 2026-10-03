@@ -79,7 +79,9 @@ pub struct EditorUi {
 
     pub inspector_tab: InspectorTab,
 
-    pub rendering_material: Option<usize>,
+    /// Texture group currently being edited in the Rendering inspector.
+    pub rendering_group: Option<String>,
+    pub rendering_revision: u64,
 
     pub show_import_multiple_materials_window: bool,
     pub show_import_single_material_window: bool,
@@ -142,7 +144,9 @@ impl Default for EditorUi {
             expanded_meshes: std::collections::BTreeSet::new(),
 
             inspector_tab: InspectorTab::Properties,
-            rendering_material: None,
+
+            rendering_group: None,
+            rendering_revision: 0,
 
             multiple_materials_root: None,
             import_materials: BTreeMap::new(),

@@ -134,6 +134,10 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
             editor_ui.project_settings.preview_texture_group = None;
         }
 
+        if editor_ui.rendering_group.as_deref() == Some(removed_id.as_str()) {
+            editor_ui.rendering_group = None;
+        }
+
         editor_ui
             .project_settings
             .texture_naming
@@ -154,6 +158,7 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
                 id: uuid::Uuid::new_v4().to_string(),
                 name: "New Group".to_string(),
                 suffixes: vec!["_new".to_string()],
+                rendering: Default::default(),
             });
     }
 

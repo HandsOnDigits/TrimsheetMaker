@@ -18,7 +18,7 @@ use crate::transform::{Rotation, Transform};
 
 use super::{
     mesh::import::MeshMaterialRef,
-    rendering::{Channel, ChannelSource, RenderingMaterialBindings},
+    rendering::{Channel, ChannelSource, RenderingMaterialBindings, TextureSource},
 };
 
 #[derive(Clone)]
@@ -44,6 +44,19 @@ pub struct TextureGroup {
     pub id: String,
     pub name: String,
     pub suffixes: Vec<String>,
+
+    pub rendering: RenderingMaterialBindings,
+}
+
+impl Default for TextureGroup {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            name: String::new(),
+            suffixes: Vec::new(),
+            rendering: RenderingMaterialBindings::default(),
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -161,6 +174,45 @@ struct AtlasBuildInput {
     materials: Vec<AtlasMaterialBuildInput>,
 }
 
+fn find_texture_group<'a>(texture_naming: &'a TextureNaming, id: &str) -> Option<&'a TextureGroup> {
+    texture_naming.groups.iter().find(|group| group.id == id)
+}
+
+fn add_group_texture(
+    maps: &mut BTreeMap<AtlasMap, AtlasSourceImage>,
+    material: &AtlasMaterial,
+    texture_naming: &TextureNaming,
+    map: AtlasMap,
+    binding: Option<&TextureSource>,
+    images: &Assets<Image>,
+) {
+    let Some(binding) = binding else {
+        return;
+    };
+
+    let Some(group) = texture_naming
+        .groups
+        .iter()
+        .find(|group| group.id == binding.texture_id)
+    else {
+        warn!(
+            "Rendering binding for {:?} references missing texture group '{}'",
+            map, binding.texture_id
+        );
+        return;
+    };
+
+    let Some(source) = resolve_rendering_texture(material, &group.id, images) else {
+        warn!(
+            "Failed to resolve {:?} texture group '{}' for material '{}'",
+            map, group.name, material.name
+        );
+        return;
+    };
+
+    maps.insert(map, source);
+}
+
 fn atlas_source_image_from_image(image: &Image) -> Option<AtlasSourceImage> {
     let data = image.data.as_ref()?;
 
@@ -199,6 +251,28 @@ fn read_f16(source_data: &[u8], offset: usize) -> Option<f32> {
     Some(half::f16::from_bits(bits).to_f32())
 }
 
+fn add_rendering_texture(
+    maps: &mut BTreeMap<AtlasMap, AtlasSourceImage>,
+    material: &AtlasMaterial,
+    map: AtlasMap,
+    binding: Option<&TextureSource>,
+    images: &Assets<Image>,
+) {
+    let Some(binding) = binding else {
+        return;
+    };
+
+    let Some(source) = resolve_rendering_texture(material, &binding.texture_id, images) else {
+        warn!(
+            "Failed to resolve {:?} texture '{}' for material '{}'",
+            map, binding.texture_id, material.name
+        );
+        return;
+    };
+
+    maps.insert(map, source);
+}
+
 fn add_rendering_map(
     maps: &mut BTreeMap<AtlasMap, AtlasSourceImage>,
     material: &AtlasMaterial,
@@ -218,23 +292,12 @@ fn add_rendering_map(
         return;
     };
 
-    let source = match map {
-        AtlasMap::BaseColor | AtlasMap::Normal => source,
-
-        AtlasMap::Height
-        | AtlasMap::AmbientOcclusion
-        | AtlasMap::Roughness
-        | AtlasMap::Metallic => {
-            let Some(source) = bake_channel_source(&source, binding.channel) else {
-                warn!(
-                    "Failed to extract {:?} channel {:?} for material '{}'",
-                    map, binding.channel, material.name
-                );
-                return;
-            };
-
-            source
-        }
+    let Some(source) = bake_channel_source(&source, binding.channel) else {
+        warn!(
+            "Failed to extract {:?} channel {:?} for material '{}'",
+            map, binding.channel, material.name
+        );
+        return;
     };
 
     maps.insert(map, source);
@@ -307,60 +370,88 @@ fn bake_channel_source(source: &AtlasSourceImage, channel: Channel) -> Option<At
     })
 }
 
-fn create_atlas_build_input(atlas: &Atlas, images: &Assets<Image>) -> AtlasBuildInput {
+fn add_group_rendering_bindings(
+    maps: &mut BTreeMap<AtlasMap, AtlasSourceImage>,
+    material: &AtlasMaterial,
+    texture_naming: &TextureNaming,
+    group: &TextureGroup,
+    images: &Assets<Image>,
+) {
+    let rendering = &group.rendering;
+
+    add_group_texture(
+        maps,
+        material,
+        texture_naming,
+        AtlasMap::BaseColor,
+        rendering.base_color.as_ref(),
+        images,
+    );
+
+    add_group_texture(
+        maps,
+        material,
+        texture_naming,
+        AtlasMap::Normal,
+        rendering.normal.as_ref(),
+        images,
+    );
+
+    add_group_channel(
+        maps,
+        material,
+        texture_naming,
+        AtlasMap::Height,
+        rendering.height.as_ref(),
+        images,
+    );
+
+    add_group_channel(
+        maps,
+        material,
+        texture_naming,
+        AtlasMap::AmbientOcclusion,
+        rendering.ambient_occlusion.as_ref(),
+        images,
+    );
+
+    add_group_channel(
+        maps,
+        material,
+        texture_naming,
+        AtlasMap::Roughness,
+        rendering.roughness.as_ref(),
+        images,
+    );
+
+    add_group_channel(
+        maps,
+        material,
+        texture_naming,
+        AtlasMap::Metallic,
+        rendering.metallic.as_ref(),
+        images,
+    );
+}
+
+fn create_atlas_build_input(
+    atlas: &Atlas,
+    texture_naming: &TextureNaming,
+    images: &Assets<Image>,
+) -> AtlasBuildInput {
     let materials = atlas
         .materials
         .iter()
         .map(|material| {
             let mut maps = BTreeMap::new();
 
-            add_rendering_map(
-                &mut maps,
-                material,
-                AtlasMap::BaseColor,
-                material.rendering.base_color.as_ref(),
-                images,
-            );
+            for texture in &material.textures {
+                let Some(group) = find_texture_group(texture_naming, &texture.id) else {
+                    continue;
+                };
 
-            add_rendering_map(
-                &mut maps,
-                material,
-                AtlasMap::Normal,
-                material.rendering.normal.as_ref(),
-                images,
-            );
-
-            add_rendering_map(
-                &mut maps,
-                material,
-                AtlasMap::Height,
-                material.rendering.height.as_ref(),
-                images,
-            );
-
-            add_rendering_map(
-                &mut maps,
-                material,
-                AtlasMap::AmbientOcclusion,
-                material.rendering.ambient_occlusion.as_ref(),
-                images,
-            );
-
-            add_rendering_map(
-                &mut maps,
-                material,
-                AtlasMap::Roughness,
-                material.rendering.roughness.as_ref(),
-                images,
-            );
-
-            add_rendering_map(
-                &mut maps,
-                material,
-                AtlasMap::Metallic,
-                material.rendering.metallic.as_ref(),
-                images,
-            );
+                add_group_rendering_bindings(&mut maps, material, texture_naming, group, images);
+            }
 
             AtlasMaterialBuildInput {
                 transform: material.transform,
@@ -551,7 +642,6 @@ impl Atlas {
             name: source.name,
             material_ref: source.material_ref,
             textures,
-            rendering: RenderingMaterialBindings::default(),
             transform: Transform::default(),
             mesh_assignments: Vec::new(),
         });
@@ -601,22 +691,6 @@ impl Atlas {
                 self.height += 512;
             }
         }
-
-        self.materials.push(AtlasMaterial {
-            index,
-            name: format!("Material {index}"),
-            material_ref: None,
-            textures: vec![],
-            rendering: RenderingMaterialBindings::default(),
-            transform: Transform {
-                x: x as i32,
-                y: y as i32,
-                width: size,
-                height: size,
-                ..Default::default()
-            },
-            mesh_assignments: Vec::new(),
-        });
 
         self.uv_revision = self.uv_revision.wrapping_add(1);
         self.image_revision = self.image_revision.wrapping_add(1);
@@ -753,8 +827,6 @@ pub struct AtlasMaterial {
     pub material_ref: Option<MeshMaterialRef>,
 
     pub textures: Vec<MaterialTexture>,
-
-    pub rendering: RenderingMaterialBindings,
 
     pub transform: Transform,
     pub mesh_assignments: Vec<MaterialMeshAssignment>,
@@ -956,6 +1028,49 @@ fn atlas_destination_rect(transform: Transform) -> Option<(i64, i64, usize, usiz
         width as usize,
         height as usize,
     ))
+}
+
+fn add_group_channel(
+    maps: &mut BTreeMap<AtlasMap, AtlasSourceImage>,
+    material: &AtlasMaterial,
+    texture_naming: &TextureNaming,
+    map: AtlasMap,
+    binding: Option<&ChannelSource>,
+    images: &Assets<Image>,
+) {
+    let Some(binding) = binding else {
+        return;
+    };
+
+    let Some(group) = texture_naming
+        .groups
+        .iter()
+        .find(|group| group.id == binding.texture_id)
+    else {
+        warn!(
+            "Rendering binding for {:?} references missing texture group '{}'",
+            map, binding.texture_id
+        );
+        return;
+    };
+
+    let Some(source) = resolve_rendering_texture(material, &group.id, images) else {
+        warn!(
+            "Failed to resolve {:?} texture group '{}' for material '{}'",
+            map, group.name, material.name
+        );
+        return;
+    };
+
+    let Some(source) = bake_channel_source(&source, binding.channel) else {
+        warn!(
+            "Failed to extract {:?} channel {:?} from group '{}' for material '{}'",
+            map, binding.channel, group.name, material.name
+        );
+        return;
+    };
+
+    maps.insert(map, source);
 }
 
 fn make_atlas_image(width: usize, height: usize, data: Vec<u8>, format: TextureFormat) -> Image {
@@ -1177,8 +1292,12 @@ fn rebuild_atlas_map(input: &AtlasBuildInput, map: AtlasMap) -> Image {
     )
 }
 
-pub fn rebuild_atlas_maps(atlas: &mut Atlas, images: &mut Assets<Image>) {
-    let input = create_atlas_build_input(atlas, images);
+pub fn rebuild_atlas_maps(
+    atlas: &mut Atlas,
+    texture_naming: &TextureNaming,
+    images: &mut Assets<Image>,
+) {
+    let input = create_atlas_build_input(atlas, texture_naming, images);
 
     let maps = [
         AtlasMap::BaseColor,

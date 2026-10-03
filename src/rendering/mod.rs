@@ -1,3 +1,5 @@
 mod bindings;
 
-pub use bindings::{Channel, ChannelSource, MaterialChannel, RenderingMaterialBindings};
+pub use bindings::{
+    Channel, ChannelSource, MaterialInput, RenderingMaterialBindings, RenderingUsage, TextureSource,
+};

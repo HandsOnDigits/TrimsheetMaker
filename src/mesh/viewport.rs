@@ -89,12 +89,14 @@ pub type MeshPreviewMaterial = ExtendedMaterial<StandardMaterial, MeshPreviewExt
 #[derive(Resource)]
 pub struct AtlasImageSyncState {
     pub atlas_uv_revision: u64,
+    pub rendering_revision: u64,
 }
 
 impl Default for AtlasImageSyncState {
     fn default() -> Self {
         Self {
             atlas_uv_revision: u64::MAX,
+            rendering_revision: u64::MAX,
         }
     }
 }
@@ -701,16 +703,26 @@ pub fn orbit_camera(
 
 pub fn sync_atlas_images(
     mut atlas: ResMut<Atlas>,
+    editor_ui: Res<EditorUi>,
     mut images: ResMut<Assets<Image>>,
     mut sync_state: ResMut<AtlasImageSyncState>,
 ) {
-    if sync_state.atlas_uv_revision == atlas.uv_revision {
+    let rendering_revision = editor_ui.rendering_revision;
+
+    if sync_state.atlas_uv_revision == atlas.uv_revision
+        && sync_state.rendering_revision == rendering_revision
+    {
         return;
     }
 
-    rebuild_atlas_maps(&mut atlas, &mut images);
+    rebuild_atlas_maps(
+        &mut atlas,
+        &editor_ui.project_settings.texture_naming,
+        &mut images,
+    );
 
     sync_state.atlas_uv_revision = atlas.uv_revision;
+    sync_state.rendering_revision = rendering_revision;
 }
 
 pub fn resize_mesh_preview_render_target(

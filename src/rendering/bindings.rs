@@ -22,13 +22,24 @@ impl Channel {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TextureSource {
+    pub texture_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChannelSource {
     pub texture_id: String,
     pub channel: Channel,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum MaterialChannel {
+pub enum RenderingUsage {
+    Sample,
+    Channel,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum MaterialInput {
     BaseColor,
     Normal,
     Height,
@@ -37,7 +48,7 @@ pub enum MaterialChannel {
     Metallic,
 }
 
-impl MaterialChannel {
+impl MaterialInput {
     pub const ALL: [Self; 6] = [
         Self::BaseColor,
         Self::Normal,
@@ -57,12 +68,23 @@ impl MaterialChannel {
             Self::Metallic => "Metallic",
         }
     }
+
+    pub fn usage(self) -> RenderingUsage {
+        match self {
+            Self::BaseColor | Self::Normal => RenderingUsage::Sample,
+
+            Self::Height | Self::AmbientOcclusion | Self::Roughness | Self::Metallic => {
+                RenderingUsage::Channel
+            }
+        }
+    }
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct RenderingMaterialBindings {
-    pub base_color: Option<ChannelSource>,
-    pub normal: Option<ChannelSource>,
+    pub base_color: Option<TextureSource>,
+    pub normal: Option<TextureSource>,
+
     pub height: Option<ChannelSource>,
     pub ambient_occlusion: Option<ChannelSource>,
     pub roughness: Option<ChannelSource>,

@@ -92,6 +92,7 @@ pub fn detect_naming(folders: &[PathBuf]) -> io::Result<TextureNaming> {
             id: uuid::Uuid::new_v4().to_string(),
             name: display_name(&suffix),
             suffixes: vec![format!("_{suffix}")],
+            rendering: Default::default(),
         });
     }
 

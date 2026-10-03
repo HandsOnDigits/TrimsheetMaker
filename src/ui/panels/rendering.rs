@@ -1,118 +1,115 @@
 use bevy_egui::egui;
 
 use crate::{
-    data::{Atlas, AtlasMaterial},
-    rendering::{Channel, ChannelSource, MaterialChannel},
+    data::{Atlas, TextureGroup},
+    rendering::{Channel, ChannelSource, MaterialInput, RenderingUsage, TextureSource},
     ui::EditorUi,
 };
 
-pub fn rendering_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
+pub fn rendering_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, _atlas: &mut Atlas) {
     ui.heading("Rendering");
 
-    // Material group selector.
-    ui.horizontal(|ui| {
-        ui.label("Material Group");
+    let groups = &editor_ui.project_settings.texture_naming.groups;
 
-        let selected_name = editor_ui
-            .rendering_material
-            .and_then(|index| editor_ui.project_settings.texture_naming.groups.get(index))
-            .map(|group| group.name.as_str())
-            .unwrap_or("None");
+    if groups.is_empty() {
+        editor_ui.rendering_group = None;
+        ui.label("No texture groups defined.");
+        return;
+    }
 
-        egui::ComboBox::from_id_salt("rendering_material_group")
-            .selected_text(selected_name)
-            .show_ui(ui, |ui| {
-                if ui
-                    .selectable_label(editor_ui.rendering_material.is_none(), "None")
-                    .clicked()
-                {
-                    editor_ui.rendering_material = None;
-                }
+    // Select the first group if nothing is currently selected.
+    let selection_is_valid = editor_ui
+        .rendering_group
+        .as_deref()
+        .is_some_and(|id| groups.iter().any(|group| group.id == id));
 
-                for (index, group) in editor_ui
-                    .project_settings
-                    .texture_naming
-                    .groups
-                    .iter()
-                    .enumerate()
-                {
-                    if ui
-                        .selectable_label(editor_ui.rendering_material == Some(index), &group.name)
-                        .clicked()
-                    {
-                        editor_ui.rendering_material = Some(index);
-                    }
-                }
-            });
-    });
+    if !selection_is_valid {
+        editor_ui.rendering_group = Some(groups[0].id.clone());
+    }
+
+    let Some(selected_id) = editor_ui.rendering_group.as_deref() else {
+        return;
+    };
+
+    let Some(selected_index) = groups.iter().position(|group| group.id == selected_id) else {
+        return;
+    };
+
+    let selected_name = groups[selected_index].name.clone();
+
+    egui::ComboBox::from_id_salt("rendering_group")
+        .selected_text(selected_name)
+        .show_ui(ui, |ui| {
+            for group in groups {
+                ui.selectable_value(
+                    &mut editor_ui.rendering_group,
+                    Some(group.id.clone()),
+                    &group.name,
+                );
+            }
+        });
 
     ui.separator();
 
-    let Some(group_index) = editor_ui.rendering_material else {
-        ui.label("Select a material group.");
-        return;
-    };
-
-    // Find an atlas material belonging to this material group.
-    //
-    // This is only appropriate if AtlasMaterial is still where the
-    // RenderingMaterialBindings are stored.
-    let Some(group) = editor_ui
-        .project_settings
-        .texture_naming
-        .groups
-        .get(group_index)
-    else {
-        editor_ui.rendering_material = None;
-        return;
-    };
-
-    let Some(material_index) = atlas.materials.iter().position(|material| {
-        material
-            .textures
-            .iter()
-            .any(|texture| texture.id == group.id)
-    }) else {
-        ui.label("No material uses this material group.");
-        return;
-    };
-
-    let texture_ids = atlas.materials[material_index]
-        .textures
+    let source_groups = groups
         .iter()
-        .map(|texture| texture.id.clone())
+        .map(|group| (group.id.clone(), group.name.clone()))
         .collect::<Vec<_>>();
 
-    let material = &mut atlas.materials[material_index];
+    let group = &mut editor_ui.project_settings.texture_naming.groups[selected_index];
 
-    for output in MaterialChannel::ALL {
-        material_channel_row(ui, material, output, &texture_ids);
+    let before = group.rendering.clone();
+
+    for input in MaterialInput::ALL {
+        material_input_row(ui, group, input, &source_groups);
+    }
+
+    if group.rendering != before {
+        editor_ui.rendering_revision = editor_ui.rendering_revision.wrapping_add(1);
     }
 }
 
-fn material_channel_row(
+fn material_input_row(
     ui: &mut egui::Ui,
-    material: &mut AtlasMaterial,
-    output: MaterialChannel,
-    texture_ids: &[String],
+    group: &mut TextureGroup,
+    input: MaterialInput,
+    source_groups: &[(String, String)],
 ) {
-    let (current_texture, current_channel) = {
-        let binding = binding_ref(material, output);
+    match input.usage() {
+        RenderingUsage::Sample => {
+            sample_input_row(ui, group, input, source_groups);
+        }
 
-        (
-            binding.map(|source| source.texture_id.clone()),
-            binding.map(|source| source.channel).unwrap_or(Channel::Red),
-        )
-    };
+        RenderingUsage::Channel => {
+            channel_input_row(ui, group, input, source_groups);
+        }
+    }
+}
 
-    let mut selected_texture = current_texture;
-    let mut selected_channel = current_channel;
+fn sample_input_row(
+    ui: &mut egui::Ui,
+    group: &mut TextureGroup,
+    input: MaterialInput,
+    source_groups: &[(String, String)],
+) {
+    let mut selected_texture =
+        texture_source_ref(group, input).map(|source| source.texture_id.clone());
 
     ui.horizontal(|ui| {
-        ui.label(output.name());
+        ui.label(input.name());
 
-        egui::ComboBox::from_id_salt(("rendering_texture", output))
-            .selected_text(selected_texture.as_deref().unwrap_or("None"))
+        egui::ComboBox::from_id_salt(("rendering_texture", input))
+            .selected_text(
+                selected_texture
+                    .as_deref()
+                    .and_then(|id| {
+                        source_groups
+                            .iter()
+                            .find(|(group_id, _)| group_id == id)
+                            .map(|(_, name)| name.as_str())
+                    })
+                    .unwrap_or("None"),
+            )
             .show_ui(ui, |ui| {
                 if ui
                     .selectable_label(selected_texture.is_none(), "None")
@@ -121,21 +118,73 @@ fn material_channel_row(
                     selected_texture = None;
                 }
 
-                for texture_id in texture_ids {
+                for (group_id, group_name) in source_groups {
                     if ui
                         .selectable_label(
-                            selected_texture.as_deref() == Some(texture_id.as_str()),
-                            texture_id,
+                            selected_texture.as_deref() == Some(group_id.as_str()),
+                            group_name,
                         )
                         .clicked()
                     {
-                        selected_texture = Some(texture_id.clone());
+                        selected_texture = Some(group_id.clone());
+                    }
+                }
+            });
+    });
+
+    *texture_source_mut(group, input) =
+        selected_texture.map(|texture_id| TextureSource { texture_id });
+}
+
+fn channel_input_row(
+    ui: &mut egui::Ui,
+    group: &mut TextureGroup,
+    input: MaterialInput,
+    source_groups: &[(String, String)],
+) {
+    let (mut selected_texture, mut selected_channel) = match channel_source_ref(group, input) {
+        Some(source) => (Some(source.texture_id.clone()), source.channel),
+        None => (None, Channel::Red),
+    };
+
+    ui.horizontal(|ui| {
+        ui.label(input.name());
+
+        egui::ComboBox::from_id_salt(("rendering_texture", input))
+            .selected_text(
+                selected_texture
+                    .as_deref()
+                    .and_then(|id| {
+                        source_groups
+                            .iter()
+                            .find(|(group_id, _)| group_id == id)
+                            .map(|(_, name)| name.as_str())
+                    })
+                    .unwrap_or("None"),
+            )
+            .show_ui(ui, |ui| {
+                if ui
+                    .selectable_label(selected_texture.is_none(), "None")
+                    .clicked()
+                {
+                    selected_texture = None;
+                }
+
+                for (group_id, group_name) in source_groups {
+                    if ui
+                        .selectable_label(
+                            selected_texture.as_deref() == Some(group_id.as_str()),
+                            group_name,
+                        )
+                        .clicked()
+                    {
+                        selected_texture = Some(group_id.clone());
                     }
                 }
             });
 
         if selected_texture.is_some() {
-            egui::ComboBox::from_id_salt(("rendering_channel", output))
+            egui::ComboBox::from_id_salt(("rendering_channel", input))
                 .selected_text(selected_channel.name())
                 .show_ui(ui, |ui| {
                     for channel in Channel::ALL {
@@ -150,33 +199,64 @@ fn material_channel_row(
         }
     });
 
-    *binding_mut(material, output) = selected_texture.map(|texture_id| ChannelSource {
+    *channel_source_mut(group, input) = selected_texture.map(|texture_id| ChannelSource {
         texture_id,
         channel: selected_channel,
     });
 }
 
-fn binding_ref(material: &AtlasMaterial, channel: MaterialChannel) -> Option<&ChannelSource> {
-    match channel {
-        MaterialChannel::BaseColor => material.rendering.base_color.as_ref(),
-        MaterialChannel::Normal => material.rendering.normal.as_ref(),
-        MaterialChannel::Height => material.rendering.height.as_ref(),
-        MaterialChannel::AmbientOcclusion => material.rendering.ambient_occlusion.as_ref(),
-        MaterialChannel::Roughness => material.rendering.roughness.as_ref(),
-        MaterialChannel::Metallic => material.rendering.metallic.as_ref(),
+fn texture_source_ref(group: &TextureGroup, input: MaterialInput) -> Option<&TextureSource> {
+    match input {
+        MaterialInput::BaseColor => group.rendering.base_color.as_ref(),
+        MaterialInput::Normal => group.rendering.normal.as_ref(),
+
+        MaterialInput::Height
+        | MaterialInput::AmbientOcclusion
+        | MaterialInput::Roughness
+        | MaterialInput::Metallic => None,
     }
 }
 
-fn binding_mut(
-    material: &mut AtlasMaterial,
-    channel: MaterialChannel,
+fn texture_source_mut(
+    group: &mut TextureGroup,
+    input: MaterialInput,
+) -> &mut Option<TextureSource> {
+    match input {
+        MaterialInput::BaseColor => &mut group.rendering.base_color,
+        MaterialInput::Normal => &mut group.rendering.normal,
+
+        MaterialInput::Height
+        | MaterialInput::AmbientOcclusion
+        | MaterialInput::Roughness
+        | MaterialInput::Metallic => {
+            unreachable!("Channel input cannot use TextureSource")
+        }
+    }
+}
+
+fn channel_source_ref(group: &TextureGroup, input: MaterialInput) -> Option<&ChannelSource> {
+    match input {
+        MaterialInput::Height => group.rendering.height.as_ref(),
+        MaterialInput::AmbientOcclusion => group.rendering.ambient_occlusion.as_ref(),
+        MaterialInput::Roughness => group.rendering.roughness.as_ref(),
+        MaterialInput::Metallic => group.rendering.metallic.as_ref(),
+
+        MaterialInput::BaseColor | MaterialInput::Normal => None,
+    }
+}
+
+fn channel_source_mut(
+    group: &mut TextureGroup,
+    input: MaterialInput,
 ) -> &mut Option<ChannelSource> {
-    match channel {
-        MaterialChannel::BaseColor => &mut material.rendering.base_color,
-        MaterialChannel::Normal => &mut material.rendering.normal,
-        MaterialChannel::Height => &mut material.rendering.height,
-        MaterialChannel::AmbientOcclusion => &mut material.rendering.ambient_occlusion,
-        MaterialChannel::Roughness => &mut material.rendering.roughness,
-        MaterialChannel::Metallic => &mut material.rendering.metallic,
+    match input {
+        MaterialInput::Height => &mut group.rendering.height,
+        MaterialInput::AmbientOcclusion => &mut group.rendering.ambient_occlusion,
+        MaterialInput::Roughness => &mut group.rendering.roughness,
+        MaterialInput::Metallic => &mut group.rendering.metallic,
+
+        MaterialInput::BaseColor | MaterialInput::Normal => {
+            unreachable!("Sample input cannot use ChannelSource")
+        }
     }
 }
