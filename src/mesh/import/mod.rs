@@ -1,3 +1,5 @@
+use bevy::prelude::*;
+
 use serde::{Deserialize, Serialize};
 
 use std::path::{Path, PathBuf};
@@ -67,7 +69,7 @@ pub struct MeshPrimitive {
     pub material: Option<MeshMaterialRef>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Reflect)]
 pub struct MeshMaterialRef {
     /// Stable identifier of the imported mesh/material.
     pub id: usize,

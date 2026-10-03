@@ -1,81 +1,14 @@
 use bevy::{
+    asset::RenderAssetUsages,
     camera::RenderTarget,
     input::mouse::{MouseMotion, MouseWheel},
+    pbr::{ExtendedMaterial, MaterialExtension, StandardMaterial},
     prelude::*,
-    render::render_resource::{AsBindGroup, Extent3d, ShaderType, TextureFormat},
+    render::render_resource::{
+        AsBindGroup, Extent3d, ShaderType, TextureDimension, TextureFormat, TextureUsages,
+    },
     shader::ShaderRef,
 };
-
-use crate::pipeline::{RenderingMaterialBindings, RenderingPipelines, TextureChannel};
-
-#[derive(Clone, Copy, Debug, ShaderType)]
-pub struct MeshPreviewGraph {
-    pub base_color: Vec4,
-    pub normal: Vec4,
-    pub height: Vec4,
-    pub ambient_occlusion: Vec4,
-    pub roughness: Vec4,
-    pub metallic: Vec4,
-}
-
-impl Default for MeshPreviewGraph {
-    fn default() -> Self {
-        Self {
-            base_color: Vec4::ZERO,
-            normal: Vec4::ZERO,
-            height: Vec4::ZERO,
-            ambient_occlusion: Vec4::ZERO,
-            roughness: Vec4::ZERO,
-            metallic: Vec4::ZERO,
-        }
-    }
-}
-
-#[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
-pub struct MeshPreviewMaterial {
-    #[texture(0)]
-    #[sampler(1)]
-    pub base_color: Handle<Image>,
-
-    #[texture(2, filterable = false)]
-    pub normal: Handle<Image>,
-
-    #[texture(3, filterable = false)]
-    pub height: Handle<Image>,
-
-    #[texture(4, filterable = false)]
-    pub ambient_occlusion: Handle<Image>,
-
-    #[texture(5, filterable = false)]
-    pub roughness: Handle<Image>,
-
-    #[texture(6, filterable = false)]
-    pub metallic: Handle<Image>,
-
-    #[uniform(7)]
-    pub graph: MeshPreviewGraph,
-}
-
-impl Material for MeshPreviewMaterial {
-    fn fragment_shader() -> ShaderRef {
-        "shaders/mesh_preview_material.wgsl".into()
-    }
-}
-
-#[derive(Resource)]
-pub struct AtlasImageSyncState {
-    pub atlas_uv_revision: u64,
-    pub pipeline_revision: u64,
-}
-
-impl Default for AtlasImageSyncState {
-    fn default() -> Self {
-        Self {
-            atlas_uv_revision: u64::MAX,
-            pipeline_revision: u64::MAX,
-        }
-    }
-}
 
 use super::{
     ImportedMeshPart, ImportedMeshRoot, MeshLight, MeshLightPreset, MeshPrimitiveSelection,
@@ -91,11 +24,83 @@ use crate::{
     ui::EditorUi,
 };
 
-#[derive(Component)]
-pub struct MeshPreviewCamera;
+#[derive(Clone, Copy, Debug, Default, ShaderType)]
+pub struct MeshPreviewMaps {
+    pub base_color: Vec4,
+    pub normal: Vec4,
+    pub height: Vec4,
+    pub ambient_occlusion: Vec4,
+    pub roughness: Vec4,
+    pub metallic: Vec4,
+}
+
+impl MeshPreviewMaps {
+    pub fn base_color(enabled: bool) -> Vec4 {
+        if enabled { Vec4::ONE } else { Vec4::ZERO }
+    }
+
+    pub fn normal(enabled: bool) -> Vec4 {
+        if enabled { Vec4::ONE } else { Vec4::ZERO }
+    }
+
+    pub fn scalar(enabled: bool) -> Vec4 {
+        if enabled { Vec4::ONE } else { Vec4::ZERO }
+    }
+}
+
+#[derive(Asset, TypePath, AsBindGroup, Debug, Clone, Default)]
+pub struct MeshPreviewExtension {
+    #[texture(100)]
+    #[sampler(101)]
+    pub base_color_texture: Option<Handle<Image>>,
+
+    #[texture(102)]
+    #[sampler(103)]
+    pub normal_texture: Option<Handle<Image>>,
+
+    #[texture(104)]
+    #[sampler(105)]
+    pub height_texture: Option<Handle<Image>>,
+
+    #[texture(106)]
+    #[sampler(107)]
+    pub ambient_occlusion_texture: Option<Handle<Image>>,
+
+    #[texture(108)]
+    #[sampler(109)]
+    pub roughness_texture: Option<Handle<Image>>,
+
+    #[texture(110)]
+    #[sampler(111)]
+    pub metallic_texture: Option<Handle<Image>>,
+
+    #[uniform(112)]
+    pub maps: MeshPreviewMaps,
+}
+
+impl MaterialExtension for MeshPreviewExtension {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/mesh_preview_material.wgsl".into()
+    }
+}
+
+pub type MeshPreviewMaterial = ExtendedMaterial<StandardMaterial, MeshPreviewExtension>;
+
+#[derive(Resource)]
+pub struct AtlasImageSyncState {
+    pub atlas_uv_revision: u64,
+}
+
+impl Default for AtlasImageSyncState {
+    fn default() -> Self {
+        Self {
+            atlas_uv_revision: u64::MAX,
+        }
+    }
+}
 
 #[derive(Component)]
-pub struct MeshPreviewLight;
+pub struct MeshPreviewCamera;
 
 #[derive(Resource, Default)]
 pub struct MeshViewportInput {
@@ -122,14 +127,6 @@ pub struct MeshPreview {
 
     pub material: Handle<MeshPreviewMaterial>,
     pub uv_revision: u64,
-
-    // Fallback textures
-    pub fallback_base_color: Handle<Image>,
-    pub fallback_normal: Handle<Image>,
-    pub fallback_height: Handle<Image>,
-    pub fallback_ambient_occlusion: Handle<Image>,
-    pub fallback_roughness: Handle<Image>,
-    pub fallback_metallic: Handle<Image>,
 }
 
 #[derive(Resource, Default)]
@@ -157,26 +154,88 @@ impl Default for MeshUvSyncState {
     }
 }
 
-#[derive(Resource)]
-pub struct AtlasMaterialSyncState {
-    pub atlas_revision: u64,
-    pub pipeline_revision: u64,
-}
-
-impl Default for AtlasMaterialSyncState {
-    fn default() -> Self {
-        Self {
-            atlas_revision: u64::MAX,
-            pipeline_revision: u64::MAX,
-        }
-    }
-}
+#[derive(Component)]
+pub struct MeshPreviewLightSource;
 
 #[derive(Resource)]
 pub struct MeshPreviewRenderTarget {
     pub image: Handle<Image>,
     pub width: u32,
     pub height: u32,
+}
+
+pub struct MeshPreviewPlugin;
+
+impl Plugin for MeshPreviewPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_plugins(MaterialPlugin::<MeshPreviewMaterial>::default())
+            .init_resource::<MeshViewportLayout>()
+            .init_resource::<MeshLight>()
+            .init_resource::<MeshViewportInput>()
+            .init_resource::<MeshSceneState>()
+            .init_resource::<MeshUvSyncState>()
+            .init_resource::<AtlasImageSyncState>()
+            .add_systems(Startup, (setup_mesh_preview, spawn_mesh_viewport).chain())
+            .add_systems(
+                EguiPrimaryContextPass,
+                (
+                    update_mesh_viewport,
+                    orbit_camera.after(crate::ui::panels::editor_ui),
+                ),
+            )
+            .add_systems(
+                Update,
+                (
+                    resize_mesh_preview_render_target,
+                    sync_mesh_visibility,
+                    sync_mesh_uv_mode,
+                    sync_atlas_images,
+                    sync_atlas_to_mesh_preview_material.after(sync_atlas_images),
+                    update_mesh_light,
+                ),
+            );
+    }
+}
+
+pub fn sync_atlas_to_mesh_preview_material(
+    atlas: Res<Atlas>,
+    mut materials: ResMut<Assets<MeshPreviewMaterial>>,
+    material_handles: Query<&MeshMaterial3d<MeshPreviewMaterial>>,
+    mut last_revision: Local<u64>,
+) {
+    if atlas.image_revision == *last_revision {
+        return;
+    }
+
+    *last_revision = atlas.image_revision;
+
+    for handle in material_handles.iter() {
+        let Some(mut material) = materials.get_mut(&handle.0) else {
+            continue;
+        };
+
+        material.extension.base_color_texture = atlas.images.base_color.clone();
+        material.extension.normal_texture = atlas.images.normal.clone();
+        material.extension.height_texture = atlas.images.height.clone();
+        material.extension.ambient_occlusion_texture = atlas.images.ambient_occlusion.clone();
+        material.extension.roughness_texture = atlas.images.roughness.clone();
+        material.extension.metallic_texture = atlas.images.metallic.clone();
+
+        material.extension.maps.base_color =
+            MeshPreviewMaps::base_color(atlas.images.base_color.is_some());
+
+        material.extension.maps.normal = MeshPreviewMaps::normal(atlas.images.normal.is_some());
+
+        material.extension.maps.height = MeshPreviewMaps::scalar(atlas.images.height.is_some());
+
+        material.extension.maps.ambient_occlusion =
+            MeshPreviewMaps::scalar(atlas.images.ambient_occlusion.is_some());
+
+        material.extension.maps.roughness =
+            MeshPreviewMaps::scalar(atlas.images.roughness.is_some());
+
+        material.extension.maps.metallic = MeshPreviewMaps::scalar(atlas.images.metallic.is_some());
+    }
 }
 
 fn setup_mesh_preview(
@@ -188,7 +247,6 @@ fn setup_mesh_preview(
     let height = 1024;
 
     let image = Image::new_target_texture(width, height, TextureFormat::Rgba8UnormSrgb, None);
-
     let image_handle = images.add(image);
 
     commands.insert_resource(MeshPreviewRenderTarget {
@@ -210,18 +268,28 @@ fn setup_mesh_preview(
         ))
         .id();
 
-    let white = create_solid_image(&mut images, [255, 255, 255, 255]);
-    let black = create_solid_image(&mut images, [0, 0, 0, 255]);
-    let flat_normal = create_solid_image(&mut images, [128, 128, 255, 255]);
+    let white = create_solid_image(
+        &mut images,
+        [255, 255, 255, 255],
+        TextureFormat::Rgba8UnormSrgb,
+    );
+    let black = create_solid_image(&mut images, [0, 0, 0, 255], TextureFormat::Rgba8Unorm);
+    let flat_normal =
+        create_solid_image(&mut images, [128, 128, 255, 255], TextureFormat::Rgba8Unorm);
+    let white_data =
+        create_solid_image(&mut images, [255, 255, 255, 255], TextureFormat::Rgba8Unorm);
 
-    let material = materials.add(MeshPreviewMaterial {
-        base_color: white.clone(),
-        normal: flat_normal.clone(),
-        height: black.clone(),
-        ambient_occlusion: white.clone(),
-        roughness: white.clone(),
-        metallic: black.clone(),
-        graph: MeshPreviewGraph::default(),
+    let material = materials.add(ExtendedMaterial {
+        base: StandardMaterial::default(),
+        extension: MeshPreviewExtension {
+            base_color_texture: Some(white),
+            normal_texture: Some(flat_normal),
+            height_texture: Some(black.clone()),
+            ambient_occlusion_texture: Some(white_data.clone()),
+            roughness_texture: Some(white_data),
+            metallic_texture: Some(black),
+            maps: MeshPreviewMaps::default(),
+        },
     });
 
     commands.insert_resource(MeshPreview {
@@ -236,16 +304,7 @@ fn setup_mesh_preview(
         selected_mesh_id: None,
         unwrapped_mesh_id: None,
         selected_primitive: None,
-
         material,
-
-        fallback_base_color: white.clone(),
-        fallback_normal: flat_normal,
-        fallback_height: black.clone(),
-        fallback_ambient_occlusion: white.clone(),
-        fallback_roughness: white,
-        fallback_metallic: black,
-
         uv_revision: 0,
     });
 
@@ -255,69 +314,30 @@ fn setup_mesh_preview(
             ..default()
         },
         Transform::from_xyz(2.0, 4.0, 2.0).looking_at(Vec3::ZERO, Vec3::Y),
-        MeshPreviewLight,
+        MeshPreviewLightSource,
     ));
 }
 
-fn create_solid_image(images: &mut Assets<Image>, color: [u8; 4]) -> Handle<Image> {
-    let image = Image::new(
+fn create_solid_image(
+    images: &mut Assets<Image>,
+    color: [u8; 4],
+    format: TextureFormat,
+) -> Handle<Image> {
+    let mut image = Image::new_fill(
         Extent3d {
             width: 1,
             height: 1,
             depth_or_array_layers: 1,
         },
-        bevy::render::render_resource::TextureDimension::D2,
-        color.to_vec(),
-        TextureFormat::Rgba8UnormSrgb,
-        bevy::asset::RenderAssetUsages::default(),
+        TextureDimension::D2,
+        &color,
+        format,
+        RenderAssetUsages::default(),
     );
 
+    image.texture_descriptor.usage = TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST;
+
     images.add(image)
-}
-
-fn graph_channel(channel: TextureChannel) -> Vec4 {
-    let channel_index = match channel {
-        TextureChannel::Red => 0,
-        TextureChannel::Green => 1,
-        TextureChannel::Blue => 2,
-        TextureChannel::Alpha => 3,
-    };
-
-    Vec4::new(channel_index as f32, 0.0, 0.0, 0.0)
-}
-
-pub struct MeshPreviewPlugin;
-
-impl Plugin for MeshPreviewPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_plugins(MaterialPlugin::<MeshPreviewMaterial>::default())
-            .init_resource::<MeshViewportLayout>()
-            .init_resource::<MeshLight>()
-            .init_resource::<MeshViewportInput>()
-            .init_resource::<MeshSceneState>()
-            .init_resource::<MeshUvSyncState>()
-            .init_resource::<AtlasImageSyncState>()
-            .init_resource::<AtlasMaterialSyncState>()
-            .add_systems(Startup, (setup_mesh_preview, spawn_mesh_viewport).chain())
-            .add_systems(
-                EguiPrimaryContextPass,
-                (
-                    update_mesh_viewport,
-                    update_mesh_light,
-                    orbit_camera.after(crate::ui::panels::editor_ui),
-                ),
-            )
-            .add_systems(
-                Update,
-                (
-                    resize_mesh_preview_render_target,
-                    sync_mesh_visibility,
-                    sync_mesh_uv_mode,
-                    sync_atlas_images,
-                    sync_mesh_material.after(sync_atlas_images),
-                ),
-            );
-    }
 }
 
 pub fn spawn_mesh_viewport(mut commands: Commands, mesh_preview: Res<MeshPreview>) {
@@ -366,7 +386,7 @@ pub fn despawn_all_meshes(commands: &mut Commands, scene_state: &mut MeshSceneSt
 
 pub fn update_mesh_light(
     mesh_light: Res<MeshLight>,
-    mut lights: Query<(&mut DirectionalLight, &mut Transform), With<MeshPreviewLight>>,
+    mut lights: Query<(&mut DirectionalLight, &mut Transform), With<MeshPreviewLightSource>>,
 ) {
     if !mesh_light.is_changed() {
         return;
@@ -381,27 +401,22 @@ pub fn update_mesh_light(
             light.illuminance = 10_000.0;
             light.color = Color::srgb(1.0, 1.0, 1.0);
         }
-
         MeshLightPreset::Neutral => {
             light.illuminance = 7_000.0;
             light.color = Color::srgb(1.0, 1.0, 1.0);
         }
-
         MeshLightPreset::Warm => {
             light.illuminance = 8_000.0;
             light.color = Color::srgb(1.0, 0.78, 0.58);
         }
-
         MeshLightPreset::Cool => {
             light.illuminance = 8_000.0;
             light.color = Color::srgb(0.65, 0.8, 1.0);
         }
-
         MeshLightPreset::Flat => {
             light.illuminance = 3_000.0;
             light.color = Color::srgb(1.0, 1.0, 1.0);
         }
-
         MeshLightPreset::None => {
             light.illuminance = 0.0;
         }
@@ -413,55 +428,45 @@ pub fn update_mesh_light(
 
 pub fn sync_mesh_visibility(
     scene_state: Res<MeshSceneState>,
-    mut queries: ParamSet<(
-        Query<(&ImportedMeshRoot, &mut Visibility)>,
-        Query<(&ImportedMeshPart, &mut Visibility)>,
-    )>,
+    mut root_query: Query<
+        (&ImportedMeshRoot, &mut Visibility),
+        (With<ImportedMeshRoot>, Without<ImportedMeshPart>),
+    >,
+    mut part_query: Query<
+        (&ImportedMeshPart, &mut Visibility),
+        (With<ImportedMeshPart>, Without<ImportedMeshRoot>),
+    >,
 ) {
-    // Whole-mesh visibility.
-    {
-        let mut root_query = queries.p0();
+    for (root, mut visibility) in &mut root_query {
+        let Some(mesh) = scene_state.get(root.id) else {
+            continue;
+        };
 
-        for (root, mut visibility) in &mut root_query {
-            let Some(mesh) = scene_state.get(root.id) else {
-                continue;
-            };
-
-            *visibility = if mesh.visible {
-                Visibility::Visible
-            } else {
-                Visibility::Hidden
-            };
-        }
+        *visibility = if mesh.visible {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     }
 
-    // Part visibility.
-    //
-    // This query now matches BOTH the part entity and all of its
-    // primitive children, so we do not depend on inherited visibility
-    // propagation to hide the actual rendered mesh.
-    {
-        let mut part_query = queries.p1();
+    for (part, mut visibility) in &mut part_query {
+        let Some(mesh) = scene_state.get(part.mesh_id) else {
+            continue;
+        };
 
-        for (part, mut visibility) in &mut part_query {
-            let Some(mesh) = scene_state.get(part.mesh_id) else {
-                continue;
-            };
+        let Some(part_entry) = mesh
+            .parts
+            .iter()
+            .find(|entry| entry.index == part.part_index)
+        else {
+            continue;
+        };
 
-            let Some(part_entry) = mesh
-                .parts
-                .iter()
-                .find(|entry| entry.index == part.part_index)
-            else {
-                continue;
-            };
-
-            *visibility = if mesh.visible && part_entry.visible {
-                Visibility::Visible
-            } else {
-                Visibility::Hidden
-            };
-        }
+        *visibility = if mesh.visible && part_entry.visible {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     }
 }
 
@@ -473,6 +478,7 @@ fn transform_material_uv(uv: [f32; 2], rotation: Rotation) -> [f32; 2] {
         Rotation::Deg270 => [1.0 - uv[1], uv[0]],
     }
 }
+
 fn atlas_uv(uv: [f32; 2], material: &AtlasMaterial, atlas: &Atlas) -> [f32; 2] {
     let uv = transform_material_uv(uv, material.transform.rotation);
 
@@ -500,7 +506,6 @@ fn material_uvs(
     atlas: &Atlas,
 ) -> Vec<[f32; 2]> {
     let Some(material) = material else {
-        // Map unassigned primitives to a single pixel to avoid rendering the full atlas
         return vec![[0.0, 0.0]; uvs.len()];
     };
 
@@ -563,10 +568,7 @@ pub fn sync_mesh_uv_mode(
         match mesh_preview.uv_mode {
             MeshUvMode::Imported => {
                 let uvs = material_uvs(&primitive.uvs, material, &atlas);
-
-                let handle = create_imported_bevy_mesh(&mut meshes, primitive, uvs);
-
-                mesh3d.0 = handle;
+                mesh3d.0 = create_imported_bevy_mesh(&mut meshes, primitive, uvs);
             }
 
             MeshUvMode::Unwrapped => {
@@ -587,10 +589,7 @@ pub fn sync_mesh_uv_mode(
                 };
 
                 let uvs = material_uvs(&unwrapped.uvs, material, &atlas);
-
-                let handle = create_unwrapped_bevy_mesh(&mut meshes, unwrapped, uvs);
-
-                mesh3d.0 = handle;
+                mesh3d.0 = create_unwrapped_bevy_mesh(&mut meshes, unwrapped, uvs);
             }
         }
     }
@@ -612,312 +611,106 @@ pub fn orbit_camera(
     cameras: Query<(&Camera, &GlobalTransform), With<MeshPreviewCamera>>,
     mut camera_transforms: Query<&mut Transform, With<MeshPreviewCamera>>,
 ) {
-    /*
-     * ------------------------------------------------------------
-     * Consume mouse input first.
-     *
-     * This is important when the pointer is over a floating egui
-     * window. We do not want mouse events to remain queued and then
-     * move the camera after the window interaction ends.
-     * ------------------------------------------------------------
-     */
-
     let mut mouse_delta = Vec2::ZERO;
-
     for event in mouse_motion.read() {
         mouse_delta += event.delta;
     }
 
     let mut scroll = 0.0;
-
     for event in mouse_wheel.read() {
         scroll += event.y;
     }
 
-    let Ok(window) = windows.single() else {
+    let Ok((_camera, camera_global)) = cameras.single() else {
         return;
     };
 
-    let Some(cursor_position) = window.cursor_position() else {
-        return;
-    };
+    let cursor_inside = windows
+        .single()
+        .ok()
+        .and_then(|w| w.cursor_position())
+        .map_or(false, |pos| {
+            pos.x >= mesh_viewport.x
+                && pos.x <= mesh_viewport.x + mesh_viewport.width
+                && pos.y >= mesh_viewport.y
+                && pos.y <= mesh_viewport.y + mesh_viewport.height
+        });
 
-    let cursor_inside = cursor_position.x >= mesh_viewport.x
-        && cursor_position.x <= mesh_viewport.x + mesh_viewport.width
-        && cursor_position.y >= mesh_viewport.y
-        && cursor_position.y <= mesh_viewport.y + mesh_viewport.height;
+    let can_interact =
+        cursor_inside && !mesh_input.pointer_over_ui && !mesh_input.floating_window_dragging;
 
-    if !cursor_inside {
-        return;
-    }
+    if can_interact {
+        if mouse_delta != Vec2::ZERO {
+            let orbit_button = mouse_buttons.pressed(MouseButton::Left)
+                || mouse_buttons.pressed(MouseButton::Right);
 
-    /*
-     * Floating egui windows and other UI elements own the pointer.
-     *
-     * Do this AFTER consuming the mouse events so they cannot leak
-     * into the next frame.
-     */
-    if mesh_input.pointer_over_ui || mesh_input.floating_window_dragging {
-        return;
-    }
+            if orbit_button {
+                let sensitivity = 0.01;
+                mesh_preview.yaw -= mouse_delta.x * sensitivity;
+                mesh_preview.pitch =
+                    (mesh_preview.pitch - mouse_delta.y * sensitivity).clamp(-1.5, 1.5);
+            }
 
-    /*
-     * ------------------------------------------------------------
-     * Mouse motion
-     * ------------------------------------------------------------
-     *
-     * Left mouse:
-     *     Orbit camera
-     *
-     * Middle mouse:
-     *     Pan camera
-     *
-     * Right mouse:
-     *     Orbit camera
-     */
+            if mouse_buttons.pressed(MouseButton::Middle) {
+                let right = *camera_global.right();
+                let up = *camera_global.up();
+                let pan_speed = mesh_preview.distance * 0.0015;
 
-    if mouse_delta != Vec2::ZERO {
-        let orbit_button =
-            mouse_buttons.pressed(MouseButton::Left) || mouse_buttons.pressed(MouseButton::Right);
-
-        if orbit_button {
-            let sensitivity = 0.01;
-
-            mesh_preview.yaw -= mouse_delta.x * sensitivity;
-            mesh_preview.pitch -= mouse_delta.y * sensitivity;
-
-            mesh_preview.pitch = mesh_preview.pitch.clamp(-1.5, 1.5);
+                mesh_preview.target += (-right * mouse_delta.x + up * mouse_delta.y) * pan_speed;
+            }
         }
 
-        if mouse_buttons.pressed(MouseButton::Middle) {
-            let Ok((_camera, camera_global)) = cameras.single() else {
-                return;
-            };
+        if scroll != 0.0 {
+            if keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight) {
+                let zoom_speed = editor_ui.editor_settings.mouse_scroll_speed;
+                let zoom_factor = (-scroll * zoom_speed * 0.05).exp();
 
-            let right = *camera_global.right();
-            let up = *camera_global.up();
+                mesh_preview.target_distance =
+                    (mesh_preview.target_distance * zoom_factor).clamp(0.01, 100_000.0);
+            } else {
+                let up = *camera_global.up();
+                let pan_speed = mesh_preview.distance * 0.05;
 
-            let pan_speed = mesh_preview.distance * 0.0015;
-
-            mesh_preview.target += (-right * mouse_delta.x + up * mouse_delta.y) * pan_speed;
+                mesh_preview.target += up * scroll * pan_speed;
+            }
         }
     }
-
-    /*
-     * ------------------------------------------------------------
-     * Mouse wheel
-     * ------------------------------------------------------------
-     *
-     * Ctrl + wheel:
-     *     Zoom
-     *
-     * Normal wheel:
-     *     Vertical pan
-     */
-
-    if scroll != 0.0 {
-        if keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight) {
-            let zoom_speed = editor_ui.editor_settings.mouse_scroll_speed;
-
-            let zoom_factor = (-scroll * zoom_speed * 0.05).exp();
-
-            mesh_preview.target_distance *= zoom_factor;
-
-            mesh_preview.target_distance = mesh_preview.target_distance.clamp(0.01, 100_000.0);
-        } else {
-            let Ok((_, camera_global)) = cameras.single() else {
-                return;
-            };
-
-            let up = *camera_global.up();
-
-            let pan_speed = mesh_preview.distance * 0.05;
-
-            mesh_preview.target += up * scroll * pan_speed;
-        }
-    }
-
-    /*
-     * ------------------------------------------------------------
-     * Smooth zoom
-     * ------------------------------------------------------------
-     */
 
     let zoom_smoothing = 14.0;
-
     let t = 1.0 - (-zoom_smoothing * time.delta_secs()).exp();
-
     mesh_preview.distance = mesh_preview.distance.lerp(mesh_preview.target_distance, t);
 
-    /*
-     * ------------------------------------------------------------
-     * Light follows camera
-     * ------------------------------------------------------------
-     */
-
     if mesh_light.follow_camera {
-        if let Ok((_, camera_global)) = cameras.single() {
-            let light_distance = mesh_scene_state
-                .visible_bounds()
-                .map(|(_, radius)| (radius * 2.0).max(1.0))
-                .unwrap_or(1.0);
+        let light_distance = mesh_scene_state
+            .visible_bounds()
+            .map(|(_, radius)| (radius * 2.0).max(1.0))
+            .unwrap_or(1.0);
 
-            mesh_light.position = mesh_preview.target - *camera_global.forward() * light_distance;
-
-            mesh_light.target = mesh_preview.target;
-        }
+        mesh_light.position = mesh_preview.target - *camera_global.forward() * light_distance;
+        mesh_light.target = mesh_preview.target;
     }
 
-    /*
-     * ------------------------------------------------------------
-     * Apply spherical orbit
-     * ------------------------------------------------------------
-     */
+    if let Ok(mut camera_transform) = camera_transforms.single_mut() {
+        let rotation = Quat::from_euler(EulerRot::YXZ, mesh_preview.yaw, mesh_preview.pitch, 0.0);
+        let offset = rotation * Vec3::new(0.0, 0.0, mesh_preview.distance);
 
-    let Ok(mut camera_transform) = camera_transforms.single_mut() else {
-        return;
-    };
-
-    let rotation = Quat::from_euler(EulerRot::YXZ, mesh_preview.yaw, mesh_preview.pitch, 0.0);
-
-    let offset = rotation * Vec3::new(0.0, 0.0, mesh_preview.distance);
-
-    camera_transform.translation = mesh_preview.target + offset;
-
-    camera_transform.look_at(mesh_preview.target, Vec3::Y);
-}
-
-fn sync_mesh_material(
-    atlas: Res<Atlas>,
-    rendering_pipelines: Res<RenderingPipelines>,
-    mesh_scene_state: Res<MeshSceneState>,
-    mut materials: ResMut<Assets<MeshPreviewMaterial>>,
-    mesh_preview: Res<MeshPreview>,
-    mut sync_state: ResMut<AtlasMaterialSyncState>,
-) {
-    let atlas_image_revision = atlas.image_revision;
-    let pipeline_revision = rendering_pipelines.revision;
-
-    if sync_state.atlas_revision == atlas_image_revision
-        && sync_state.pipeline_revision == pipeline_revision
-    {
-        return;
-    }
-
-    let Some(mut material) = materials.get_mut(&mesh_preview.material) else {
-        return;
-    };
-
-    // Nothing is bound by default.
-    material.base_color = mesh_preview.fallback_base_color.clone();
-    material.normal = mesh_preview.fallback_normal.clone();
-    material.height = mesh_preview.fallback_height.clone();
-    material.ambient_occlusion = mesh_preview.fallback_ambient_occlusion.clone();
-    material.roughness = mesh_preview.fallback_roughness.clone();
-    material.metallic = mesh_preview.fallback_metallic.clone();
-
-    material.graph = MeshPreviewGraph::default();
-
-    let Some(material_ref) = mesh_preview.selected_primitive.and_then(|selection| {
-        let mesh = mesh_scene_state.get(selection.mesh_id)?;
-        let object = mesh.scene.objects.get(selection.object_index)?;
-        let primitive = object.primitives.get(selection.primitive_index)?;
-
-        primitive.material.as_ref()
-    }) else {
-        sync_state.atlas_revision = atlas_image_revision;
-        sync_state.pipeline_revision = pipeline_revision;
-        return;
-    };
-
-    let Some(pipeline) = rendering_pipelines.pipeline_for(material_ref) else {
-        sync_state.atlas_revision = atlas_image_revision;
-        sync_state.pipeline_revision = pipeline_revision;
-        return;
-    };
-
-    let Ok(bindings) = pipeline.compile() else {
-        sync_state.atlas_revision = atlas_image_revision;
-        sync_state.pipeline_revision = pipeline_revision;
-        return;
-    };
-
-    apply_rendering_bindings(&mut material, &bindings, &atlas);
-
-    sync_state.atlas_revision = atlas_image_revision;
-    sync_state.pipeline_revision = pipeline_revision;
-}
-
-fn apply_rendering_bindings(
-    material: &mut MeshPreviewMaterial,
-    bindings: &RenderingMaterialBindings,
-    atlas: &Atlas,
-) {
-    if bindings.base_color.is_some() {
-        if let Some(image) = &atlas.images.base_color {
-            material.base_color = image.clone();
-        }
-    }
-
-    if bindings.normal.is_some() {
-        if let Some(image) = &atlas.images.normal {
-            material.normal = image.clone();
-        }
-    }
-
-    if let Some(binding) = &bindings.height {
-        if let Some(image) = &atlas.images.height {
-            material.height = image.clone();
-        }
-
-        material.graph.height = graph_channel(binding.channel);
-    }
-
-    if let Some(binding) = &bindings.ambient_occlusion {
-        if let Some(image) = &atlas.images.ambient_occlusion {
-            material.ambient_occlusion = image.clone();
-        }
-
-        material.graph.ambient_occlusion = graph_channel(binding.channel);
-    }
-
-    if let Some(binding) = &bindings.roughness {
-        if let Some(image) = &atlas.images.roughness {
-            material.roughness = image.clone();
-        }
-
-        material.graph.roughness = graph_channel(binding.channel);
-    }
-
-    if let Some(binding) = &bindings.metallic {
-        if let Some(image) = &atlas.images.metallic {
-            material.metallic = image.clone();
-        }
-
-        material.graph.metallic = graph_channel(binding.channel);
+        camera_transform.translation = mesh_preview.target + offset;
+        camera_transform.look_at(mesh_preview.target, Vec3::Y);
     }
 }
 
 pub fn sync_atlas_images(
     mut atlas: ResMut<Atlas>,
     mut images: ResMut<Assets<Image>>,
-    rendering_pipelines: Res<RenderingPipelines>,
     mut sync_state: ResMut<AtlasImageSyncState>,
 ) {
-    let atlas_uv_revision = atlas.uv_revision;
-    let pipeline_revision = rendering_pipelines.revision;
-
-    let needs_rebuild = sync_state.atlas_uv_revision != atlas_uv_revision
-        || sync_state.pipeline_revision != pipeline_revision;
-
-    if !needs_rebuild {
+    if sync_state.atlas_uv_revision == atlas.uv_revision {
         return;
     }
 
-    rebuild_atlas_maps(&mut atlas, &mut images, &rendering_pipelines);
+    rebuild_atlas_maps(&mut atlas, &mut images);
 
-    sync_state.atlas_uv_revision = atlas_uv_revision;
-    sync_state.pipeline_revision = pipeline_revision;
+    sync_state.atlas_uv_revision = atlas.uv_revision;
 }
 
 pub fn resize_mesh_preview_render_target(

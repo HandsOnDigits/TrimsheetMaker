@@ -122,6 +122,7 @@ pub fn meshes_window(
                                             let label = format!("Primitive {primitive_index}");
 
                                             if ui.selectable_label(selected, label).clicked() {
+                                                editor_ui.selected_mesh = Some(mesh_id);
                                                 mesh_preview.selected_mesh_id = Some(mesh_id);
 
                                                 mesh_preview.selected_primitive =
@@ -145,9 +146,10 @@ pub fn meshes_window(
             /*
              * Atlas assignment
              *
-             * The selected mesh primitive is independent from the atlas
-             * region being inspected. The inspected atlas region is the
-             * target of an assignment; it is not a material selection.
+             * Mesh selection and primitive selection in this window are strictly
+             * isolated from the rendering graph. Inspected atlas regions serve
+             * as target regions for mesh mapping assignments and do not modify
+             * or interact with active graph nodes or material selections.
              */
             let selected_primitive = mesh_preview.selected_primitive;
 
@@ -241,8 +243,7 @@ pub fn meshes_window(
                         }
 
                         /*
-                         * Assign the primitive to the inspected atlas
-                         * region.
+                         * Assign the primitive to the inspected atlas region.
                          */
                         if let Some(region) = atlas
                             .materials

@@ -64,20 +64,16 @@ impl MeshSceneState {
         bounds_radius: f32,
     ) -> u64 {
         let id = self.next_id;
-        self.next_id += 1;
-
-        self.meshes.push(MeshEntry {
+        self.add_with_id(
             id,
             name,
             path,
-            visible: true,
             scene,
-            root: Some(root),
+            root,
             parts,
             bounds_center,
             bounds_radius,
-        });
-
+        );
         id
     }
 
@@ -219,16 +215,27 @@ fn create_bevy_mesh(
     uvs: Vec<[f32; 2]>,
     indices: Vec<u32>,
 ) -> Handle<Mesh> {
+    let vertex_count = positions.len();
     let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::default(),
     );
 
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_TANGENT, tangents);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-    mesh.insert_indices(bevy::mesh::Indices::U32(indices));
+
+    if normals.len() == vertex_count {
+        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    }
+    if tangents.len() == vertex_count {
+        mesh.insert_attribute(Mesh::ATTRIBUTE_TANGENT, tangents);
+    }
+    if uvs.len() == vertex_count {
+        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    }
+
+    if !indices.is_empty() {
+        mesh.insert_indices(bevy::mesh::Indices::U32(indices));
+    }
 
     meshes.add(mesh)
 }

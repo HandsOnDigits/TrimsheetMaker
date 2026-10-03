@@ -11,7 +11,6 @@ use crate::{
         unwrap::{MeshUvMode, unwrap_current_mesh},
         viewport::MeshPreview,
     },
-    pipeline::RenderingPipelines,
 };
 
 pub fn toolbar(
@@ -25,7 +24,6 @@ pub fn toolbar(
     mesh_scene_state: &mut MeshSceneState,
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    rendering_pipelines: &mut RenderingPipelines,
 ) {
     ui.horizontal(|ui| {
         ui.add_space(8.0);
@@ -42,7 +40,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    rendering_pipelines,
                 );
                 ui.close();
             }
@@ -58,7 +55,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    rendering_pipelines,
                 );
                 ui.close();
             }
@@ -74,7 +70,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    rendering_pipelines,
                 );
                 ui.close();
             }
@@ -90,7 +85,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    rendering_pipelines,
                 );
                 ui.close();
             }
@@ -113,7 +107,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    rendering_pipelines,
                 );
                 ui.close();
             }
@@ -134,7 +127,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    rendering_pipelines,
                 );
                 ui.close();
             }
@@ -150,7 +142,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    rendering_pipelines,
                 );
                 ui.close();
             }
@@ -168,7 +159,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    rendering_pipelines,
                 );
                 ui.close();
             }
@@ -193,7 +183,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    rendering_pipelines,
                 );
                 ui.close();
             }
@@ -209,7 +198,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    rendering_pipelines,
                 );
                 ui.close();
             }
@@ -255,13 +243,6 @@ pub fn toolbar(
 
             ui.separator();
 
-            if ui.button("Rendering").clicked() {
-                editor_ui.show_rendering_window = true;
-                ui.close();
-            }
-
-            ui.separator();
-
             if menu_action_button(ui, hotkeys, EditorAction::ResetViewport, "Reset Viewports") {
                 execute_action(
                     EditorAction::ResetViewport,
@@ -273,7 +254,6 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
-                    rendering_pipelines,
                 );
                 ui.close();
             }

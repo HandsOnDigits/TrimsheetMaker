@@ -9,6 +9,8 @@ use inspector::inspector_panel;
 
 mod atlas;
 
+mod rendering;
+
 mod status_bar;
 use status_bar::status_bar;
 
@@ -27,7 +29,6 @@ use crate::{
         MeshLight, MeshSceneState,
         viewport::{MeshPreview, MeshViewportInput, MeshViewportLayout},
     },
-    pipeline::RenderingPipelines,
     ui::windows,
 };
 
@@ -45,7 +46,6 @@ pub fn editor_ui(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut mesh_scene_state: ResMut<MeshSceneState>,
-    mut rendering_pipelines: ResMut<RenderingPipelines>,
 ) -> Result {
     mesh_input.pointer_over_ui = false;
     mesh_input.floating_window_dragging = false;
@@ -91,7 +91,6 @@ pub fn editor_ui(
                 &mut mesh_scene_state,
                 &mut commands,
                 &mut meshes,
-                &mut rendering_pipelines,
             );
         });
 
@@ -114,13 +113,15 @@ pub fn editor_ui(
     }
 
     if editor_ui.show_inspector {
-        egui::Panel::right("inspector_panel")
-            .resizable(true)
-            .default_size(280.0)
-            .size_range(220.0..=500.0)
-            .show(&mut root_ui, |ui| {
-                inspector_panel(ui, &mut editor_ui, &mut atlas);
-            });
+        if editor_ui.show_inspector {
+            egui::Panel::right("inspector_panel")
+                .resizable(true)
+                .default_size(320.0)
+                .size_range(220.0..=500.0)
+                .show(&mut root_ui, |ui| {
+                    inspector_panel(ui, &mut editor_ui, &mut atlas);
+                });
+        }
     }
 
     if editor_ui.show_editor_settings_window {
@@ -239,16 +240,6 @@ pub fn editor_ui(
         &mut commands,
         &mut mesh_scene_state,
         &mut mesh_preview,
-    );
-
-    // Rendering
-    mesh_input.floating_window_dragging |= windows::rendering::rendering_window(
-        ctx,
-        &mut editor_ui,
-        &mesh_scene_state,
-        &mesh_preview,
-        &mut atlas,
-        &mut rendering_pipelines,
     );
 
     Ok(())

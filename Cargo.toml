@@ -7,7 +7,6 @@ edition = "2024"
 anyhow = "1.0.104"
 bevy = { version = "0.19.1", features = ["exr"] }
 bevy_egui = "0.42.0"
-egui_node_editor = "0.11.0"
 exr = "1.74.0"
 rayon = "1.12.0"
 rfd = "0.17.2"
@@ -18,3 +17,4 @@ uuid = { version = "1.26.1", features = ["v4", "serde"] }
 ron = "0.12.2"
 libloading = "0.9.0"
 gltf = { version = "1.4.1", features = ["utils"] }
+half = "2.7.1"

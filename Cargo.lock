@@ -2558,18 +2558,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "egui_node_editor"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c12fc92d46b864bd60df7e3e5d191f29459bcd4e3cda5086bf5bc3c71228621"
-dependencies = [
- "egui",
- "slotmap",
- "smallvec",
- "thiserror 2.0.20",
-]
-
-[[package]]
 name = "either"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5752,9 +5740,9 @@ dependencies = [
  "anyhow",
  "bevy",
  "bevy_egui",
- "egui_node_editor",
  "exr",
  "gltf",
+ "half",
  "libloading 0.9.0",
  "rayon",
  "rfd",

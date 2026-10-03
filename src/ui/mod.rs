@@ -8,7 +8,6 @@ use crate::{
     editor_settings::EditorSettings,
     hotkeys::{self, EditorAction, EditorActionMessage},
     mesh::{MeshLight, MeshSceneState},
-    pipeline::RenderingPipelines,
     project_settings::ProjectSettings,
 };
 
@@ -20,7 +19,6 @@ pub struct EditorUiPlugin;
 impl Plugin for EditorUiPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<EditorUi>()
-            .init_resource::<RenderingPipelines>()
             .init_resource::<data::Atlas>()
             .add_systems(Startup, (setup, load_editor_settings))
             .add_systems(
@@ -55,7 +53,6 @@ fn apply_editor_actions(
     mut mesh_scene_state: ResMut<MeshSceneState>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut rendering_pipelines: ResMut<RenderingPipelines>,
 ) {
     for message in messages.read() {
         hotkeys::execute_action(
@@ -68,7 +65,6 @@ fn apply_editor_actions(
             &mut mesh_scene_state,
             &mut commands,
             &mut meshes,
-            &mut rendering_pipelines,
         );
     }
 }
@@ -81,14 +77,15 @@ pub struct EditorUi {
 
     pub expanded_meshes: std::collections::BTreeSet<u64>,
 
+    pub inspector_tab: InspectorTab,
+
+    pub rendering_material: Option<usize>,
+
     pub show_import_multiple_materials_window: bool,
     pub show_import_single_material_window: bool,
     pub show_editor_settings_window: bool,
     pub show_import_mesh_window: bool,
     pub show_meshes_window: bool,
-    pub show_rendering_window: bool,
-
-    pub rendering_window_state: windows::rendering::RenderingWindowState,
 
     pub mesh_import_path: Option<std::path::PathBuf>,
     pub mesh_import_backend: crate::mesh::import::MeshBackend,
@@ -144,6 +141,9 @@ impl Default for EditorUi {
 
             expanded_meshes: std::collections::BTreeSet::new(),
 
+            inspector_tab: InspectorTab::Properties,
+            rendering_material: None,
+
             multiple_materials_root: None,
             import_materials: BTreeMap::new(),
 
@@ -165,9 +165,6 @@ impl Default for EditorUi {
             show_editor_settings_window: false,
             show_import_mesh_window: false,
             show_meshes_window: true,
-            show_rendering_window: false,
-
-            rendering_window_state: windows::rendering::RenderingWindowState::default(),
 
             mesh_import_path: None,
             mesh_import_backend: crate::mesh::import::MeshBackend::Auto,
@@ -190,4 +187,10 @@ impl Default for EditorUi {
             show_status: true,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InspectorTab {
+    Properties,
+    Rendering,
 }

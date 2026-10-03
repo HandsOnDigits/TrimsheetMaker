@@ -4,7 +4,6 @@ use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 use bevy::{
     asset::RenderAssetUsages,
-    image::ImageSampler,
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
@@ -19,7 +18,7 @@ use crate::transform::{Rotation, Transform};
 
 use super::{
     mesh::import::MeshMaterialRef,
-    pipeline::{RenderingPipelines, TextureChannel},
+    rendering::{Channel, ChannelSource, RenderingMaterialBindings},
 };
 
 #[derive(Clone)]
@@ -189,15 +188,64 @@ fn resolve_rendering_texture(
     atlas_source_image_from_image(image)
 }
 
-fn bake_channel_source(
-    source: &AtlasSourceImage,
-    channel: TextureChannel,
-) -> Option<AtlasSourceImage> {
+fn read_f32(source_data: &[u8], offset: usize) -> Option<f32> {
+    let bytes = source_data.get(offset..offset + 4)?;
+    Some(f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
+fn read_f16(source_data: &[u8], offset: usize) -> Option<f32> {
+    let bytes = source_data.get(offset..offset + 2)?;
+    let bits = u16::from_le_bytes([bytes[0], bytes[1]]);
+    Some(half::f16::from_bits(bits).to_f32())
+}
+
+fn add_rendering_map(
+    maps: &mut BTreeMap<AtlasMap, AtlasSourceImage>,
+    material: &AtlasMaterial,
+    map: AtlasMap,
+    binding: Option<&ChannelSource>,
+    images: &Assets<Image>,
+) {
+    let Some(binding) = binding else {
+        return;
+    };
+
+    let Some(source) = resolve_rendering_texture(material, &binding.texture_id, images) else {
+        warn!(
+            "Failed to resolve {:?} texture '{}' for material '{}'",
+            map, binding.texture_id, material.name
+        );
+        return;
+    };
+
+    let source = match map {
+        AtlasMap::BaseColor | AtlasMap::Normal => source,
+
+        AtlasMap::Height
+        | AtlasMap::AmbientOcclusion
+        | AtlasMap::Roughness
+        | AtlasMap::Metallic => {
+            let Some(source) = bake_channel_source(&source, binding.channel) else {
+                warn!(
+                    "Failed to extract {:?} channel {:?} for material '{}'",
+                    map, binding.channel, material.name
+                );
+                return;
+            };
+
+            source
+        }
+    };
+
+    maps.insert(map, source);
+}
+
+fn bake_channel_source(source: &AtlasSourceImage, channel: Channel) -> Option<AtlasSourceImage> {
     let channel_index = match channel {
-        TextureChannel::Red => 0,
-        TextureChannel::Green => 1,
-        TextureChannel::Blue => 2,
-        TextureChannel::Alpha => 3,
+        Channel::Red => 0,
+        Channel::Green => 1,
+        Channel::Blue => 2,
+        Channel::Alpha => 3,
     };
 
     let pixel_count = source.width.checked_mul(source.height)?;
@@ -215,14 +263,27 @@ fn bake_channel_source(
                     0.0
                 } else {
                     let offset = pixel.checked_mul(4)?;
-                    read_f32(&source.data, offset)
+                    read_f32(&source.data, offset)?
                 }
             }
 
             TextureFormat::Rgba32Float => {
                 let offset = pixel.checked_mul(16)?.checked_add(channel_index * 4)?;
+                read_f32(&source.data, offset)?
+            }
 
-                read_f32(&source.data, offset)
+            TextureFormat::R16Float => {
+                if channel_index != 0 {
+                    0.0
+                } else {
+                    let offset = pixel.checked_mul(2)?;
+                    read_f16(&source.data, offset)?
+                }
+            }
+
+            TextureFormat::Rgba16Float => {
+                let offset = pixel.checked_mul(8)?.checked_add(channel_index * 2)?;
+                read_f16(&source.data, offset)?
             }
 
             _ => return None,
@@ -246,105 +307,65 @@ fn bake_channel_source(
     })
 }
 
-fn create_atlas_build_input(
-    atlas: &Atlas,
-    images: &Assets<Image>,
-    rendering_pipelines: &RenderingPipelines,
-) -> AtlasBuildInput {
+fn create_atlas_build_input(atlas: &Atlas, images: &Assets<Image>) -> AtlasBuildInput {
     let materials = atlas
         .materials
         .iter()
-        .filter_map(|material| {
-            let Some(material_ref) = material.material_ref.as_ref() else {
-                warn!("Atlas material '{}' has no MeshMaterialRef", material.name);
-                return None;
-            };
-
-            let Some(pipeline) = rendering_pipelines.pipeline_for(material_ref) else {
-                warn!(
-                    "Atlas material '{}' has no rendering pipeline for {:?}",
-                    material.name, material_ref
-                );
-                return None;
-            };
-
-            let bindings = match pipeline.compile() {
-                Ok(result) => result,
-                Err(error) => {
-                    error!(
-                        "Failed to evaluate rendering pipeline for material '{}': {}",
-                        material.name, error
-                    );
-                    return None;
-                }
-            };
-
+        .map(|material| {
             let mut maps = BTreeMap::new();
 
-            if let Some(binding) = &bindings.base_color {
-                if let Some(source) =
-                    resolve_rendering_texture(material, &binding.texture_group, images)
-                {
-                    maps.insert(AtlasMap::BaseColor, source);
-                } else {
-                    warn!(
-                        "Failed to resolve base color texture group '{}' for material '{}'",
-                        binding.texture_group, material.name
-                    );
-                }
-            }
+            add_rendering_map(
+                &mut maps,
+                material,
+                AtlasMap::BaseColor,
+                material.rendering.base_color.as_ref(),
+                images,
+            );
 
-            if let Some(binding) = &bindings.normal {
-                if let Some(source) =
-                    resolve_rendering_texture(material, &binding.texture_group, images)
-                {
-                    maps.insert(AtlasMap::Normal, source);
-                } else {
-                    warn!(
-                        "Failed to resolve normal texture group '{}' for material '{}'",
-                        binding.texture_group, material.name
-                    );
-                }
-            }
+            add_rendering_map(
+                &mut maps,
+                material,
+                AtlasMap::Normal,
+                material.rendering.normal.as_ref(),
+                images,
+            );
 
-            for (map, binding) in [
-                (AtlasMap::Height, bindings.height.as_ref()),
-                (
-                    AtlasMap::AmbientOcclusion,
-                    bindings.ambient_occlusion.as_ref(),
-                ),
-                (AtlasMap::Roughness, bindings.roughness.as_ref()),
-                (AtlasMap::Metallic, bindings.metallic.as_ref()),
-            ] {
-                let Some(binding) = binding else {
-                    continue;
-                };
+            add_rendering_map(
+                &mut maps,
+                material,
+                AtlasMap::Height,
+                material.rendering.height.as_ref(),
+                images,
+            );
 
-                let Some(source) =
-                    resolve_rendering_texture(material, &binding.texture_group, images)
-                else {
-                    warn!(
-                        "Failed to resolve {:?} texture group '{}' for material '{}'",
-                        map, binding.texture_group, material.name
-                    );
-                    continue;
-                };
+            add_rendering_map(
+                &mut maps,
+                material,
+                AtlasMap::AmbientOcclusion,
+                material.rendering.ambient_occlusion.as_ref(),
+                images,
+            );
 
-                let Some(source) = bake_channel_source(&source, binding.channel) else {
-                    warn!(
-                        "Failed to bake {:?} channel {:?} for material '{}'",
-                        binding.channel, map, material.name
-                    );
-                    continue;
-                };
+            add_rendering_map(
+                &mut maps,
+                material,
+                AtlasMap::Roughness,
+                material.rendering.roughness.as_ref(),
+                images,
+            );
 
-                maps.insert(map, source);
-            }
+            add_rendering_map(
+                &mut maps,
+                material,
+                AtlasMap::Metallic,
+                material.rendering.metallic.as_ref(),
+                images,
+            );
 
-            Some(AtlasMaterialBuildInput {
+            AtlasMaterialBuildInput {
                 transform: material.transform,
                 maps,
-            })
+            }
         })
         .collect();
 
@@ -523,13 +544,14 @@ impl Atlas {
                 image: None,
                 egui_texture: None,
             })
-            .collect();
+            .collect::<Vec<_>>();
 
         self.materials.push(AtlasMaterial {
             index,
             name: source.name,
             material_ref: source.material_ref,
             textures,
+            rendering: RenderingMaterialBindings::default(),
             transform: Transform::default(),
             mesh_assignments: Vec::new(),
         });
@@ -585,6 +607,7 @@ impl Atlas {
             name: format!("Material {index}"),
             material_ref: None,
             textures: vec![],
+            rendering: RenderingMaterialBindings::default(),
             transform: Transform {
                 x: x as i32,
                 y: y as i32,
@@ -596,6 +619,7 @@ impl Atlas {
         });
 
         self.uv_revision = self.uv_revision.wrapping_add(1);
+        self.image_revision = self.image_revision.wrapping_add(1);
 
         index
     }
@@ -623,7 +647,14 @@ impl Atlas {
                 let material = &mut self.materials[material_index];
 
                 for texture in &mut material.textures {
-                    if texture.image.is_some() {
+                    if let Some(handle) = &texture.image {
+                        if let Some(img) = images.get(handle) {
+                            let size = (img.width(), img.height());
+                            if first_size.is_none() {
+                                first_size = Some(size);
+                            }
+                            preferred_size = Some(size);
+                        }
                         continue;
                     }
 
@@ -718,8 +749,13 @@ pub struct MaterialMeshAssignment {
 pub struct AtlasMaterial {
     pub index: usize,
     pub name: String,
+
     pub material_ref: Option<MeshMaterialRef>,
+
     pub textures: Vec<MaterialTexture>,
+
+    pub rendering: RenderingMaterialBindings,
+
     pub transform: Transform,
     pub mesh_assignments: Vec<MaterialMeshAssignment>,
 }
@@ -811,61 +847,51 @@ fn find_material_texture<'a>(
     material.maps.get(&map)
 }
 
-fn read_f32(source_data: &[u8], offset: usize) -> f32 {
-    f32::from_le_bytes([
-        source_data[offset],
-        source_data[offset + 1],
-        source_data[offset + 2],
-        source_data[offset + 3],
-    ])
-}
-
 fn read_source_pixel(image: &AtlasSourceImage, x: usize, y: usize) -> Option<[f32; 4]> {
     let pixel = y.checked_mul(image.width)?.checked_add(x)?;
 
     match image.format {
         TextureFormat::Rgba8UnormSrgb | TextureFormat::Rgba8Unorm => {
             let offset = pixel.checked_mul(4)?;
-            let end = offset.checked_add(4)?;
-
-            if end > image.data.len() {
-                return None;
-            }
+            let data = image.data.get(offset..offset + 4)?;
 
             Some([
-                image.data[offset] as f32 / 255.0,
-                image.data[offset + 1] as f32 / 255.0,
-                image.data[offset + 2] as f32 / 255.0,
-                image.data[offset + 3] as f32 / 255.0,
+                data[0] as f32 / 255.0,
+                data[1] as f32 / 255.0,
+                data[2] as f32 / 255.0,
+                data[3] as f32 / 255.0,
             ])
         }
 
         TextureFormat::Rgba32Float => {
             let offset = pixel.checked_mul(16)?;
-            let end = offset.checked_add(16)?;
-
-            if end > image.data.len() {
-                return None;
-            }
-
             Some([
-                read_f32(&image.data, offset),
-                read_f32(&image.data, offset + 4),
-                read_f32(&image.data, offset + 8),
-                read_f32(&image.data, offset + 12),
+                read_f32(&image.data, offset)?,
+                read_f32(&image.data, offset + 4)?,
+                read_f32(&image.data, offset + 8)?,
+                read_f32(&image.data, offset + 12)?,
             ])
         }
 
         TextureFormat::R32Float => {
             let offset = pixel.checked_mul(4)?;
-            let end = offset.checked_add(4)?;
+            let value = read_f32(&image.data, offset)?;
+            Some([value, value, value, 1.0])
+        }
 
-            if end > image.data.len() {
-                return None;
-            }
+        TextureFormat::Rgba16Float => {
+            let offset = pixel.checked_mul(8)?;
+            Some([
+                read_f16(&image.data, offset)?,
+                read_f16(&image.data, offset + 2)?,
+                read_f16(&image.data, offset + 4)?,
+                read_f16(&image.data, offset + 6)?,
+            ])
+        }
 
-            let value = read_f32(&image.data, offset);
-
+        TextureFormat::R16Float => {
+            let offset = pixel.checked_mul(2)?;
+            let value = read_f16(&image.data, offset)?;
             Some([value, value, value, 1.0])
         }
 
@@ -887,7 +913,6 @@ fn source_coordinates(
     }
 
     let x_source = dst_x.saturating_mul(source_width) / dest_width;
-
     let y_source = dst_y.saturating_mul(source_height) / dest_height;
 
     match rotation {
@@ -895,7 +920,9 @@ fn source_coordinates(
 
         Rotation::Deg90 => (
             dst_y.saturating_mul(source_width) / dest_height,
-            source_height.saturating_sub(1).saturating_sub(x_source),
+            source_height
+                .saturating_sub(1)
+                .saturating_sub(dst_x.saturating_mul(source_height) / dest_width),
         ),
 
         Rotation::Deg180 => (
@@ -931,11 +958,26 @@ fn atlas_destination_rect(transform: Transform) -> Option<(i64, i64, usize, usiz
     ))
 }
 
-fn rebuild_atlas_map(input: &AtlasBuildInput, map: AtlasMap) -> Image {
-    for material in &input.materials {
-        let source = find_material_texture(material, map);
-    }
+fn make_atlas_image(width: usize, height: usize, data: Vec<u8>, format: TextureFormat) -> Image {
+    let mut image = Image::new(
+        Extent3d {
+            width: width as u32,
+            height: height as u32,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        data,
+        format,
+        RenderAssetUsages::default(),
+    );
 
+    image.texture_descriptor.usage = bevy::render::render_resource::TextureUsages::TEXTURE_BINDING
+        | bevy::render::render_resource::TextureUsages::COPY_DST;
+
+    image
+}
+
+fn rebuild_atlas_map(input: &AtlasBuildInput, map: AtlasMap) -> Image {
     let width = input.width;
     let height = input.height;
 
@@ -1033,26 +1075,12 @@ fn rebuild_atlas_map(input: &AtlasBuildInput, map: AtlasMap) -> Image {
             }
         }
 
-        let non_zero = atlas_data
-            .chunks_exact(16)
-            .filter(|pixel| pixel[..12].iter().any(|&byte| byte != 0))
-            .count();
-
-        let mut image = Image::new(
-            Extent3d {
-                width: input.width as u32,
-                height: input.height as u32,
-                depth_or_array_layers: 1,
-            },
-            TextureDimension::D2,
+        return make_atlas_image(
+            input.width,
+            input.height,
             atlas_data,
             TextureFormat::Rgba32Float,
-            RenderAssetUsages::default(),
         );
-
-        image.sampler = ImageSampler::nearest();
-
-        return image;
     }
 
     // Base color is stored as sRGB8.
@@ -1141,25 +1169,16 @@ fn rebuild_atlas_map(input: &AtlasBuildInput, map: AtlasMap) -> Image {
         }
     }
 
-    Image::new(
-        Extent3d {
-            width: input.width as u32,
-            height: input.height as u32,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
+    make_atlas_image(
+        input.width,
+        input.height,
         atlas_data,
         TextureFormat::Rgba8UnormSrgb,
-        RenderAssetUsages::default(),
     )
 }
 
-pub fn rebuild_atlas_maps(
-    atlas: &mut Atlas,
-    images: &mut Assets<Image>,
-    rendering_pipelines: &RenderingPipelines,
-) {
-    let input = create_atlas_build_input(atlas, images, rendering_pipelines);
+pub fn rebuild_atlas_maps(atlas: &mut Atlas, images: &mut Assets<Image>) {
+    let input = create_atlas_build_input(atlas, images);
 
     let maps = [
         AtlasMap::BaseColor,

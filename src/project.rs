@@ -15,8 +15,8 @@ use crate::{
         spawn_mesh_scene,
         viewport::MeshPreview,
     },
-    pipeline::RenderingPipelines,
     project_settings::ProjectSettings,
+    rendering::RenderingMaterialBindings,
     transform::Transform,
     ui::EditorUi,
 };
@@ -56,9 +56,6 @@ pub struct ProjectFile {
     pub settings: ProjectSettings,
     pub meshes: Vec<ProjectMesh>,
     pub materials: Vec<ProjectMaterial>,
-
-    #[serde(default)]
-    pub rendering_pipelines: RenderingPipelines,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -71,6 +68,9 @@ pub struct ProjectMaterial {
 
     pub textures: Vec<ProjectTexture>,
     pub transform: Transform,
+
+    #[serde(default)]
+    pub rendering: RenderingMaterialBindings,
 
     #[serde(default)]
     pub mesh_assignments: Vec<ProjectMaterialMeshAssignment>,
@@ -88,7 +88,6 @@ impl ProjectFile {
         atlas: &Atlas,
         settings: &ProjectSettings,
         mesh_scene_state: &MeshSceneState,
-        rendering_pipelines: &RenderingPipelines,
     ) -> Self {
         Self {
             format_version: PROJECT_FORMAT_VERSION,
@@ -129,6 +128,8 @@ impl ProjectFile {
                         .collect(),
                     transform: material.transform.clone(),
 
+                    rendering: material.rendering.clone(),
+
                     mesh_assignments: material
                         .mesh_assignments
                         .iter()
@@ -140,8 +141,6 @@ impl ProjectFile {
                         .collect(),
                 })
                 .collect(),
-
-            rendering_pipelines: rendering_pipelines.clone(),
         }
     }
 
@@ -150,12 +149,10 @@ impl ProjectFile {
         atlas: &Atlas,
         settings: &ProjectSettings,
         mesh_scene_state: &MeshSceneState,
-        rendering_pipelines: &RenderingPipelines,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let path = path.as_ref();
 
-        let project =
-            Self::from_state(path, atlas, settings, mesh_scene_state, rendering_pipelines);
+        let project = Self::from_state(path, atlas, settings, mesh_scene_state);
 
         let config = ron::ser::PrettyConfig::new();
 
@@ -168,10 +165,7 @@ impl ProjectFile {
 
     pub fn load(
         path: impl AsRef<Path>,
-    ) -> Result<
-        (Atlas, ProjectSettings, Vec<ProjectMesh>, RenderingPipelines),
-        Box<dyn std::error::Error>,
-    > {
+    ) -> Result<(Atlas, ProjectSettings, Vec<ProjectMesh>), Box<dyn std::error::Error>> {
         let contents = fs::read_to_string(path)?;
 
         let project: Self = ron::from_str(&contents)?;
@@ -207,6 +201,9 @@ impl ProjectFile {
                         egui_texture: None,
                     })
                     .collect(),
+
+                rendering: material.rendering,
+
                 transform: material.transform,
 
                 mesh_assignments: material
@@ -221,12 +218,7 @@ impl ProjectFile {
             })
             .collect();
 
-        Ok((
-            atlas,
-            project.settings,
-            project.meshes,
-            project.rendering_pipelines,
-        ))
+        Ok((atlas, project.settings, project.meshes))
     }
 }
 
@@ -352,7 +344,6 @@ pub fn save_project_as_dialog(
     atlas: &Atlas,
     settings: &ProjectSettings,
     mesh_scene_state: &MeshSceneState,
-    rendering_pipelines: &RenderingPipelines,
 ) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
     let Some(mut path) = rfd::FileDialog::new()
         .add_filter("Trimsheet Project", &[PROJECT_EXTENSION])
@@ -366,13 +357,7 @@ pub fn save_project_as_dialog(
         path.set_extension(PROJECT_EXTENSION);
     }
 
-    ProjectFile::save(
-        &path,
-        atlas,
-        settings,
-        mesh_scene_state,
-        rendering_pipelines,
-    )?;
+    ProjectFile::save(&path, atlas, settings, mesh_scene_state)?;
 
     Ok(Some(path))
 }
@@ -393,9 +378,8 @@ pub fn save_project(
     atlas: &Atlas,
     settings: &ProjectSettings,
     mesh_scene_state: &MeshSceneState,
-    rendering_pipelines: &RenderingPipelines,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    ProjectFile::save(path, atlas, settings, mesh_scene_state, rendering_pipelines)
+    ProjectFile::save(path, atlas, settings, mesh_scene_state)
 }
 
 fn make_project_relative_path(project_path: &Path, asset_path: &Path) -> PathBuf {

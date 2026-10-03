@@ -2,21 +2,55 @@ use bevy_egui::egui;
 
 use super::EditorUi;
 
-use crate::data::{Atlas, MaterialTexture};
+use crate::{
+    data::{Atlas, MaterialTexture},
+    ui::{InspectorTab, panels::rendering::rendering_panel},
+};
 
 pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
     ui.heading("Inspector");
 
+    ui.horizontal(|ui| {
+        if ui
+            .selectable_label(
+                editor_ui.inspector_tab == InspectorTab::Properties,
+                "Properties",
+            )
+            .clicked()
+        {
+            editor_ui.inspector_tab = InspectorTab::Properties;
+        }
+
+        if ui
+            .selectable_label(
+                editor_ui.inspector_tab == InspectorTab::Rendering,
+                "Rendering",
+            )
+            .clicked()
+        {
+            editor_ui.inspector_tab = InspectorTab::Rendering;
+        }
+    });
+
     ui.separator();
 
-    let Some(index) = editor_ui.dragging_atlas_region else {
+    match editor_ui.inspector_tab {
+        InspectorTab::Properties => {
+            properties_panel(ui, editor_ui, atlas);
+        }
+
+        InspectorTab::Rendering => {
+            rendering_panel(ui, editor_ui, atlas);
+        }
+    }
+}
+
+fn properties_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
+    let Some(index) = editor_ui.inspected_atlas_region else {
         ui.vertical_centered(|ui| {
             ui.add_space(16.0);
-
             ui.label(egui::RichText::new("Nothing active").weak().size(15.0));
-
             ui.add_space(4.0);
-
             ui.label(egui::RichText::new("Interact with an atlas region to inspect it.").weak());
         });
 
@@ -31,7 +65,7 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
             .iter_mut()
             .find(|material| material.index == index)
         else {
-            editor_ui.dragging_atlas_region = None;
+            editor_ui.inspected_atlas_region = None;
             return;
         };
 
@@ -117,7 +151,6 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
             });
 
         ui.add_space(16.0);
-
         ui.separator();
 
         ui.horizontal(|ui| {
