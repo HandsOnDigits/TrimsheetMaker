@@ -4,6 +4,8 @@ use toolbar::toolbar;
 mod materials;
 use materials::materials_panel;
 
+mod properties;
+
 mod inspector;
 use inspector::inspector_panel;
 

@@ -79,8 +79,6 @@ pub struct EditorUi {
 
     pub inspector_tab: InspectorTab,
 
-    /// Texture group currently being edited in the Rendering inspector.
-    pub rendering_group: Option<String>,
     pub rendering_revision: u64,
 
     pub show_import_multiple_materials_window: bool,
@@ -145,7 +143,6 @@ impl Default for EditorUi {
 
             inspector_tab: InspectorTab::Properties,
 
-            rendering_group: None,
             rendering_revision: 0,
 
             multiple_materials_root: None,
