@@ -4,6 +4,7 @@ use gltf::mesh::util::ReadIndices;
 
 use super::{
     MeshImportError, MeshMaterialRef, MeshObject, MeshPrimitive, MeshScene, MeshTransform,
+    generate_mikktspace_tangents,
 };
 
 pub fn import(path: &Path) -> Result<MeshScene, MeshImportError> {
@@ -96,19 +97,6 @@ fn convert_primitive(
         ));
     }
 
-    let tangents = match reader.read_tangents() {
-        Some(tangents) => tangents
-            .map(|tangent| [tangent[0], tangent[1], tangent[2], tangent[3]])
-            .collect::<Vec<_>>(),
-        None => vec![[0.0, 0.0, 0.0, 1.0]; positions.len()],
-    };
-
-    if tangents.len() != positions.len() {
-        return Err(MeshImportError::InvalidData(
-            "glTF primitive tangent count does not match vertex count".to_owned(),
-        ));
-    }
-
     let uvs = match reader.read_tex_coords(0) {
         Some(gltf::mesh::util::ReadTexCoords::U8(iter)) => iter
             .map(|uv| [uv[0] as f32 / 255.0, uv[1] as f32 / 255.0])
@@ -152,6 +140,24 @@ fn convert_primitive(
             )));
         }
     }
+
+    let tangents = match reader.read_tangents() {
+        Some(tangents) => {
+            let tangents = tangents
+                .map(|tangent| [tangent[0], tangent[1], tangent[2], tangent[3]])
+                .collect::<Vec<_>>();
+
+            if tangents.len() != positions.len() {
+                return Err(MeshImportError::InvalidData(
+                    "glTF primitive tangent count does not match vertex count".to_owned(),
+                ));
+            }
+
+            tangents
+        }
+
+        None => generate_mikktspace_tangents(&positions, &normals, &uvs, &indices)?,
+    };
 
     let material = primitive.material();
 

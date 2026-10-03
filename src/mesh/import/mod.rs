@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use mikktspace::generate_tangents;
+
 use serde::{Deserialize, Serialize};
 
 use std::path::{Path, PathBuf};
@@ -151,4 +153,76 @@ pub fn import(
         MeshBackend::Gltf => gltf::import(path),
         MeshBackend::Assimp => assimp::import(path, settings.assimp_library.as_deref()),
     }
+}
+
+struct MikkGeometry<'a> {
+    positions: &'a [[f32; 3]],
+    normals: &'a [[f32; 3]],
+    uvs: &'a [[f32; 2]],
+    indices: &'a [u32],
+    tangents: Vec<[f32; 4]>,
+}
+
+impl<'a> MikkGeometry<'a> {
+    fn new(
+        positions: &'a [[f32; 3]],
+        normals: &'a [[f32; 3]],
+        uvs: &'a [[f32; 2]],
+        indices: &'a [u32],
+    ) -> Self {
+        Self {
+            positions,
+            normals,
+            uvs,
+            indices,
+            tangents: vec![[0.0; 4]; positions.len()],
+        }
+    }
+}
+
+impl mikktspace::Geometry for MikkGeometry<'_> {
+    fn num_faces(&self) -> usize {
+        self.indices.len() / 3
+    }
+
+    fn num_vertices_of_face(&self, _face: usize) -> usize {
+        3
+    }
+
+    fn position(&self, face: usize, vert: usize) -> [f32; 3] {
+        let index = self.indices[face * 3 + vert] as usize;
+        self.positions[index]
+    }
+
+    fn normal(&self, face: usize, vert: usize) -> [f32; 3] {
+        let index = self.indices[face * 3 + vert] as usize;
+        self.normals[index]
+    }
+
+    fn tex_coord(&self, face: usize, vert: usize) -> [f32; 2] {
+        let index = self.indices[face * 3 + vert] as usize;
+        self.uvs[index]
+    }
+
+    fn set_tangent_encoded(&mut self, tangent: [f32; 4], face: usize, vert: usize) {
+        let index = self.indices[face * 3 + vert] as usize;
+        self.tangents[index] = tangent;
+    }
+}
+
+fn generate_mikktspace_tangents(
+    positions: &[[f32; 3]],
+    normals: &[[f32; 3]],
+    uvs: &[[f32; 2]],
+    indices: &[u32],
+) -> Result<Vec<[f32; 4]>, MeshImportError> {
+    let mut geometry = MikkGeometry::new(positions, normals, uvs, indices);
+
+    if !generate_tangents(&mut geometry) {
+        return Err(MeshImportError::InvalidData(
+            "MikkTSpace failed to generate tangents".to_owned(),
+        ));
+    }
+
+    Ok(geometry.tangents)
 }

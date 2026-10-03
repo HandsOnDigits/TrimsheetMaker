@@ -1,5 +1,7 @@
 #import bevy_pbr::{
     pbr_fragment::pbr_input_from_standard_material,
+    pbr_functions,
+    pbr_types,
     pbr_functions::{
         apply_pbr_lighting,
         main_pass_post_lighting_processing,
@@ -92,14 +94,11 @@ fn fragment(
         pbr_input_from_standard_material(in, is_front);
 
 
-    // -------------------------------------------------------------------------
-    // Custom atlas material
-    //
-    // Start without parallax. This is deliberately the simplest possible
-    // modification to Bevy's PBR input.
-    // -------------------------------------------------------------------------
-
     #ifdef VERTEX_UVS
+
+    // -------------------------------------------------------------------------
+    // Base Color
+    // -------------------------------------------------------------------------
 
     pbr_input.material.base_color =
         textureSample(
@@ -109,20 +108,49 @@ fn fragment(
         );
 
 
-    let normal =
+   // -------------------------------------------------------------------------
+   // Normal
+   //
+   // Follow Bevy 0.19.1's MikkTSpace normal mapping.
+   // -------------------------------------------------------------------------
+   
+   #ifndef LOAD_PREPASS_NORMALS
+   #ifdef VERTEX_UVS
+   #ifdef VERTEX_TANGENTS
+   
+   let normal_sample =
         textureSample(
-            normal_texture,
-            normal_sampler,
-            in.uv,
+        normal_texture,
+        normal_sampler,
+        in.uv,
+   ).rgb;
+   
+   let tbn =
+        pbr_functions::calculate_tbn_mikktspace(
+        pbr_input.world_normal,
+        in.world_tangent,
+   );
+   
+   pbr_input.N =
+        pbr_functions::apply_normal_mapping(
+            pbr_input.flags,
+            tbn,
+            false,
+            is_front,
+            normal_sample,
         );
+   
+   pbr_input.clearcoat_N =
+   pbr_input.N;
+   
+   #endif
+   #endif
+   #endif
 
-    // Bevy's StandardMaterial normal-map path expects the sampled value
-    // in [0, 1]. Do NOT convert it to [-1, 1] here.
-    //
-    // We are intentionally leaving pbr_input.N alone for this first
-    // working version. This proves that the custom atlas textures can
-    // coexist with Bevy's normal/light/shadow pipeline.
 
+    // -------------------------------------------------------------------------
+    // Ambient Occlusion
+    // -------------------------------------------------------------------------
 
     let ambient_occlusion =
         textureSample(
@@ -131,12 +159,28 @@ fn fragment(
             in.uv,
         ).r;
 
+    pbr_input.diffuse_occlusion =
+        vec3<f32>(ambient_occlusion);
+
+
+    // -------------------------------------------------------------------------
+    // Roughness
+    // -------------------------------------------------------------------------
+
     let roughness =
         textureSample(
             roughness_texture,
             roughness_sampler,
             in.uv,
         ).r;
+
+    pbr_input.material.perceptual_roughness =
+        roughness;
+
+
+    // -------------------------------------------------------------------------
+    // Metallic
+    // -------------------------------------------------------------------------
 
     let metallic =
         textureSample(
@@ -145,13 +189,6 @@ fn fragment(
             in.uv,
         ).r;
 
-
-    pbr_input.diffuse_occlusion =
-        vec3<f32>(ambient_occlusion);
-
-    pbr_input.material.perceptual_roughness =
-        roughness;
-
     pbr_input.material.metallic =
         metallic;
 
@@ -159,12 +196,11 @@ fn fragment(
 
 
     // -------------------------------------------------------------------------
-    // Forward / deferred
+    // Forward / Deferred
     // -------------------------------------------------------------------------
 
     #ifdef PREPASS_PIPELINE
 
-    // In deferred mode lighting happens later in the deferred lighting pass.
     return deferred_output(
         in,
         pbr_input,
@@ -174,15 +210,6 @@ fn fragment(
 
     var out: FragmentOutput;
 
-    // Bevy performs:
-    //
-    //   directional lights
-    //   point lights
-    //   spot lights
-    //   PBR BRDF
-    //   shadows
-    //   ambient lighting
-    //
     out.color =
         apply_pbr_lighting(
             pbr_input,
