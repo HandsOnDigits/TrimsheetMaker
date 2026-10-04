@@ -461,6 +461,8 @@ pub struct Atlas {
 
     /// Changes that require the composed atlas image to be rebuilt.
     pub image_revision: u64,
+
+    pub bake_revision: u64,
 }
 
 impl Atlas {
@@ -476,6 +478,11 @@ impl Atlas {
     pub fn mark_dirty(&mut self) {
         self.mark_uv_dirty();
         self.mark_image_dirty();
+    }
+
+    pub fn mark_bake_dirty(&mut self) {
+        self.image_revision = self.image_revision.wrapping_add(1);
+        self.bake_revision = self.bake_revision.wrapping_add(1);
     }
 
     fn find_free_rect(&mut self, width: u32, height: u32) -> (u32, u32) {
@@ -755,6 +762,7 @@ impl Default for Atlas {
 
             uv_revision: 0,
             image_revision: 0,
+            bake_revision: 0,
         }
     }
 }

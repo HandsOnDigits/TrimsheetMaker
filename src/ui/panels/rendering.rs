@@ -55,7 +55,6 @@ fn sample_input_row(ui: &mut egui::Ui, group: &mut TextureGroup, input: Material
 
 fn channel_input_row(ui: &mut egui::Ui, group: &mut TextureGroup, input: MaterialInput) {
     let binding = match input {
-        MaterialInput::Height => &mut group.rendering.height,
         MaterialInput::AmbientOcclusion => &mut group.rendering.ambient_occlusion,
         MaterialInput::Roughness => &mut group.rendering.roughness,
         MaterialInput::Metallic => &mut group.rendering.metallic,

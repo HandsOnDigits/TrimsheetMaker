@@ -24,6 +24,8 @@ pub fn handle_material_drag(
     if response.drag_stopped_by(egui::PointerButton::Primary) {
         editor_ui.dragging_atlas_region = None;
         editor_ui.drag_offset = egui::Vec2::ZERO;
+
+        atlas.mark_bake_dirty();
     }
 }
 
@@ -100,7 +102,7 @@ fn drag_atlas_region(
         editor_ui.snap_distance,
     );
 
-    atlas.mark_dirty();
+    atlas.mark_uv_dirty();
 }
 
 fn atlas_screen_rect(viewport: egui::Rect, editor_ui: &EditorUi, atlas: &Atlas) -> egui::Rect {

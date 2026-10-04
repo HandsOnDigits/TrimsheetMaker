@@ -36,17 +36,15 @@ pub enum RenderingUsage {
 pub enum MaterialInput {
     BaseColor,
     Normal,
-    Height,
     AmbientOcclusion,
     Roughness,
     Metallic,
 }
 
 impl MaterialInput {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 5] = [
         Self::BaseColor,
         Self::Normal,
-        Self::Height,
         Self::AmbientOcclusion,
         Self::Roughness,
         Self::Metallic,
@@ -56,7 +54,6 @@ impl MaterialInput {
         match self {
             Self::BaseColor => "Base Color",
             Self::Normal => "Normal",
-            Self::Height => "Height",
             Self::AmbientOcclusion => "Ambient Occlusion",
             Self::Roughness => "Roughness",
             Self::Metallic => "Metallic",
@@ -66,9 +63,7 @@ impl MaterialInput {
     pub fn usage(self) -> RenderingUsage {
         match self {
             Self::BaseColor | Self::Normal => RenderingUsage::Sample,
-            Self::Height | Self::AmbientOcclusion | Self::Roughness | Self::Metallic => {
-                RenderingUsage::Channel
-            }
+            Self::AmbientOcclusion | Self::Roughness | Self::Metallic => RenderingUsage::Channel,
         }
     }
 }
