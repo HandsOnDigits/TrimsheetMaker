@@ -249,7 +249,12 @@ impl Default for TextureNaming {
                 TextureGroup {
                     id: "ao".into(),
                     name: "Ambient Occlusion".into(),
-                    suffixes: vec!["_ao".into(), "_occlusion".into()],
+                    suffixes: vec![
+                        "_ao".into(),
+                        "_occlusion".into(),
+                        "_ambient_occlusio".into(),
+                        "_ambientocclusio".into(),
+                    ],
                     rendering: RenderingMaterialBindings {
                         ambient_occlusion: Some(ChannelSource {
                             channel: Channel::Red,
@@ -336,33 +341,6 @@ fn prepare_material<'a>(
         source_width: image.width,
         source_height: image.height,
     })
-}
-
-pub(crate) fn find_texture_group<'a>(
-    texture_naming: &'a TextureNaming,
-    id: &str,
-) -> Option<&'a TextureGroup> {
-    texture_naming.groups.iter().find(|group| group.id == id)
-}
-
-fn add_group_texture(
-    maps: &mut BTreeMap<AtlasMap, AtlasSourceImage>,
-    material: &AtlasMaterial,
-    texture: &MaterialTexture,
-    map: AtlasMap,
-    images: &Assets<Image>,
-) {
-    let Some(source) = texture_source_image(texture, images) else {
-        warn!(
-            "Failed to load {:?} texture '{}' for material '{}'",
-            map,
-            texture.path.display(),
-            material.name
-        );
-        return;
-    };
-
-    maps.insert(map, source);
 }
 
 fn atlas_source_image_from_image(image: &Image) -> Option<AtlasSourceImage> {
@@ -659,14 +637,6 @@ impl Atlas {
                 panic!("atlas is too large to place a material");
             }
         }
-    }
-
-    pub fn selected_mut(&mut self, index: Option<usize>) -> Option<&mut AtlasMaterial> {
-        index.and_then(|index| {
-            self.materials
-                .iter_mut()
-                .find(|material| material.index == index)
-        })
     }
 
     pub fn next_index(&self) -> usize {
@@ -1013,13 +983,6 @@ fn float_to_srgb8(value: f32) -> u8 {
     (srgb * 255.0 + 0.5) as u8
 }
 
-fn find_material_texture<'a>(
-    material: &'a AtlasMaterialBuildInput,
-    map: AtlasMap,
-) -> Option<&'a AtlasSourceImage> {
-    material.maps.get(&map)
-}
-
 fn read_source_pixel(image: &AtlasSourceImage, x: usize, y: usize) -> Option<[f32; 4]> {
     let pixel = y.checked_mul(image.width)?.checked_add(x)?;
 
@@ -1129,42 +1092,6 @@ fn atlas_destination_rect(transform: Transform) -> Option<(i64, i64, usize, usiz
         width as usize,
         height as usize,
     ))
-}
-
-fn add_group_channel(
-    maps: &mut BTreeMap<AtlasMap, AtlasSourceImage>,
-    material: &AtlasMaterial,
-    texture: &MaterialTexture,
-    map: AtlasMap,
-    binding: Option<&ChannelSource>,
-    images: &Assets<Image>,
-) {
-    let Some(binding) = binding else {
-        return;
-    };
-
-    let Some(source) = texture_source_image(texture, images) else {
-        warn!(
-            "Failed to load {:?} texture '{}' for material '{}'",
-            map,
-            texture.path.display(),
-            material.name
-        );
-        return;
-    };
-
-    let Some(source) = bake_channel_source(&source, binding.channel) else {
-        warn!(
-            "Failed to extract {:?} channel {:?} from texture '{}' for material '{}'",
-            map,
-            binding.channel,
-            texture.path.display(),
-            material.name
-        );
-        return;
-    };
-
-    maps.insert(map, source);
 }
 
 fn make_atlas_image(width: usize, height: usize, data: Vec<u8>, format: TextureFormat) -> Image {
@@ -1423,46 +1350,6 @@ pub(crate) fn create_atlas_build_input(
         width: atlas.width as usize,
         height: atlas.height as usize,
         materials,
-    }
-}
-
-pub fn rebuild_atlas_maps(
-    atlas: &mut Atlas,
-    texture_naming: &TextureNaming,
-    images: &mut Assets<Image>,
-) {
-    let input = create_atlas_build_input(atlas, texture_naming, images);
-
-    let maps = [
-        AtlasMap::BaseColor,
-        AtlasMap::Normal,
-        AtlasMap::Height,
-        AtlasMap::AmbientOcclusion,
-        AtlasMap::Roughness,
-        AtlasMap::Metallic,
-    ];
-
-    for map in maps {
-        if !atlas_input_has_map(&input, map) {
-            *atlas.images.get_mut(map) = None;
-            continue;
-        }
-
-        let image = rebuild_atlas_map(&input, map);
-
-        match atlas.images.get(map).cloned() {
-            Some(handle) => {
-                if let Some(mut existing) = images.get_mut(&handle) {
-                    *existing = image;
-                } else {
-                    *atlas.images.get_mut(map) = Some(images.add(image));
-                }
-            }
-
-            None => {
-                *atlas.images.get_mut(map) = Some(images.add(image));
-            }
-        }
     }
 }
 
