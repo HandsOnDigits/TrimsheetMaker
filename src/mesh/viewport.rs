@@ -1,12 +1,10 @@
 use bevy::{
-    asset::RenderAssetUsages,
     camera::RenderTarget,
     input::mouse::{MouseMotion, MouseWheel},
+    material::OpaqueRendererMethod,
     pbr::{ExtendedMaterial, MaterialExtension, StandardMaterial},
     prelude::*,
-    render::render_resource::{
-        AsBindGroup, Extent3d, TextureDimension, TextureFormat, TextureUsages,
-    },
+    render::render_resource::{AsBindGroup, Extent3d, TextureFormat},
     shader::ShaderRef,
     tasks::{AsyncComputeTaskPool, Task},
 };
@@ -23,6 +21,7 @@ use bevy_egui::EguiPrimaryContextPass;
 
 use crate::{
     data::{Atlas, AtlasBuildResult, AtlasMaterial, build_atlas, create_atlas_build_input},
+    rendering::DefaultTextures,
     transform::Rotation,
     ui::EditorUi,
 };
@@ -187,6 +186,7 @@ impl Plugin for MeshPreviewPlugin {
 
 pub fn sync_atlas_to_mesh_preview_material(
     atlas: Res<Atlas>,
+    default_textures: Res<DefaultTextures>,
     mut materials: ResMut<Assets<MeshPreviewMaterial>>,
     material_handles: Query<&MeshMaterial3d<MeshPreviewMaterial>>,
 ) {
@@ -195,11 +195,35 @@ pub fn sync_atlas_to_mesh_preview_material(
             continue;
         };
 
-        material.extension.base_color_texture = atlas.images.base_color.clone();
-        material.extension.normal_texture = atlas.images.normal.clone();
-        material.extension.ambient_occlusion_texture = atlas.images.ambient_occlusion.clone();
-        material.extension.roughness_texture = atlas.images.roughness.clone();
-        material.extension.metallic_texture = atlas.images.metallic.clone();
+        material.extension.base_color_texture = atlas
+            .images
+            .base_color
+            .clone()
+            .or_else(|| Some(default_textures.checkerboard.clone()));
+
+        material.extension.normal_texture = atlas
+            .images
+            .normal
+            .clone()
+            .or_else(|| Some(default_textures.flat_normal.clone()));
+
+        material.extension.ambient_occlusion_texture = atlas
+            .images
+            .ambient_occlusion
+            .clone()
+            .or_else(|| Some(default_textures.white.clone()));
+
+        material.extension.roughness_texture = atlas
+            .images
+            .roughness
+            .clone()
+            .or_else(|| Some(default_textures.white.clone()));
+
+        material.extension.metallic_texture = atlas
+            .images
+            .metallic
+            .clone()
+            .or_else(|| Some(default_textures.black.clone()));
     }
 }
 
@@ -212,6 +236,7 @@ fn setup_mesh_preview(
     let height = 1024;
 
     let image = Image::new_target_texture(width, height, TextureFormat::Rgba8UnormSrgb, None);
+
     let image_handle = images.add(image);
 
     commands.insert_resource(MeshPreviewRenderTarget {
@@ -233,18 +258,7 @@ fn setup_mesh_preview(
         ))
         .id();
 
-    let white = create_solid_image(
-        &mut images,
-        [255, 255, 255, 255],
-        TextureFormat::Rgba8UnormSrgb,
-    );
-    let black = create_solid_image(&mut images, [0, 0, 0, 255], TextureFormat::Rgba8Unorm);
-    let flat_normal =
-        create_solid_image(&mut images, [128, 128, 255, 255], TextureFormat::Rgba8Unorm);
-    let white_data =
-        create_solid_image(&mut images, [255, 255, 255, 255], TextureFormat::Rgba8Unorm);
-
-    use bevy::material::OpaqueRendererMethod;
+    let default_textures = DefaultTextures::create(&mut images);
 
     let material = materials.add(ExtendedMaterial {
         base: StandardMaterial {
@@ -253,13 +267,15 @@ fn setup_mesh_preview(
         },
 
         extension: MeshPreviewExtension {
-            base_color_texture: Some(white),
-            normal_texture: Some(flat_normal),
-            ambient_occlusion_texture: Some(white_data.clone()),
-            roughness_texture: Some(white_data.clone()),
-            metallic_texture: Some(black),
+            base_color_texture: Some(default_textures.checkerboard.clone()),
+            normal_texture: Some(default_textures.flat_normal.clone()),
+            ambient_occlusion_texture: Some(default_textures.white.clone()),
+            roughness_texture: Some(default_textures.white.clone()),
+            metallic_texture: Some(default_textures.black.clone()),
         },
     });
+
+    commands.insert_resource(default_textures);
 
     commands.insert_resource(MeshPreview {
         camera,
@@ -287,28 +303,6 @@ fn setup_mesh_preview(
         Transform::from_xyz(2.0, 4.0, 2.0).looking_at(Vec3::ZERO, Vec3::Y),
         MeshPreviewLightSource,
     ));
-}
-
-fn create_solid_image(
-    images: &mut Assets<Image>,
-    color: [u8; 4],
-    format: TextureFormat,
-) -> Handle<Image> {
-    let mut image = Image::new_fill(
-        Extent3d {
-            width: 1,
-            height: 1,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        &color,
-        format,
-        RenderAssetUsages::default(),
-    );
-
-    image.texture_descriptor.usage = TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST;
-
-    images.add(image)
 }
 
 pub fn spawn_mesh_viewport(mut commands: Commands, mesh_preview: Res<MeshPreview>) {

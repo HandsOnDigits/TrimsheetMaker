@@ -1287,28 +1287,25 @@ pub fn rebuild_atlas_maps(
         AtlasMap::Metallic,
     ];
 
-    let generated: Vec<(AtlasMap, Image)> = maps
-        .iter()
-        .map(|map| (*map, rebuild_atlas_map(&input, *map)))
-        .collect();
+    for map in maps {
+        if !atlas_input_has_map(&input, map) {
+            *atlas.images.get_mut(map) = None;
+            continue;
+        }
 
-    for (map, image) in generated {
-        let handle = atlas.images.get(map).cloned();
+        let image = rebuild_atlas_map(&input, map);
 
-        match handle {
+        match atlas.images.get(map).cloned() {
             Some(handle) => {
                 if let Some(mut existing) = images.get_mut(&handle) {
                     *existing = image;
                 } else {
-                    let new_handle = images.add(image);
-                    *atlas.images.get_mut(map) = Some(new_handle);
+                    *atlas.images.get_mut(map) = Some(images.add(image));
                 }
             }
 
             None => {
-                let new_handle = images.add(image);
-
-                *atlas.images.get_mut(map) = Some(new_handle);
+                *atlas.images.get_mut(map) = Some(images.add(image));
             }
         }
     }
@@ -1342,11 +1339,21 @@ pub(crate) fn build_atlas(mut input: AtlasBuildInput, generation: u64) -> AtlasB
 
     let maps = maps
         .into_iter()
-        .map(|map| {
-            let image = rebuild_atlas_map(&input, map);
-            (map, image)
+        .filter_map(|map| {
+            if !atlas_input_has_map(&input, map) {
+                return None;
+            }
+
+            Some((map, rebuild_atlas_map(&input, map)))
         })
         .collect();
 
     AtlasBuildResult { generation, maps }
+}
+
+fn atlas_input_has_map(input: &AtlasBuildInput, map: AtlasMap) -> bool {
+    input
+        .materials
+        .iter()
+        .any(|material| material.maps.contains_key(&map))
 }
