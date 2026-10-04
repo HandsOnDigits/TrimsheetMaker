@@ -32,6 +32,7 @@ pub struct AtlasRefresh {
     pub task: Option<Task<AtlasBuildResult>>,
     pub generation: u64,
 
+    pub building_image_revision: u64,
     pub building_bake_revision: u64,
     pub building_rendering_revision: u64,
 }
@@ -42,6 +43,8 @@ impl Default for AtlasRefresh {
             requested: true,
             task: None,
             generation: 0,
+
+            building_image_revision: u64::MAX,
             building_bake_revision: u64::MAX,
             building_rendering_revision: u64::MAX,
         }
@@ -670,7 +673,8 @@ pub fn sync_atlas_images(
     images: Res<Assets<Image>>,
     mut refresh: ResMut<AtlasRefresh>,
 ) {
-    if atlas.bake_revision != refresh.building_bake_revision
+    if atlas.image_revision != refresh.building_image_revision
+        || atlas.bake_revision != refresh.building_bake_revision
         || editor_ui.rendering_revision != refresh.building_rendering_revision
     {
         refresh.requested = true;
@@ -680,6 +684,7 @@ pub fn sync_atlas_images(
         return;
     }
 
+    let image_revision = atlas.image_revision;
     let bake_revision = atlas.bake_revision;
     let rendering_revision = editor_ui.rendering_revision;
 
@@ -688,6 +693,7 @@ pub fn sync_atlas_images(
 
     refresh.generation = refresh.generation.wrapping_add(1);
 
+    refresh.building_image_revision = image_revision;
     refresh.building_bake_revision = bake_revision;
     refresh.building_rendering_revision = rendering_revision;
 
@@ -760,9 +766,8 @@ pub fn finish_atlas_build(
         }
     }
 
-    atlas.image_revision = atlas.image_revision.wrapping_add(1);
-
-    let still_current = atlas.bake_revision == refresh.building_bake_revision
+    let still_current = atlas.image_revision == refresh.building_image_revision
+        && atlas.bake_revision == refresh.building_bake_revision
         && editor_ui.rendering_revision == refresh.building_rendering_revision;
 
     refresh.requested = !still_current;

@@ -4,7 +4,7 @@ use bevy_egui::egui;
 use super::atlas_interaction;
 
 use crate::{
-    data::{Atlas, AtlasMaterial},
+    data::{Atlas, AtlasMaterial, TextureNaming},
     mesh::{MeshSceneState, viewport::MeshPreview},
     transform::Rotation,
     ui::EditorUi,
@@ -95,6 +95,7 @@ pub fn atlas_view(
         atlas,
         mesh_preview,
         mesh_scene_state,
+        &editor_ui.project_settings.texture_naming,
     );
 }
 
@@ -105,6 +106,7 @@ fn draw_atlas(
     atlas: &Atlas,
     mesh_preview: &MeshPreview,
     mesh_scene_state: &MeshSceneState,
+    texture_naming: &TextureNaming,
 ) {
     let zoom = editor_ui.atlas_zoom;
 
@@ -134,7 +136,7 @@ fn draw_atlas(
     for atlas_material in &atlas.materials {
         let rect = atlas_material_rect(atlas_material, atlas_rect, zoom);
 
-        draw_material_region(painter, rect, atlas_material, preview_group);
+        draw_material_region(painter, rect, atlas_material, preview_group, texture_naming);
 
         draw_uv_overlay(
             painter,
@@ -179,6 +181,7 @@ fn draw_material_region(
     rect: egui::Rect,
     material: &AtlasMaterial,
     preview_group: Option<&str>,
+    texture_naming: &TextureNaming,
 ) {
     /*
      * Every AtlasMaterial is an atlas region.
@@ -189,11 +192,11 @@ fn draw_material_region(
 
     painter.rect_filled(rect, 0.0, fill);
 
-    if let Some(texture_id) = preview_group.and_then(|group| {
+    if let Some(texture_id) = preview_group.and_then(|group_id| {
         material
             .textures
             .iter()
-            .find(|texture| texture.id.eq_ignore_ascii_case(group))
+            .find(|texture| texture_naming.texture_matches_group(&texture.path, group_id))
             .and_then(|texture| texture.egui_texture)
     }) {
         draw_rotated_texture(painter, rect, texture_id, material.transform.rotation);

@@ -230,6 +230,9 @@ impl ProjectFile {
 
         atlas.load_textures(images);
 
+        // Generated atlas images must be rebuilt after loading a project.
+        atlas.images = Default::default();
+
         Ok((atlas, project.settings, project.meshes))
     }
 }

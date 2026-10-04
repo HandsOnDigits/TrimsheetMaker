@@ -1393,7 +1393,11 @@ pub(crate) fn create_atlas_build_input(
                     continue;
                 };
 
-                let Some(group) = find_texture_group(texture_naming, group_id) else {
+                let Some(group) = texture_naming
+                    .groups
+                    .iter()
+                    .find(|group| group.id == group_id)
+                else {
                     continue;
                 };
 

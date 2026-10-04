@@ -51,10 +51,9 @@ pub fn import_multiple_materials_window(
                                     .texture_naming
                                     .merge_detected(scan.naming);
 
-                                editor_ui
-                                    .project_settings
-                                    .texture_naming
-                                    .reclassify_materials(&mut editor_ui.import_materials);
+                                let naming = &editor_ui.project_settings.texture_naming;
+
+                                naming.reclassify_materials(&mut editor_ui.import_materials);
                             }
                             Err(error) => {
                                 eprintln!("Failed to scan material folder: {error}");
