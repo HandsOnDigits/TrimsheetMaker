@@ -14,11 +14,13 @@ pub fn classify_textures(paths: Vec<PathBuf>, naming: &TextureNaming) -> Vec<Mat
         .into_iter()
         .filter_map(|path| {
             let filename = path.file_name()?.to_str()?;
-            let id = naming.group_for_filename(filename)?;
+
+            let group_id = naming.group_for_filename(filename)?;
 
             Some(MaterialTexture {
-                id,
+                id: uuid::Uuid::new_v4().to_string(),
                 path,
+                group_id: Some(group_id),
                 image: None,
                 egui_texture: None,
             })
@@ -33,9 +35,10 @@ pub fn material_source_from_paths(
 ) -> MaterialSource {
     let textures = textures
         .into_iter()
-        .map(|(id, path)| MaterialTexture {
-            id,
+        .map(|(group_id, path)| MaterialTexture {
+            id: uuid::Uuid::new_v4().to_string(),
             path,
+            group_id: Some(group_id),
             image: None,
             egui_texture: None,
         })

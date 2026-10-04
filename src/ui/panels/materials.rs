@@ -2,7 +2,7 @@ use bevy_egui::egui;
 
 use super::EditorUi;
 
-use crate::data::{Atlas, AtlasMaterial};
+use crate::data::{Atlas, AtlasMaterial, TextureNaming};
 
 pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
     ui.heading("Atlas Regions");
@@ -173,6 +173,7 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
                     atlas_material,
                     active,
                     editor_ui.project_settings.preview_texture_group.as_deref(),
+                    &editor_ui.project_settings.texture_naming,
                 )
                 .clicked()
                 {
@@ -205,6 +206,7 @@ fn material_row(
     material: &AtlasMaterial,
     active: bool,
     preview_texture_group: Option<&str>,
+    texture_naming: &TextureNaming,
 ) -> egui::Response {
     let height = 48.0;
     let width = ui.available_width();
@@ -231,7 +233,7 @@ fn material_row(
         material
             .textures
             .iter()
-            .find(|texture| texture.id == group_id)
+            .find(|texture| texture_naming.texture_matches_group(&texture.path, group_id))
             .and_then(|texture| texture.egui_texture)
     });
 

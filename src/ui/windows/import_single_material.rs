@@ -65,9 +65,11 @@ pub fn import_single_material_window(
                                 );
 
                                 for texture in textures {
-                                    editor_ui
-                                        .single_material_textures
-                                        .insert(texture.id, Some(texture.path));
+                                    if let Some(group_id) = texture.group_id {
+                                        editor_ui
+                                            .single_material_textures
+                                            .insert(group_id, Some(texture.path));
+                                    }
                                 }
                             }
 

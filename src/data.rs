@@ -30,6 +30,8 @@ pub struct MaterialTexture {
     // Original source file. Never discard this.
     pub path: PathBuf,
 
+    pub group_id: Option<String>,
+
     // Runtime representation, if loaded.
     pub image: Option<Handle<Image>>,
     pub egui_texture: Option<egui::TextureId>,
@@ -72,15 +74,13 @@ impl TextureNaming {
     pub fn reclassify_atlas(&self, atlas: &mut Atlas) {
         for material in &mut atlas.materials {
             for texture in &mut material.textures {
-                if let Some(group) = self.group_for_filename(
+                texture.group_id = self.group_for_filename(
                     texture
                         .path
                         .file_name()
                         .and_then(|name| name.to_str())
                         .unwrap_or_default(),
-                ) {
-                    texture.id = group;
-                }
+                );
             }
         }
     }
@@ -88,15 +88,13 @@ impl TextureNaming {
     pub fn reclassify_materials(&self, materials: &mut BTreeMap<String, MaterialSource>) {
         for material in materials.values_mut() {
             for texture in &mut material.textures {
-                if let Some(group) = self.group_for_filename(
+                texture.group_id = self.group_for_filename(
                     texture
                         .path
                         .file_name()
                         .and_then(|name| name.to_str())
                         .unwrap_or_default(),
-                ) {
-                    texture.id = group;
-                }
+                );
             }
         }
     }
@@ -116,6 +114,23 @@ impl TextureNaming {
             })
             .max_by_key(|(_, suffix)| suffix.len())
             .map(|(group, _)| group.id.clone())
+    }
+
+    pub fn texture_matches_group(&self, path: &Path, group_id: &str) -> bool {
+        let Some(group) = self.groups.iter().find(|group| group.id == group_id) else {
+            return false;
+        };
+
+        let stem = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+
+        group
+            .suffixes
+            .iter()
+            .any(|suffix| stem.ends_with(&suffix.trim().to_ascii_lowercase()))
     }
 
     pub fn merge_detected(&mut self, detected: TextureNaming) {
@@ -154,10 +169,109 @@ impl TextureNaming {
 
 impl Default for TextureNaming {
     fn default() -> Self {
-        Self { groups: Vec::new() }
+        Self {
+            groups: vec![
+                TextureGroup {
+                    id: "base_color".into(),
+                    name: "Base Color".into(),
+                    suffixes: vec![
+                        "_basecolor".into(),
+                        "_base_color".into(),
+                        "_albedo".into(),
+                        "_diffuse".into(),
+                    ],
+                    rendering: RenderingMaterialBindings {
+                        base_color: true,
+                        ..default()
+                    },
+                },
+                TextureGroup {
+                    id: "normal".into(),
+                    name: "Normal".into(),
+                    suffixes: vec![
+                        "_normal".into(),
+                        "_normal_gl".into(),
+                        "_normal_dx".into(),
+                        "_nrm".into(),
+                    ],
+                    rendering: RenderingMaterialBindings {
+                        normal: true,
+                        ..default()
+                    },
+                },
+                TextureGroup {
+                    id: "ormh".into(),
+                    name: "ORMH".into(),
+                    suffixes: vec![
+                        "_orm".into(),
+                        "_ormh".into(),
+                        "_occlusion_roughness_metallic".into(),
+                        "_occlusion_roughness_metallic_height".into(),
+                    ],
+                    rendering: RenderingMaterialBindings {
+                        ambient_occlusion: Some(ChannelSource {
+                            channel: Channel::Red,
+                        }),
+                        roughness: Some(ChannelSource {
+                            channel: Channel::Green,
+                        }),
+                        metallic: Some(ChannelSource {
+                            channel: Channel::Blue,
+                        }),
+                        height: Some(ChannelSource {
+                            channel: Channel::Alpha,
+                        }),
+                        ..default()
+                    },
+                },
+                TextureGroup {
+                    id: "roughness".into(),
+                    name: "Roughness".into(),
+                    suffixes: vec!["_roughness".into(), "_rough".into()],
+                    rendering: RenderingMaterialBindings {
+                        roughness: Some(ChannelSource {
+                            channel: Channel::Red,
+                        }),
+                        ..default()
+                    },
+                },
+                TextureGroup {
+                    id: "metallic".into(),
+                    name: "Metallic".into(),
+                    suffixes: vec!["_metallic".into(), "_metalness".into(), "_metal".into()],
+                    rendering: RenderingMaterialBindings {
+                        metallic: Some(ChannelSource {
+                            channel: Channel::Red,
+                        }),
+                        ..default()
+                    },
+                },
+                TextureGroup {
+                    id: "ao".into(),
+                    name: "Ambient Occlusion".into(),
+                    suffixes: vec!["_ao".into(), "_occlusion".into()],
+                    rendering: RenderingMaterialBindings {
+                        ambient_occlusion: Some(ChannelSource {
+                            channel: Channel::Red,
+                        }),
+                        ..default()
+                    },
+                },
+                TextureGroup {
+                    id: "height".into(),
+                    name: "Height".into(),
+                    suffixes: vec!["_height".into(), "_displacement".into(), "_disp".into()],
+                    rendering: RenderingMaterialBindings {
+                        height: Some(ChannelSource {
+                            channel: Channel::Red,
+                        }),
+                        ..default()
+                    },
+                },
+            ],
+        }
     }
 }
-
 #[derive(Clone)]
 pub struct AtlasMaterialBuildInput {
     pub(crate) transform: Transform,
@@ -573,6 +687,7 @@ impl Atlas {
             .map(|texture| MaterialTexture {
                 id: texture.id,
                 path: texture.path,
+                group_id: texture.group_id,
                 image: None,
                 egui_texture: None,
             })
@@ -666,51 +781,83 @@ impl Atlas {
         let mut uv_changed = false;
         let mut image_changed = false;
 
+        // First collect the textures that actually need decoding.
+        let pending: Vec<(usize, usize, PathBuf)> = self
+            .materials
+            .iter()
+            .enumerate()
+            .flat_map(|(material_index, material)| {
+                material
+                    .textures
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, texture)| texture.image.is_none())
+                    .map(move |(texture_index, texture)| {
+                        (material_index, texture_index, texture.path.clone())
+                    })
+            })
+            .collect();
+
+        // Decode EXRs in parallel.
+        let decoded: Vec<(usize, usize, PathBuf, Result<Image, String>)> = pending
+            .into_par_iter()
+            .map(|(material_index, texture_index, path)| {
+                let result =
+                    crate::image::import::exr::load_exr(&path).map_err(|error| error.to_string());
+
+                (material_index, texture_index, path, result)
+            })
+            .collect();
+
+        // Add decoded images to Bevy's Assets on the main thread.
+        for (material_index, texture_index, path, result) in decoded {
+            match result {
+                Ok(image) => {
+                    let size = (image.width(), image.height());
+
+                    let material = &mut self.materials[material_index];
+                    let texture = &mut material.textures[texture_index];
+
+                    texture.image = Some(images.add(image));
+
+                    image_changed = true;
+
+                    // Store the dimensions for placement below.
+                    // We handle placement after all textures are loaded.
+                    if material.transform.width == 0 || material.transform.height == 0 {
+                        let _ = size;
+                    }
+                }
+
+                Err(error) => {
+                    error!("Failed to load texture '{}': {error}", path.display());
+                }
+            }
+        }
+
+        // Determine placement after all images have been loaded.
         for material_index in 0..self.materials.len() {
-            let mut first_size = None;
             let mut preferred_size = None;
 
             {
-                let material = &mut self.materials[material_index];
+                let material = &self.materials[material_index];
 
-                for texture in &mut material.textures {
-                    if let Some(handle) = &texture.image {
-                        if let Some(img) = images.get(handle) {
-                            let size = (img.width(), img.height());
-                            if first_size.is_none() {
-                                first_size = Some(size);
-                            }
-                            preferred_size = Some(size);
-                        }
+                for texture in &material.textures {
+                    let Some(handle) = &texture.image else {
                         continue;
-                    }
+                    };
 
-                    match crate::image::import::exr::load_exr(&texture.path) {
-                        Ok(image) => {
-                            let size = (image.width(), image.height());
+                    let Some(image) = images.get(handle) else {
+                        continue;
+                    };
 
-                            if first_size.is_none() {
-                                first_size = Some(size);
-                            }
-
-                            preferred_size = Some(size);
-
-                            texture.image = Some(images.add(image));
-
-                            image_changed = true;
-                        }
-
-                        Err(error) => {
-                            error!(
-                                "Failed to load texture '{}': {error}",
-                                texture.path.display()
-                            );
-                        }
+                    if preferred_size.is_none() {
+                        preferred_size = Some((image.width(), image.height()));
                     }
                 }
             }
 
-            let Some((width, height)) = preferred_size.or(first_size) else {
+            let Some((width, height)) = preferred_size else {
                 continue;
             };
 
@@ -1242,7 +1389,11 @@ pub(crate) fn create_atlas_build_input(
             let mut channel_sources = Vec::new();
 
             for texture in &material.textures {
-                let Some(group) = find_texture_group(texture_naming, &texture.id) else {
+                let Some(group_id) = texture.group_id.as_deref() else {
+                    continue;
+                };
+
+                let Some(group) = find_texture_group(texture_naming, group_id) else {
                     continue;
                 };
 

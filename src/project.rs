@@ -75,6 +75,10 @@ pub struct ProjectMaterial {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProjectTexture {
     pub id: String,
+
+    #[serde(default)]
+    pub group_id: Option<String>,
+
     pub path: PathBuf,
 }
 
@@ -202,6 +206,7 @@ impl ProjectFile {
 
                         MaterialTexture {
                             id: texture.id,
+                            group_id: texture.group_id,
                             path: resolved_path,
                             image: None,
                             egui_texture: None,
@@ -335,6 +340,7 @@ impl ProjectTexture {
     fn from_texture(texture: &MaterialTexture) -> Self {
         Self {
             id: texture.id.clone(),
+            group_id: texture.group_id.clone(),
             path: texture.path.clone(),
         }
     }

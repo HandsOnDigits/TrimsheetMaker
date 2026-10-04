@@ -45,10 +45,16 @@ pub fn import_multiple_materials_window(
                             Ok(scan) => {
                                 editor_ui.multiple_materials_root = Some(path);
                                 editor_ui.import_materials = scan.materials;
+
                                 editor_ui
                                     .project_settings
                                     .texture_naming
                                     .merge_detected(scan.naming);
+
+                                editor_ui
+                                    .project_settings
+                                    .texture_naming
+                                    .reclassify_materials(&mut editor_ui.import_materials);
                             }
                             Err(error) => {
                                 eprintln!("Failed to scan material folder: {error}");
@@ -100,8 +106,12 @@ pub fn import_multiple_materials_window(
                             .unwrap_or("Unknown")
                             .to_owned();
 
+                        let Some(group_id) = &texture.group_id else {
+                            continue;
+                        };
+
                         groups
-                            .entry(texture.id.clone())
+                            .entry(group_id.clone())
                             .or_default()
                             .push((material.name.clone(), filename));
                     }
@@ -109,49 +119,6 @@ pub fn import_multiple_materials_window(
 
                 for textures in groups.values_mut() {
                     textures.sort_by(|a, b| a.0.cmp(&b.0));
-                }
-
-                if editor_ui.project_settings.preview_texture_group.is_none() {
-                    ui.add_space(8.0);
-
-                    ui.label("Default Preview Map");
-
-                    ui.add_space(4.0);
-
-                    let available_groups: Vec<_> = editor_ui
-                        .project_settings
-                        .texture_naming
-                        .groups
-                        .iter()
-                        .filter(|group| {
-                            groups.contains_key(&group.id) || groups.contains_key(&group.name)
-                        })
-                        .collect();
-
-                    if available_groups.is_empty() {
-                        ui.label("No texture groups detected.");
-                    } else {
-                        egui::ComboBox::from_id_salt("preview_texture_group")
-                            .selected_text("Select a texture map...")
-                            .show_ui(ui, |ui| {
-                                for group in available_groups {
-                                    ui.selectable_value(
-                                        &mut editor_ui.project_settings.preview_texture_group,
-                                        Some(group.id.clone()),
-                                        &group.name,
-                                    );
-                                }
-                            });
-
-                        ui.add_space(4.0);
-
-                        ui.label(
-                            egui::RichText::new(
-                                "Select which texture map should be displayed in the atlas.",
-                            )
-                            .weak(),
-                        );
-                    }
                 }
             } else {
                 ui.label("Select a folder containing material folders.");

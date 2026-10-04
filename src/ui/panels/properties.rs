@@ -119,6 +119,7 @@ pub fn properties_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut
                 material.textures.push(MaterialTexture {
                     id: String::new(),
                     path: std::path::PathBuf::new(),
+                    group_id: None,
                     image: None,
                     egui_texture: None,
                 });

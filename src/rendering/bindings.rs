@@ -39,6 +39,7 @@ pub enum MaterialInput {
     AmbientOcclusion,
     Roughness,
     Metallic,
+    Height,
 }
 
 impl MaterialInput {
@@ -57,18 +58,21 @@ impl MaterialInput {
             Self::AmbientOcclusion => "Ambient Occlusion",
             Self::Roughness => "Roughness",
             Self::Metallic => "Metallic",
+            Self::Height => "Height",
         }
     }
 
     pub fn usage(self) -> RenderingUsage {
         match self {
             Self::BaseColor | Self::Normal => RenderingUsage::Sample,
-            Self::AmbientOcclusion | Self::Roughness | Self::Metallic => RenderingUsage::Channel,
+            Self::AmbientOcclusion | Self::Roughness | Self::Metallic | Self::Height => {
+                RenderingUsage::Channel
+            }
         }
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RenderingMaterialBindings {
     #[serde(default)]
     pub base_color: bool,
@@ -87,4 +91,17 @@ pub struct RenderingMaterialBindings {
 
     #[serde(default)]
     pub metallic: Option<ChannelSource>,
+}
+
+impl Default for RenderingMaterialBindings {
+    fn default() -> Self {
+        Self {
+            base_color: false,
+            normal: false,
+            height: None,
+            ambient_occlusion: None,
+            roughness: None,
+            metallic: None,
+        }
+    }
 }
