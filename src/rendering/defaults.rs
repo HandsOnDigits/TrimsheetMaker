@@ -4,14 +4,6 @@ use bevy::{
     render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum DefaultTexture {
-    Checkerboard,
-    White,
-    Black,
-    FlatNormal,
-}
-
 #[derive(Resource)]
 pub struct DefaultTextures {
     pub checkerboard: Handle<Image>,
@@ -30,15 +22,6 @@ impl DefaultTextures {
             )),
             black: images.add(solid_color([0, 0, 0, 255], TextureFormat::Rgba8Unorm)),
             flat_normal: images.add(solid_color([128, 128, 255, 255], TextureFormat::Rgba8Unorm)),
-        }
-    }
-
-    pub fn get(&self, texture: DefaultTexture) -> &Handle<Image> {
-        match texture {
-            DefaultTexture::Checkerboard => &self.checkerboard,
-            DefaultTexture::White => &self.white,
-            DefaultTexture::Black => &self.black,
-            DefaultTexture::FlatNormal => &self.flat_normal,
         }
     }
 }

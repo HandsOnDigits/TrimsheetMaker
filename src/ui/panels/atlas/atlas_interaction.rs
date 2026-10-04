@@ -5,6 +5,29 @@ use crate::{
     ui::EditorUi,
 };
 
+pub fn handle_material_selection(
+    response: &egui::Response,
+    viewport: egui::Rect,
+    editor_ui: &mut EditorUi,
+    atlas: &Atlas,
+) {
+    if !response.clicked_by(egui::PointerButton::Primary) {
+        return;
+    }
+
+    let atlas_rect = atlas_screen_rect(viewport, editor_ui, atlas);
+
+    let Some(pointer) = response.interact_pointer_pos() else {
+        return;
+    };
+
+    let Some(index) = atlas_material_at_position(pointer, atlas_rect, editor_ui, atlas) else {
+        return;
+    };
+
+    editor_ui.inspected_atlas_region = Some(index);
+}
+
 pub fn handle_material_drag(
     response: &egui::Response,
     viewport: egui::Rect,
@@ -43,13 +66,6 @@ fn start_atlas_region_drag(
         return;
     };
 
-    /*
-     * The clicked atlas region becomes the region being inspected.
-     *
-     * This is persistent UI state and is independent from dragging.
-     */
-    editor_ui.inspected_atlas_region = Some(index);
-
     let atlas_position = screen_to_atlas(pointer, atlas_rect, editor_ui.atlas_zoom);
 
     let Some(atlas_material) = atlas
@@ -60,15 +76,8 @@ fn start_atlas_region_drag(
         return;
     };
 
-    /*
-     * Dragging is transient interaction state.
-     */
     editor_ui.dragging_atlas_region = Some(index);
 
-    /*
-     * Preserve the exact point where the pointer grabbed the region.
-     * This prevents the region from jumping when dragging begins.
-     */
     editor_ui.drag_offset = egui::vec2(
         atlas_position.x - atlas_material.transform.x as f32,
         atlas_position.y - atlas_material.transform.y as f32,
@@ -133,33 +142,18 @@ fn atlas_material_at_position(
         .materials
         .iter()
         .rev()
-        .find(|atlas_material| {
-            let has_preview_texture = editor_ui
-                .project_settings
-                .preview_texture_group
-                .as_deref()
-                .map(|group| {
-                    atlas_material
-                        .textures
-                        .iter()
-                        .any(|texture| texture.id.eq_ignore_ascii_case(group))
-                })
-                .unwrap_or(false);
-
-            has_preview_texture && material_rect_in_atlas(atlas_material).contains(atlas_position)
-        })
+        .find(|atlas_material| material_rect_in_atlas(atlas_material).contains(atlas_position))
         .map(|atlas_material| atlas_material.index)
 }
 
 pub fn material_rect_in_atlas(atlas_material: &AtlasMaterial) -> egui::Rect {
     let transform = &atlas_material.transform;
 
-    let center_x = transform.x as f32 + transform.width as f32 * 0.5;
-
-    let center_y = transform.y as f32 + transform.height as f32 * 0.5;
-
     let width = transform.rotated_width() as f32;
     let height = transform.rotated_height() as f32;
 
-    egui::Rect::from_center_size(egui::pos2(center_x, center_y), egui::vec2(width, height))
+    egui::Rect::from_min_size(
+        egui::pos2(transform.x as f32, transform.y as f32),
+        egui::vec2(width, height),
+    )
 }

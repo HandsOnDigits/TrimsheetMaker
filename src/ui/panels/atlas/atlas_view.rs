@@ -84,6 +84,7 @@ pub fn atlas_view(
         }
     }
 
+    atlas_interaction::handle_material_selection(&response, viewport_rect, editor_ui, atlas);
     atlas_interaction::handle_material_drag(&response, viewport_rect, editor_ui, atlas);
 
     let painter = ui.painter_at(viewport_rect);

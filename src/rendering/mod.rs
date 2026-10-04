@@ -1,5 +1,5 @@
 mod defaults;
-pub use defaults::{DefaultTexture, DefaultTextures};
+pub use defaults::DefaultTextures;
 
 mod bindings;
 pub use bindings::{
