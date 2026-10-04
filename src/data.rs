@@ -21,6 +21,8 @@ use super::{
     rendering::{Channel, ChannelSource, RenderingMaterialBindings},
 };
 
+const ATLAS_ROW_CHUNK: usize = 32;
+
 #[derive(Clone)]
 pub struct MaterialTexture {
     pub id: String,
@@ -157,26 +159,75 @@ impl Default for TextureNaming {
 }
 
 #[derive(Clone)]
-struct AtlasSourceImage {
-    format: TextureFormat,
-    width: usize,
-    height: usize,
-    data: Arc<[u8]>,
+pub struct AtlasMaterialBuildInput {
+    pub(crate) transform: Transform,
+    pub(crate) maps: BTreeMap<AtlasMap, AtlasSourceImage>,
+    pub(crate) channel_sources: Vec<(AtlasMap, AtlasSourceImage, Channel)>,
+}
+
+pub struct AtlasBuildInput {
+    pub(crate) width: usize,
+    pub(crate) height: usize,
+    pub(crate) materials: Vec<AtlasMaterialBuildInput>,
 }
 
 #[derive(Clone)]
-struct AtlasMaterialBuildInput {
-    transform: Transform,
-    maps: BTreeMap<AtlasMap, AtlasSourceImage>,
+pub(crate) struct AtlasSourceImage {
+    pub(crate) format: TextureFormat,
+    pub(crate) width: usize,
+    pub(crate) height: usize,
+    pub(crate) data: Arc<[u8]>,
 }
 
-struct AtlasBuildInput {
+pub struct AtlasBuildResult {
+    pub generation: u64,
+    pub maps: Vec<(AtlasMap, Image)>,
+}
+
+#[derive(Clone, Copy)]
+struct PreparedAtlasMaterial<'a> {
+    image: &'a AtlasSourceImage,
+
+    x: i64,
+    y: i64,
+
     width: usize,
     height: usize,
-    materials: Vec<AtlasMaterialBuildInput>,
+
+    rotation: Rotation,
+
+    source_width: usize,
+    source_height: usize,
 }
 
-fn find_texture_group<'a>(texture_naming: &'a TextureNaming, id: &str) -> Option<&'a TextureGroup> {
+fn prepare_material<'a>(
+    material: &'a AtlasMaterialBuildInput,
+    map: AtlasMap,
+) -> Option<PreparedAtlasMaterial<'a>> {
+    let image = material.maps.get(&map)?;
+
+    let (x, y, width, height) = atlas_destination_rect(material.transform)?;
+
+    Some(PreparedAtlasMaterial {
+        image,
+
+        x,
+        y,
+
+        width,
+        height,
+
+        rotation: material.transform.rotation,
+
+        source_width: image.width,
+        source_height: image.height,
+    })
+}
+
+pub(crate) fn find_texture_group<'a>(
+    texture_naming: &'a TextureNaming,
+    id: &str,
+) -> Option<&'a TextureGroup> {
     texture_naming.groups.iter().find(|group| group.id == id)
 }
 
@@ -243,58 +294,60 @@ fn bake_channel_source(source: &AtlasSourceImage, channel: Channel) -> Option<At
     };
 
     let pixel_count = source.width.checked_mul(source.height)?;
-    let mut output = vec![0u8; pixel_count.checked_mul(16)?];
+    let data_len = pixel_count.checked_mul(16)?;
 
-    for pixel in 0..pixel_count {
-        let value = match source.format {
-            TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => {
-                let offset = pixel.checked_mul(4)?.checked_add(channel_index)?;
+    let mut output = vec![0u8; data_len];
 
-                *source.data.get(offset)? as f32 / 255.0
-            }
+    output
+        .par_chunks_mut(16)
+        .enumerate()
+        .for_each(|(pixel, output)| {
+            let value = match source.format {
+                TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => {
+                    let offset = pixel * 4 + channel_index;
 
-            TextureFormat::R32Float => {
-                if channel_index != 0 {
-                    0.0
-                } else {
-                    let offset = pixel.checked_mul(4)?;
-                    read_f32(&source.data, offset)?
+                    source
+                        .data
+                        .get(offset)
+                        .map(|value| *value as f32 / 255.0)
+                        .unwrap_or(0.0)
                 }
-            }
 
-            TextureFormat::Rgba32Float => {
-                let offset = pixel.checked_mul(16)?.checked_add(channel_index * 4)?;
-
-                read_f32(&source.data, offset)?
-            }
-
-            TextureFormat::R16Float => {
-                if channel_index != 0 {
-                    0.0
-                } else {
-                    let offset = pixel.checked_mul(2)?;
-                    read_f16(&source.data, offset)?
+                TextureFormat::R32Float => {
+                    if channel_index != 0 {
+                        0.0
+                    } else {
+                        read_f32(&source.data, pixel * 4).unwrap_or(0.0)
+                    }
                 }
-            }
 
-            TextureFormat::Rgba16Float => {
-                let offset = pixel.checked_mul(8)?.checked_add(channel_index * 2)?;
+                TextureFormat::Rgba32Float => {
+                    read_f32(&source.data, pixel * 16 + channel_index * 4).unwrap_or(0.0)
+                }
 
-                read_f16(&source.data, offset)?
-            }
+                TextureFormat::R16Float => {
+                    if channel_index != 0 {
+                        0.0
+                    } else {
+                        read_f16(&source.data, pixel * 2).unwrap_or(0.0)
+                    }
+                }
 
-            _ => return None,
-        };
+                TextureFormat::Rgba16Float => {
+                    read_f16(&source.data, pixel * 8 + channel_index * 2).unwrap_or(0.0)
+                }
 
-        let offset = pixel.checked_mul(16)?;
+                _ => return,
+            };
 
-        for component in 0..3 {
-            output[offset + component * 4..offset + component * 4 + 4]
-                .copy_from_slice(&value.to_le_bytes());
-        }
+            let bytes = value.to_le_bytes();
 
-        output[offset + 12..offset + 16].copy_from_slice(&1.0f32.to_le_bytes());
-    }
+            output[0..4].copy_from_slice(&bytes);
+            output[4..8].copy_from_slice(&bytes);
+            output[8..12].copy_from_slice(&bytes);
+
+            output[12..16].copy_from_slice(&1.0f32.to_le_bytes());
+        });
 
     Some(AtlasSourceImage {
         format: TextureFormat::Rgba32Float,
@@ -306,56 +359,46 @@ fn bake_channel_source(source: &AtlasSourceImage, channel: Channel) -> Option<At
 
 fn add_group_rendering_bindings(
     maps: &mut BTreeMap<AtlasMap, AtlasSourceImage>,
+    channel_sources: &mut Vec<(AtlasMap, AtlasSourceImage, Channel)>,
     material: &AtlasMaterial,
     texture: &MaterialTexture,
     group: &TextureGroup,
     images: &Assets<Image>,
 ) {
+    let Some(source) = texture_source_image(texture, images) else {
+        warn!(
+            "Failed to load texture '{}' for material '{}'",
+            texture.path.display(),
+            material.name
+        );
+        return;
+    };
+
     let rendering = &group.rendering;
 
     if rendering.base_color {
-        add_group_texture(maps, material, texture, AtlasMap::BaseColor, images);
+        maps.insert(AtlasMap::BaseColor, source.clone());
     }
 
     if rendering.normal {
-        add_group_texture(maps, material, texture, AtlasMap::Normal, images);
+        maps.insert(AtlasMap::Normal, source.clone());
     }
 
-    add_group_channel(
-        maps,
-        material,
-        texture,
-        AtlasMap::Height,
-        rendering.height.as_ref(),
-        images,
-    );
+    if let Some(binding) = rendering.height.as_ref() {
+        channel_sources.push((AtlasMap::Height, source.clone(), binding.channel));
+    }
 
-    add_group_channel(
-        maps,
-        material,
-        texture,
-        AtlasMap::AmbientOcclusion,
-        rendering.ambient_occlusion.as_ref(),
-        images,
-    );
+    if let Some(binding) = rendering.ambient_occlusion.as_ref() {
+        channel_sources.push((AtlasMap::AmbientOcclusion, source.clone(), binding.channel));
+    }
 
-    add_group_channel(
-        maps,
-        material,
-        texture,
-        AtlasMap::Roughness,
-        rendering.roughness.as_ref(),
-        images,
-    );
+    if let Some(binding) = rendering.roughness.as_ref() {
+        channel_sources.push((AtlasMap::Roughness, source.clone(), binding.channel));
+    }
 
-    add_group_channel(
-        maps,
-        material,
-        texture,
-        AtlasMap::Metallic,
-        rendering.metallic.as_ref(),
-        images,
-    );
+    if let Some(binding) = rendering.metallic.as_ref() {
+        channel_sources.push((AtlasMap::Metallic, source, binding.channel));
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -988,113 +1031,102 @@ fn make_atlas_image(width: usize, height: usize, data: Vec<u8>, format: TextureF
     image
 }
 
-fn rebuild_atlas_map(input: &AtlasBuildInput, map: AtlasMap) -> Image {
+pub(crate) fn rebuild_atlas_map(input: &AtlasBuildInput, map: AtlasMap) -> Image {
     let width = input.width;
     let height = input.height;
 
-    let is_data_map = !matches!(map, AtlasMap::BaseColor);
+    let materials: Vec<PreparedAtlasMaterial<'_>> = input
+        .materials
+        .iter()
+        .filter_map(|material| prepare_material(material, map))
+        .collect();
 
-    if is_data_map {
-        // Four 32-bit floats per pixel.
-        let data_len = width
-            .checked_mul(height)
-            .and_then(|pixels| pixels.checked_mul(16))
-            .expect("atlas dimensions are too large");
+    if matches!(map, AtlasMap::BaseColor) {
+        rebuild_base_color_map(width, height, &materials)
+    } else {
+        rebuild_data_map(width, height, &materials)
+    }
+}
 
-        let mut atlas_data = vec![0u8; data_len];
+fn rebuild_data_map(width: usize, height: usize, materials: &[PreparedAtlasMaterial<'_>]) -> Image {
+    let data_len = width
+        .checked_mul(height)
+        .and_then(|pixels| pixels.checked_mul(16))
+        .expect("atlas dimensions are too large");
 
-        for material in &input.materials {
-            let Some(image) = find_material_texture(material, map) else {
-                continue;
-            };
+    let mut atlas_data = vec![0u8; data_len];
 
-            let source_width = image.width;
-            let source_height = image.height;
+    const ROW_CHUNK: usize = 32;
 
-            if source_width == 0 || source_height == 0 {
-                continue;
-            }
+    let row_bytes = width * 16;
+    let chunk_bytes = row_bytes * ROW_CHUNK;
 
-            let transform = material.transform;
+    atlas_data
+        .par_chunks_mut(chunk_bytes)
+        .enumerate()
+        .for_each(|(chunk_index, chunk)| {
+            let start_y = chunk_index * ROW_CHUNK;
+            let end_y = (start_y + ROW_CHUNK).min(height);
 
-            let Some((rect_x, rect_y, dest_width, dest_height)) = atlas_destination_rect(transform)
-            else {
-                continue;
-            };
+            let active_materials: Vec<_> = materials
+                .iter()
+                .copied()
+                .filter(|material| material_intersects_rows(material, start_y, end_y))
+                .collect();
 
-            for dst_y in 0..dest_height {
-                for dst_x in 0..dest_width {
-                    let (src_x, src_y) = source_coordinates(
-                        transform.rotation,
-                        dst_x,
-                        dst_y,
-                        dest_width,
-                        dest_height,
-                        source_width,
-                        source_height,
-                    );
+            for (local_y, row) in chunk.chunks_exact_mut(row_bytes).enumerate() {
+                let atlas_y = start_y + local_y;
+                let atlas_y = atlas_y as i64;
 
-                    if src_x >= source_width || src_y >= source_height {
+                for material in &active_materials {
+                    if atlas_y < material.y || atlas_y >= material.y + material.height as i64 {
                         continue;
                     }
 
-                    // Keep atlas coordinates signed until after bounds checking.
-                    let atlas_x = rect_x + dst_x as i64;
-                    let atlas_y = rect_y + dst_y as i64;
+                    let dst_y = (atlas_y - material.y) as usize;
 
-                    if atlas_x < 0
-                        || atlas_y < 0
-                        || atlas_x >= width as i64
-                        || atlas_y >= height as i64
-                    {
-                        continue;
-                    }
+                    for dst_x in 0..material.width {
+                        let atlas_x = material.x + dst_x as i64;
 
-                    let atlas_x = atlas_x as usize;
-                    let atlas_y = atlas_y as usize;
+                        if atlas_x < 0 || atlas_x >= width as i64 {
+                            continue;
+                        }
 
-                    let Some(value) = read_source_pixel(image, src_x, src_y) else {
-                        continue;
-                    };
+                        let (src_x, src_y) = prepared_source_coordinates(material, dst_x, dst_y);
 
-                    let Some(pixel_index) = atlas_y
-                        .checked_mul(width)
-                        .and_then(|value| value.checked_add(atlas_x))
-                    else {
-                        continue;
-                    };
+                        if src_x >= material.source_width || src_y >= material.source_height {
+                            continue;
+                        }
 
-                    let Some(dst_offset) = pixel_index.checked_mul(16) else {
-                        continue;
-                    };
+                        let Some(value) = read_source_pixel(material.image, src_x, src_y) else {
+                            continue;
+                        };
 
-                    let Some(dst_end) = dst_offset.checked_add(16) else {
-                        continue;
-                    };
+                        let dst_offset = atlas_x as usize * 16;
 
-                    if dst_end > atlas_data.len() {
-                        continue;
-                    }
+                        row[dst_offset..dst_offset + 4].copy_from_slice(&value[0].to_le_bytes());
 
-                    for channel in 0..4 {
-                        let channel_offset = dst_offset + channel * 4;
+                        row[dst_offset + 4..dst_offset + 8]
+                            .copy_from_slice(&value[1].to_le_bytes());
 
-                        atlas_data[channel_offset..channel_offset + 4]
-                            .copy_from_slice(&value[channel].to_le_bytes());
+                        row[dst_offset + 8..dst_offset + 12]
+                            .copy_from_slice(&value[2].to_le_bytes());
+
+                        row[dst_offset + 12..dst_offset + 16]
+                            .copy_from_slice(&value[3].to_le_bytes());
                     }
                 }
             }
-        }
+        });
 
-        return make_atlas_image(
-            input.width,
-            input.height,
-            atlas_data,
-            TextureFormat::Rgba32Float,
-        );
-    }
+    make_atlas_image(width, height, atlas_data, TextureFormat::Rgba32Float)
+}
 
-    // Base color is stored as sRGB8.
+fn rebuild_base_color_map(
+    width: usize,
+    height: usize,
+    materials: &[PreparedAtlasMaterial<'_>],
+) -> Image {
     let data_len = width
         .checked_mul(height)
         .and_then(|pixels| pixels.checked_mul(4))
@@ -1102,93 +1134,94 @@ fn rebuild_atlas_map(input: &AtlasBuildInput, map: AtlasMap) -> Image {
 
     let mut atlas_data = vec![0u8; data_len];
 
-    for material in &input.materials {
-        let Some(image) = find_material_texture(material, map) else {
-            continue;
-        };
+    let row_bytes = width * 4;
+    let chunk_bytes = row_bytes * ATLAS_ROW_CHUNK;
 
-        let source_width = image.width;
-        let source_height = image.height;
+    atlas_data
+        .par_chunks_mut(chunk_bytes)
+        .enumerate()
+        .for_each(|(chunk_index, chunk)| {
+            let start_y = chunk_index * ATLAS_ROW_CHUNK;
+            let end_y = (start_y + ATLAS_ROW_CHUNK).min(height);
 
-        if source_width == 0 || source_height == 0 {
-            continue;
-        }
+            let active_materials: Vec<_> = materials
+                .iter()
+                .copied()
+                .filter(|material| material_intersects_rows(material, start_y, end_y))
+                .collect();
 
-        let transform = material.transform;
+            for (local_y, row) in chunk.chunks_exact_mut(row_bytes).enumerate() {
+                let atlas_y = (start_y + local_y) as i64;
 
-        let Some((rect_x, rect_y, dest_width, dest_height)) = atlas_destination_rect(transform)
-        else {
-            continue;
-        };
+                for material in &active_materials {
+                    if atlas_y < material.y || atlas_y >= material.y + material.height as i64 {
+                        continue;
+                    }
 
-        for dst_y in 0..dest_height {
-            for dst_x in 0..dest_width {
-                let (src_x, src_y) = source_coordinates(
-                    transform.rotation,
-                    dst_x,
-                    dst_y,
-                    dest_width,
-                    dest_height,
-                    source_width,
-                    source_height,
-                );
+                    let dst_y = (atlas_y - material.y) as usize;
 
-                if src_x >= source_width || src_y >= source_height {
-                    continue;
+                    for dst_x in 0..material.width {
+                        let atlas_x = material.x + dst_x as i64;
+
+                        if atlas_x < 0 || atlas_x >= width as i64 {
+                            continue;
+                        }
+
+                        let (src_x, src_y) = prepared_source_coordinates(material, dst_x, dst_y);
+
+                        if src_x >= material.source_width || src_y >= material.source_height {
+                            continue;
+                        }
+
+                        let Some(value) = read_source_pixel(material.image, src_x, src_y) else {
+                            continue;
+                        };
+
+                        let dst_offset = atlas_x as usize * 4;
+
+                        row[dst_offset] = float_to_srgb8(value[0]);
+                        row[dst_offset + 1] = float_to_srgb8(value[1]);
+                        row[dst_offset + 2] = float_to_srgb8(value[2]);
+                        row[dst_offset + 3] = (value[3].clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+                    }
                 }
-
-                // Keep atlas coordinates signed until after bounds checking.
-                let atlas_x = rect_x + dst_x as i64;
-                let atlas_y = rect_y + dst_y as i64;
-
-                if atlas_x < 0 || atlas_y < 0 || atlas_x >= width as i64 || atlas_y >= height as i64
-                {
-                    continue;
-                }
-
-                let atlas_x = atlas_x as usize;
-                let atlas_y = atlas_y as usize;
-
-                let Some(value) = read_source_pixel(image, src_x, src_y) else {
-                    continue;
-                };
-
-                let Some(pixel_index) = atlas_y
-                    .checked_mul(width)
-                    .and_then(|value| value.checked_add(atlas_x))
-                else {
-                    continue;
-                };
-
-                let Some(dst_offset) = pixel_index.checked_mul(4) else {
-                    continue;
-                };
-
-                let Some(dst_end) = dst_offset.checked_add(4) else {
-                    continue;
-                };
-
-                if dst_end > atlas_data.len() {
-                    continue;
-                }
-
-                atlas_data[dst_offset] = float_to_srgb8(value[0]);
-                atlas_data[dst_offset + 1] = float_to_srgb8(value[1]);
-                atlas_data[dst_offset + 2] = float_to_srgb8(value[2]);
-                atlas_data[dst_offset + 3] = (value[3].clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
             }
-        }
-    }
+        });
 
-    make_atlas_image(
-        input.width,
-        input.height,
-        atlas_data,
-        TextureFormat::Rgba8UnormSrgb,
+    make_atlas_image(width, height, atlas_data, TextureFormat::Rgba8UnormSrgb)
+}
+
+fn prepared_source_coordinates(
+    material: &PreparedAtlasMaterial<'_>,
+    dst_x: usize,
+    dst_y: usize,
+) -> (usize, usize) {
+    source_coordinates(
+        material.rotation,
+        dst_x,
+        dst_y,
+        material.width,
+        material.height,
+        material.source_width,
+        material.source_height,
     )
 }
 
-fn create_atlas_build_input(
+fn material_intersects_rows(
+    material: &PreparedAtlasMaterial<'_>,
+    start_y: usize,
+    end_y: usize,
+) -> bool {
+    let mat_start_y = material.y;
+    let mat_end_y = material.y + material.height as i64;
+
+    let chunk_start_y = start_y as i64;
+    let chunk_end_y = end_y as i64;
+
+    mat_start_y < chunk_end_y && mat_end_y > chunk_start_y
+}
+
+pub(crate) fn create_atlas_build_input(
     atlas: &Atlas,
     texture_naming: &TextureNaming,
     images: &Assets<Image>,
@@ -1198,18 +1231,27 @@ fn create_atlas_build_input(
         .iter()
         .map(|material| {
             let mut maps = BTreeMap::new();
+            let mut channel_sources = Vec::new();
 
             for texture in &material.textures {
                 let Some(group) = find_texture_group(texture_naming, &texture.id) else {
                     continue;
                 };
 
-                add_group_rendering_bindings(&mut maps, material, texture, group, images);
+                add_group_rendering_bindings(
+                    &mut maps,
+                    &mut channel_sources,
+                    material,
+                    texture,
+                    group,
+                    images,
+                );
             }
 
             AtlasMaterialBuildInput {
                 transform: material.transform,
                 maps,
+                channel_sources,
             }
         })
         .collect();
@@ -1238,7 +1280,7 @@ pub fn rebuild_atlas_maps(
     ];
 
     let generated: Vec<(AtlasMap, Image)> = maps
-        .par_iter()
+        .iter()
         .map(|map| (*map, rebuild_atlas_map(&input, *map)))
         .collect();
 
@@ -1262,4 +1304,41 @@ pub fn rebuild_atlas_maps(
             }
         }
     }
+}
+
+pub(crate) fn bake_channel_maps(input: &mut AtlasBuildInput) {
+    for material in &mut input.materials {
+        let channel_sources = std::mem::take(&mut material.channel_sources);
+
+        for (map, source, channel) in channel_sources {
+            let Some(baked) = bake_channel_source(&source, channel) else {
+                continue;
+            };
+
+            material.maps.insert(map, baked);
+        }
+    }
+}
+
+pub(crate) fn build_atlas(mut input: AtlasBuildInput, generation: u64) -> AtlasBuildResult {
+    bake_channel_maps(&mut input);
+
+    let maps = [
+        AtlasMap::BaseColor,
+        AtlasMap::Normal,
+        AtlasMap::Height,
+        AtlasMap::AmbientOcclusion,
+        AtlasMap::Roughness,
+        AtlasMap::Metallic,
+    ];
+
+    let maps = maps
+        .into_iter()
+        .map(|map| {
+            let image = rebuild_atlas_map(&input, map);
+            (map, image)
+        })
+        .collect();
+
+    AtlasBuildResult { generation, maps }
 }

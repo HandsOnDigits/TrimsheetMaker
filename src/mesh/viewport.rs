@@ -8,7 +8,10 @@ use bevy::{
         AsBindGroup, Extent3d, TextureDimension, TextureFormat, TextureUsages,
     },
     shader::ShaderRef,
+    tasks::{AsyncComputeTaskPool, Task},
 };
+
+use futures_lite::future;
 
 use super::{
     ImportedMeshPart, ImportedMeshRoot, MeshLight, MeshLightPreset, MeshPrimitiveSelection,
@@ -19,14 +22,31 @@ use super::{
 use bevy_egui::EguiPrimaryContextPass;
 
 use crate::{
-    data::{Atlas, AtlasMaterial, rebuild_atlas_maps},
+    data::{Atlas, AtlasBuildResult, AtlasMaterial, build_atlas, create_atlas_build_input},
     transform::Rotation,
     ui::EditorUi,
 };
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct AtlasRefresh {
     pub requested: bool,
+    pub task: Option<Task<AtlasBuildResult>>,
+    pub generation: u64,
+
+    pub building_atlas_uv_revision: u64,
+    pub building_rendering_revision: u64,
+}
+
+impl Default for AtlasRefresh {
+    fn default() -> Self {
+        Self {
+            requested: true,
+            task: None,
+            generation: 0,
+            building_atlas_uv_revision: u64::MAX,
+            building_rendering_revision: u64::MAX,
+        }
+    }
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone, Default)]
@@ -63,21 +83,6 @@ impl MaterialExtension for MeshPreviewExtension {
 }
 
 pub type MeshPreviewMaterial = ExtendedMaterial<StandardMaterial, MeshPreviewExtension>;
-
-#[derive(Resource)]
-pub struct AtlasImageSyncState {
-    pub atlas_uv_revision: u64,
-    pub rendering_revision: u64,
-}
-
-impl Default for AtlasImageSyncState {
-    fn default() -> Self {
-        Self {
-            atlas_uv_revision: u64::MAX,
-            rendering_revision: u64::MAX,
-        }
-    }
-}
 
 #[derive(Component)]
 pub struct MeshPreviewCamera;
@@ -155,7 +160,6 @@ impl Plugin for MeshPreviewPlugin {
             .init_resource::<MeshViewportInput>()
             .init_resource::<MeshSceneState>()
             .init_resource::<MeshUvSyncState>()
-            .init_resource::<AtlasImageSyncState>()
             .init_resource::<AtlasRefresh>()
             .add_systems(Startup, (setup_mesh_preview, spawn_mesh_viewport).chain())
             .add_systems(
@@ -171,8 +175,10 @@ impl Plugin for MeshPreviewPlugin {
                     resize_mesh_preview_render_target,
                     sync_mesh_visibility,
                     sync_mesh_uv_mode,
+                    ensure_atlas_build_requested,
                     sync_atlas_images,
-                    sync_atlas_to_mesh_preview_material.after(sync_atlas_images),
+                    finish_atlas_build,
+                    sync_atlas_to_mesh_preview_material.after(finish_atlas_build),
                     update_mesh_light,
                 ),
             );
@@ -183,14 +189,7 @@ pub fn sync_atlas_to_mesh_preview_material(
     atlas: Res<Atlas>,
     mut materials: ResMut<Assets<MeshPreviewMaterial>>,
     material_handles: Query<&MeshMaterial3d<MeshPreviewMaterial>>,
-    mut last_revision: Local<u64>,
 ) {
-    if atlas.image_revision == *last_revision {
-        return;
-    }
-
-    *last_revision = atlas.image_revision;
-
     for handle in material_handles.iter() {
         let Some(mut material) = materials.get_mut(&handle.0) else {
             continue;
@@ -672,32 +671,29 @@ pub fn orbit_camera(
 }
 
 pub fn sync_atlas_images(
-    mut atlas: ResMut<Atlas>,
+    atlas: Res<Atlas>,
     editor_ui: Res<EditorUi>,
-    mut images: ResMut<Assets<Image>>,
-    mut sync_state: ResMut<AtlasImageSyncState>,
+    images: Res<Assets<Image>>,
     mut refresh: ResMut<AtlasRefresh>,
 ) {
-    let rendering_revision = editor_ui.rendering_revision;
-
-    if !refresh.requested
-        && sync_state.atlas_uv_revision == atlas.uv_revision
-        && sync_state.rendering_revision == rendering_revision
-    {
+    if !refresh.requested || refresh.task.is_some() {
         return;
     }
 
-    rebuild_atlas_maps(
-        &mut atlas,
-        &editor_ui.project_settings.texture_naming,
-        &mut images,
-    );
+    let atlas_uv_revision = atlas.uv_revision;
+    let rendering_revision = editor_ui.rendering_revision;
 
-    sync_state.atlas_uv_revision = atlas.uv_revision;
-    sync_state.rendering_revision = rendering_revision;
-    refresh.requested = false;
+    let input =
+        create_atlas_build_input(&atlas, &editor_ui.project_settings.texture_naming, &images);
 
-    atlas.image_revision = atlas.image_revision.wrapping_add(1);
+    refresh.generation = refresh.generation.wrapping_add(1);
+    refresh.building_atlas_uv_revision = atlas_uv_revision;
+    refresh.building_rendering_revision = rendering_revision;
+
+    let generation = refresh.generation;
+
+    refresh.task =
+        Some(AsyncComputeTaskPool::get().spawn(async move { build_atlas(input, generation) }));
 }
 
 pub fn resize_mesh_preview_render_target(
@@ -724,4 +720,65 @@ pub fn resize_mesh_preview_render_target(
 
     target.width = width;
     target.height = height;
+}
+
+pub fn finish_atlas_build(
+    mut atlas: ResMut<Atlas>,
+    mut images: ResMut<Assets<Image>>,
+    mut refresh: ResMut<AtlasRefresh>,
+    editor_ui: Res<EditorUi>,
+) {
+    let Some(mut task) = refresh.task.take() else {
+        return;
+    };
+
+    let Some(result) = future::block_on(future::poll_once(&mut task)) else {
+        refresh.task = Some(task);
+        return;
+    };
+
+    if result.generation != refresh.generation {
+        return;
+    }
+
+    for (map, image) in result.maps {
+        match atlas.images.get(map).cloned() {
+            Some(handle) => {
+                if let Some(mut existing) = images.get_mut(&handle) {
+                    *existing = image;
+                } else {
+                    let new_handle = images.add(image);
+                    *atlas.images.get_mut(map) = Some(new_handle);
+                }
+            }
+
+            None => {
+                let handle = images.add(image);
+                *atlas.images.get_mut(map) = Some(handle);
+            }
+        }
+    }
+
+    atlas.image_revision = atlas.image_revision.wrapping_add(1);
+
+    let still_current = atlas.uv_revision == refresh.building_atlas_uv_revision
+        && editor_ui.rendering_revision == refresh.building_rendering_revision;
+
+    refresh.requested = !still_current;
+}
+
+pub fn ensure_atlas_build_requested(atlas: Res<Atlas>, mut refresh: ResMut<AtlasRefresh>) {
+    if refresh.task.is_some() {
+        return;
+    }
+
+    if atlas.images.base_color.is_none()
+        && atlas.images.normal.is_none()
+        && atlas.images.height.is_none()
+        && atlas.images.ambient_occlusion.is_none()
+        && atlas.images.roughness.is_none()
+        && atlas.images.metallic.is_none()
+    {
+        refresh.requested = true;
+    }
 }

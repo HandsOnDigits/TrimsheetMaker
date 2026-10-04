@@ -19,3 +19,4 @@ libloading = "0.9.0"
 gltf = { version = "1.4.1", features = ["utils"] }
 half = "2.7.1"
 mikktspace = "0.3.0"
+futures-lite = "2.6.1"
