@@ -1,0 +1,85 @@
+mod atlas;
+mod camera;
+mod lighting;
+mod materials;
+mod picking;
+mod scene;
+mod setup;
+mod state;
+mod uv;
+mod visibility;
+
+pub use atlas::{
+    AtlasRefresh, ensure_atlas_build_requested, finish_atlas_build, sync_atlas_images,
+};
+
+pub use camera::orbit_camera;
+
+pub use lighting::update_mesh_light;
+
+pub use materials::{
+    MeshPreviewExtension, MeshPreviewMaterial, sync_atlas_to_mesh_preview_material,
+    sync_mesh_preview_material_assignments,
+};
+
+pub use picking::*;
+
+pub use scene::despawn_all_meshes;
+
+pub use setup::{
+    resize_mesh_preview_render_target, setup_mesh_preview, spawn_mesh_viewport,
+    update_mesh_viewport,
+};
+
+pub use state::{
+    MeshPreview, MeshPreviewCamera, MeshPreviewLightSource, MeshPreviewMaterials,
+    MeshPreviewRenderTarget, MeshUvSyncState, MeshViewportInput, MeshViewportLayout,
+    MeshViewportSection,
+};
+
+pub use uv::sync_mesh_uv_mode;
+
+pub use visibility::sync_mesh_visibility;
+
+use bevy::{pbr::MaterialPlugin, prelude::*};
+use bevy_egui::EguiPrimaryContextPass;
+
+use crate::mesh::{MeshLight, MeshSceneState};
+
+pub struct MeshPreviewPlugin;
+
+impl Plugin for MeshPreviewPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_plugins(MaterialPlugin::<MeshPreviewMaterial>::default())
+            .init_resource::<MeshViewportLayout>()
+            .init_resource::<MeshLight>()
+            .init_resource::<MeshViewportInput>()
+            .init_resource::<MeshSceneState>()
+            .init_resource::<MeshUvSyncState>()
+            .init_resource::<AtlasRefresh>()
+            .init_resource::<MeshPreviewMaterials>()
+            .add_systems(Startup, (setup_mesh_preview, spawn_mesh_viewport).chain())
+            .add_systems(
+                EguiPrimaryContextPass,
+                (
+                    update_mesh_viewport,
+                    orbit_camera.after(crate::ui::panels::editor_ui),
+                ),
+            )
+            .add_systems(
+                Update,
+                (
+                    resize_mesh_preview_render_target,
+                    sync_mesh_visibility,
+                    sync_mesh_uv_mode,
+                    ensure_atlas_build_requested,
+                    sync_atlas_images,
+                    finish_atlas_build,
+                    sync_atlas_to_mesh_preview_material.after(finish_atlas_build),
+                    sync_mesh_preview_material_assignments
+                        .after(sync_atlas_to_mesh_preview_material),
+                    update_mesh_light,
+                ),
+            );
+    }
+}
