@@ -768,12 +768,11 @@ impl Atlas {
             })
             .collect();
 
-        // Decode EXRs in parallel.
+        // Decode images in parallel.
         let decoded: Vec<(usize, usize, PathBuf, Result<Image, String>)> = pending
             .into_par_iter()
             .map(|(material_index, texture_index, path)| {
-                let result =
-                    crate::image::import::exr::load_exr(&path).map_err(|error| error.to_string());
+                let result = crate::image::import::load(&path).map_err(|error| error.to_string());
 
                 (material_index, texture_index, path, result)
             })

@@ -4,7 +4,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::data::{TextureGroup, TextureNaming};
+use crate::{
+    data::{TextureGroup, TextureNaming},
+    image::import,
+};
 
 pub fn detect_naming(folders: &[PathBuf]) -> io::Result<TextureNaming> {
     let mut suffix_folders: HashMap<String, HashSet<PathBuf>> = HashMap::new();
@@ -111,11 +114,7 @@ pub fn collect_texture_paths(folder: &Path) -> io::Result<Vec<PathBuf>> {
 
         let path = entry.path();
 
-        if path
-            .extension()
-            .and_then(|extension| extension.to_str())
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("exr"))
-        {
+        if import::is_supported(&path) {
             textures.push(path);
         }
     }
