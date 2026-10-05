@@ -7,9 +7,9 @@ use crate::{
         import::{self, MeshBackend, MeshImportSettings},
         spawn_mesh_scene,
         unwrap::MeshUvMode,
-        viewport::MeshPreview,
     },
     ui::EditorUi,
+    viewport::MeshPreview,
 };
 
 use super::FloatingWindowInteraction;

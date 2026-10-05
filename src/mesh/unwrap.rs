@@ -3,8 +3,8 @@ use bevy::{asset::RenderAssetUsages, mesh::PrimitiveTopology, prelude::*};
 use anyhow::{Result, anyhow, ensure};
 use xatlas_rs_v2::{ChartOptions, IndexData, MeshData, MeshDecl, PackOptions, Xatlas};
 
-use crate::mesh::{
-    import::{MeshMaterialRef, MeshPrimitive, MeshScene, MeshTransform},
+use crate::{
+    mesh::import::{MeshMaterialRef, MeshPrimitive, MeshScene, MeshTransform},
     viewport::MeshPreview,
 };
 

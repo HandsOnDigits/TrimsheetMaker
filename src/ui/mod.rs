@@ -48,7 +48,7 @@ fn apply_editor_actions(
     mut editor_ui: ResMut<EditorUi>,
     mut atlas: ResMut<data::Atlas>,
     mut images: ResMut<Assets<Image>>,
-    mut mesh_preview: ResMut<crate::mesh::viewport::MeshPreview>,
+    mut mesh_preview: ResMut<crate::viewport::MeshPreview>,
     mut mesh_light: ResMut<MeshLight>,
     mut mesh_scene_state: ResMut<MeshSceneState>,
     mut commands: Commands,

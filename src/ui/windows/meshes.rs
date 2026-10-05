@@ -4,8 +4,9 @@ use bevy_egui::egui;
 use crate::{
     data::Atlas,
     hotkeys::{EditorAction, EditorActionMessage},
-    mesh::{MeshPrimitiveSelection, MeshSceneState, viewport::MeshPreview},
+    mesh::MeshSceneState,
     ui::EditorUi,
+    viewport::{MeshPreview, MeshPrimitiveSelection},
 };
 
 use super::FloatingWindowInteraction;

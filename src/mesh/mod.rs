@@ -3,12 +3,9 @@ use import::{MeshMaterialRef, MeshScene};
 
 pub mod unwrap;
 
-pub mod viewport;
-use viewport::MeshPreviewMaterial;
-
 use bevy::{asset::RenderAssetUsages, mesh::PrimitiveTopology, prelude::*};
 
-pub use viewport::MeshPrimitiveSelection;
+use crate::viewport::MeshPreviewMaterial;
 
 #[derive(Component)]
 pub struct ImportedMesh;

@@ -5,9 +5,10 @@ use super::atlas_interaction;
 
 use crate::{
     data::{Atlas, AtlasMaterial, TextureNaming},
-    mesh::{MeshSceneState, viewport::MeshPreview},
+    mesh::MeshSceneState,
     transform::Rotation,
     ui::EditorUi,
+    viewport::MeshPreview,
 };
 
 pub fn atlas_view(

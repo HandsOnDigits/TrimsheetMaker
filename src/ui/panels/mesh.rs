@@ -3,10 +3,8 @@ use bevy_egui::egui;
 
 use crate::{
     hotkeys::{EditorAction, HotkeyManager},
-    mesh::{
-        MeshLight, MeshLightPreset,
-        viewport::{MeshPreview, MeshViewportInput, MeshViewportLayout},
-    },
+    mesh::{MeshLight, MeshLightPreset},
+    viewport::{MeshPreview, MeshViewportInput, MeshViewportLayout},
 };
 
 pub fn mesh_panel(

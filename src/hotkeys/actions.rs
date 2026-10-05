@@ -5,10 +5,11 @@ use bevy_egui::egui;
 
 use crate::{
     data::Atlas,
-    mesh::{MeshLight, MeshSceneState, viewport::MeshPreview},
+    mesh::{MeshLight, MeshSceneState},
     project,
     project_settings::ProjectSettings,
     ui::EditorUi,
+    viewport::MeshPreview,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -82,7 +83,7 @@ pub fn execute_action(
             editor_ui.atlas_zoom = 1.0;
             editor_ui.atlas_pan = egui::Vec2::ZERO;
 
-            crate::mesh::viewport::despawn_all_meshes(commands, mesh_scene_state);
+            crate::viewport::despawn_all_meshes(commands, mesh_scene_state);
 
             editor_ui.mesh_import_path = None;
             editor_ui.mesh_import_paths.clear();

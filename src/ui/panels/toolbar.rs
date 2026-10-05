@@ -9,8 +9,8 @@ use crate::{
     mesh::{
         MeshLight, MeshSceneState,
         unwrap::{MeshUvMode, unwrap_current_mesh},
-        viewport::MeshPreview,
     },
+    viewport::MeshPreview,
 };
 
 pub fn toolbar(

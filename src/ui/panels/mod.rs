@@ -27,11 +27,9 @@ use super::EditorUi;
 use crate::{
     data::Atlas,
     hotkeys::{EditorAction, EditorActionMessage, HotkeyManager},
-    mesh::{
-        MeshLight, MeshSceneState,
-        viewport::{MeshPreview, MeshViewportInput, MeshViewportLayout},
-    },
+    mesh::{MeshLight, MeshSceneState},
     ui::windows,
+    viewport::{MeshPreview, MeshViewportInput, MeshViewportLayout},
 };
 
 pub fn editor_ui(

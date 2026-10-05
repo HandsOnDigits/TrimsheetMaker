@@ -13,11 +13,11 @@ use crate::{
         MeshSceneState,
         import::{self, MeshImportSettings},
         spawn_mesh_scene,
-        viewport::MeshPreview,
     },
     project_settings::ProjectSettings,
     transform::Transform,
     ui::EditorUi,
+    viewport::MeshPreview,
 };
 
 pub const PROJECT_EXTENSION: &str = "tsm";
@@ -246,7 +246,7 @@ pub fn load_project_meshes(
     mesh_scene_state: &mut MeshSceneState,
     mesh_preview: &mut MeshPreview,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    crate::mesh::viewport::despawn_all_meshes(commands, mesh_scene_state);
+    crate::viewport::despawn_all_meshes(commands, mesh_scene_state);
 
     editor_ui.mesh_import_path = None;
 
