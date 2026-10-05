@@ -28,6 +28,7 @@ pub enum EditorAction {
     Redo,
 
     RemoveAtlasRegion,
+    RemoveSelectedMeshPrimitive,
     PackAtlas,
 
     ResetViewport,
@@ -251,6 +252,10 @@ pub fn execute_action(
                     editor_ui.drag_offset = egui::Vec2::ZERO;
                 }
             }
+        }
+
+        EditorAction::RemoveSelectedMeshPrimitive => {
+            // Handled by the mesh viewport deletion system.
         }
 
         EditorAction::PackAtlas => {

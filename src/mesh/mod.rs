@@ -8,6 +8,8 @@ use viewport::MeshPreviewMaterial;
 
 use bevy::{asset::RenderAssetUsages, mesh::PrimitiveTopology, prelude::*};
 
+pub use viewport::MeshPrimitiveSelection;
+
 #[derive(Component)]
 pub struct ImportedMesh;
 
@@ -15,8 +17,8 @@ pub struct ImportedMesh;
 pub struct ImportedMeshPart {
     pub mesh_id: u64,
     pub part_index: usize,
-    pub primitive_index: Option<usize>,
-    pub source_mesh: Option<Handle<Mesh>>,
+    pub primitive_index: usize,
+    pub source_mesh: Handle<Mesh>,
     pub source_material: Option<MeshMaterialRef>,
 }
 
@@ -39,6 +41,7 @@ pub struct MeshPartEntry {
     pub name: String,
     pub visible: bool,
     pub object_index: usize,
+    pub primitive_index: usize,
 }
 
 #[derive(Component)]
@@ -200,13 +203,6 @@ impl MeshLightPreset {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MeshPrimitiveSelection {
-    pub mesh_id: u64,
-    pub object_index: usize,
-    pub primitive_index: usize,
-}
-
 fn create_bevy_mesh(
     meshes: &mut Assets<Mesh>,
     positions: Vec<[f32; 3]>,
@@ -251,21 +247,15 @@ pub fn spawn_mesh_scene(
     let mut bounds_max = Vec3::splat(f32::NEG_INFINITY);
 
     for object in &scene.objects {
-        let translation = Vec3::from(object.transform.translation);
-
-        let rotation = Quat::from_xyzw(
-            object.transform.rotation[0],
-            object.transform.rotation[1],
-            object.transform.rotation[2],
-            object.transform.rotation[3],
-        );
-
-        let scale = Vec3::from(object.transform.scale);
-
         let transform = Transform {
-            translation,
-            rotation,
-            scale,
+            translation: Vec3::from(object.transform.translation),
+            rotation: Quat::from_xyzw(
+                object.transform.rotation[0],
+                object.transform.rotation[1],
+                object.transform.rotation[2],
+                object.transform.rotation[3],
+            ),
+            scale: Vec3::from(object.transform.scale),
         };
 
         for primitive in &object.primitives {
@@ -288,35 +278,15 @@ pub fn spawn_mesh_scene(
         ))
         .id();
 
-    let mut parts = Vec::with_capacity(scene.objects.len());
+    let part_count: usize = scene
+        .objects
+        .iter()
+        .map(|object| object.primitives.len())
+        .sum();
 
-    for (part_index, object) in scene.objects.iter().enumerate() {
-        let object_entity = commands
-            .spawn((
-                Name::new(object.name.clone()),
-                Transform::from_translation(Vec3::from(object.transform.translation))
-                    .with_rotation(Quat::from_xyzw(
-                        object.transform.rotation[0],
-                        object.transform.rotation[1],
-                        object.transform.rotation[2],
-                        object.transform.rotation[3],
-                    ))
-                    .with_scale(Vec3::from(object.transform.scale)),
-                Visibility::Visible,
-                InheritedVisibility::default(),
-                ImportedMesh,
-                ImportedMeshPart {
-                    mesh_id,
-                    part_index,
-                    primitive_index: None,
-                    source_mesh: None,
-                    source_material: None,
-                },
-            ))
-            .id();
+    let mut parts = Vec::with_capacity(part_count);
 
-        commands.entity(root).add_child(object_entity);
-
+    for (object_index, object) in scene.objects.iter().enumerate() {
         for (primitive_index, primitive) in object.primitives.iter().enumerate() {
             let mesh_handle = create_bevy_mesh(
                 meshes,
@@ -327,7 +297,9 @@ pub fn spawn_mesh_scene(
                 primitive.indices.clone(),
             );
 
-            commands.entity(object_entity).with_children(|parent| {
+            let part_index = parts.len();
+
+            commands.entity(root).with_children(|parent| {
                 parent.spawn((
                     Name::new(format!("{} Primitive {}", object.name, primitive_index)),
                     Mesh3d(mesh_handle.clone()),
@@ -338,20 +310,21 @@ pub fn spawn_mesh_scene(
                     ImportedMeshPart {
                         mesh_id,
                         part_index,
-                        primitive_index: Some(primitive_index),
-                        source_mesh: Some(mesh_handle),
+                        primitive_index,
+                        source_mesh: mesh_handle.clone(),
                         source_material: primitive.material.clone(),
                     },
                 ));
             });
-        }
 
-        parts.push(MeshPartEntry {
-            index: part_index,
-            name: object.name.clone(),
-            visible: true,
-            object_index: part_index,
-        });
+            parts.push(MeshPartEntry {
+                index: part_index,
+                name: object.name.clone(),
+                visible: true,
+                object_index,
+                primitive_index,
+            });
+        }
     }
 
     let bounds_center = if bounds_min.x.is_finite() {

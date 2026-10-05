@@ -1,9 +1,9 @@
 mod atlas;
 mod camera;
+mod deletion;
 mod lighting;
 mod materials;
 mod picking;
-mod scene;
 mod setup;
 mod state;
 mod uv;
@@ -22,9 +22,9 @@ pub use materials::{
     sync_mesh_preview_material_assignments,
 };
 
-pub use picking::*;
+pub use deletion::{despawn_all_meshes, remove_selected_mesh_primitive};
 
-pub use scene::despawn_all_meshes;
+pub use picking::{MeshPrimitiveSelection, MeshViewportPicking, pick_mesh_primitive};
 
 pub use setup::{
     resize_mesh_preview_render_target, setup_mesh_preview, spawn_mesh_viewport,
@@ -54,6 +54,7 @@ impl Plugin for MeshPreviewPlugin {
             .init_resource::<MeshViewportLayout>()
             .init_resource::<MeshLight>()
             .init_resource::<MeshViewportInput>()
+            .init_resource::<MeshViewportPicking>()
             .init_resource::<MeshSceneState>()
             .init_resource::<MeshUvSyncState>()
             .init_resource::<AtlasRefresh>()
@@ -64,6 +65,8 @@ impl Plugin for MeshPreviewPlugin {
                 (
                     update_mesh_viewport,
                     orbit_camera.after(crate::ui::panels::editor_ui),
+                    pick_mesh_primitive.after(orbit_camera),
+                    remove_selected_mesh_primitive.after(pick_mesh_primitive),
                 ),
             )
             .add_systems(

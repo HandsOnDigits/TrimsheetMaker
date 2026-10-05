@@ -3,26 +3,12 @@ use bevy::{
     prelude::*,
 };
 
-use super::{
-    MeshPreview, MeshPreviewCamera, MeshViewportInput, MeshViewportLayout, MeshViewportSection,
-};
+use super::{MeshPreview, MeshPreviewCamera, MeshViewportInput, MeshViewportLayout};
 
 use crate::{
     mesh::{MeshLight, MeshSceneState},
     ui::EditorUi,
 };
-
-pub fn update_mesh_viewport(
-    layout: Res<MeshViewportLayout>,
-    mut query: Query<&mut Node, With<MeshViewportSection>>,
-) {
-    for mut node in &mut query {
-        node.left = Val::Px(layout.x);
-        node.top = Val::Px(layout.y);
-        node.width = Val::Px(layout.width);
-        node.height = Val::Px(layout.height);
-    }
-}
 
 pub fn orbit_camera(
     mut mouse_motion: MessageReader<MouseMotion>,

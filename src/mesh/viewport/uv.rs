@@ -80,10 +80,6 @@ pub fn sync_mesh_uv_mode(
             continue;
         };
 
-        let Some(primitive_index) = part.primitive_index else {
-            continue;
-        };
-
         let Some(part_entry) = mesh_entry
             .parts
             .iter()
@@ -93,6 +89,7 @@ pub fn sync_mesh_uv_mode(
         };
 
         let object_index = part_entry.object_index;
+        let primitive_index = part_entry.primitive_index;
 
         let Some(object) = mesh_entry.scene.objects.get(object_index) else {
             continue;

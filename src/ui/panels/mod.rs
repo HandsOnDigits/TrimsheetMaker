@@ -26,7 +26,7 @@ use super::EditorUi;
 
 use crate::{
     data::Atlas,
-    hotkeys::{EditorAction, HotkeyManager},
+    hotkeys::{EditorAction, EditorActionMessage, HotkeyManager},
     mesh::{
         MeshLight, MeshSceneState,
         viewport::{MeshPreview, MeshViewportInput, MeshViewportLayout},
@@ -48,6 +48,7 @@ pub fn editor_ui(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut mesh_scene_state: ResMut<MeshSceneState>,
+    mut action_messages: MessageWriter<EditorActionMessage>,
 ) -> Result {
     mesh_input.pointer_over_ui = false;
     mesh_input.floating_window_dragging = false;
@@ -239,9 +240,9 @@ pub fn editor_ui(
         ctx,
         &mut editor_ui,
         &mut atlas,
-        &mut commands,
         &mut mesh_scene_state,
         &mut mesh_preview,
+        &mut action_messages,
     );
 
     Ok(())

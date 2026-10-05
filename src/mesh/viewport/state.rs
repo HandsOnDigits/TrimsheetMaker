@@ -2,12 +2,9 @@ use std::collections::HashMap;
 
 use bevy::prelude::*;
 
-use crate::mesh::{
-    MeshPrimitiveSelection,
-    unwrap::{MeshUvMode, UnwrappedMeshScene},
-};
+use crate::mesh::unwrap::{MeshUvMode, UnwrappedMeshScene};
 
-use super::MeshPreviewMaterial;
+use super::{MeshPreviewMaterial, MeshPrimitiveSelection};
 
 #[derive(Component)]
 pub struct MeshPreviewCamera;
