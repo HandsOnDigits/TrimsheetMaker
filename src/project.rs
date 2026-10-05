@@ -25,8 +25,8 @@ pub const PROJECT_FORMAT_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectMeshPart {
-    pub index: usize,
-    pub name: String,
+    pub object_index: usize,
+    pub primitive_index: usize,
 
     #[serde(default = "default_mesh_visibility")]
     pub visible: bool,
@@ -106,8 +106,8 @@ impl ProjectFile {
                         .parts
                         .iter()
                         .map(|part| ProjectMeshPart {
-                            index: part.index,
-                            name: part.name.clone(),
+                            object_index: part.object_index,
+                            primitive_index: part.primitive_index,
                             visible: part.visible,
                         })
                         .collect(),
@@ -276,8 +276,10 @@ pub fn load_project_meshes(
         }
 
         match import::import(&resolved_path, editor_ui.mesh_import_backend, &settings) {
-            Ok(scene) => {
+            Ok(mut scene) => {
                 let mesh_id = project_mesh.id;
+
+                apply_saved_mesh_parts(&mut scene, &project_mesh.parts);
 
                 let (root, parts, bounds_center, bounds_radius) = spawn_mesh_scene(
                     commands,
@@ -291,7 +293,7 @@ pub fn load_project_meshes(
                     project_mesh.id,
                     project_mesh.name.clone(),
                     resolved_path.clone(),
-                    scene.clone(),
+                    scene,
                     root,
                     parts,
                     bounds_center,
@@ -302,11 +304,10 @@ pub fn load_project_meshes(
                     mesh.visible = project_mesh.visible;
 
                     for saved_part in &project_mesh.parts {
-                        if let Some(part) = mesh
-                            .parts
-                            .iter_mut()
-                            .find(|part| part.index == saved_part.index)
-                        {
+                        if let Some(part) = mesh.parts.iter_mut().find(|part| {
+                            part.object_index == saved_part.object_index
+                                && part.primitive_index == saved_part.primitive_index
+                        }) {
                             part.visible = saved_part.visible;
                         }
                     }
@@ -407,5 +408,23 @@ fn make_project_relative_path(project_path: &Path, asset_path: &Path) -> PathBuf
         relative.to_path_buf()
     } else {
         asset_path.to_path_buf()
+    }
+}
+
+fn apply_saved_mesh_parts(scene: &mut import::MeshScene, saved_parts: &[ProjectMeshPart]) {
+    for (object_index, object) in scene.objects.iter_mut().enumerate() {
+        let mut saved_indices: Vec<usize> = saved_parts
+            .iter()
+            .filter(|part| part.object_index == object_index)
+            .map(|part| part.primitive_index)
+            .collect();
+
+        saved_indices.sort_unstable();
+        saved_indices.dedup();
+
+        object.primitives = saved_indices
+            .into_iter()
+            .filter_map(|primitive_index| object.primitives.get(primitive_index).cloned())
+            .collect();
     }
 }

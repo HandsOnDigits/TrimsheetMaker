@@ -12,10 +12,7 @@ pub fn remove_selected_mesh_primitive(
     mut mesh_preview: ResMut<MeshPreview>,
     mut mesh_scene_state: ResMut<MeshSceneState>,
     mut commands: Commands,
-    mut parts: ParamSet<(
-        Query<(Entity, &ImportedMeshPart)>,
-        Query<&mut ImportedMeshPart>,
-    )>,
+    parts: Query<(Entity, &ImportedMeshPart)>,
 ) {
     for message in messages.read() {
         if message.action != EditorAction::RemoveSelectedMeshPrimitive {
@@ -36,6 +33,7 @@ pub fn remove_selected_mesh_primitive(
                 "Mesh {} has no object {}",
                 selection.mesh_id, selection.object_index
             );
+            mesh_preview.selected_primitive = None;
             continue;
         };
 
@@ -44,20 +42,20 @@ pub fn remove_selected_mesh_primitive(
                 "Mesh {} object {} has no primitive {}",
                 selection.mesh_id, selection.object_index, selection.primitive_index
             );
+            mesh_preview.selected_primitive = None;
             continue;
         }
 
-        // Find the flat mesh-part corresponding to this primitive.
-        let part_index = mesh
+        // Find the flat mesh part corresponding to this source primitive.
+        let Some(part_index) = mesh
             .parts
             .iter()
             .find(|part| {
                 part.object_index == selection.object_index
                     && part.primitive_index == selection.primitive_index
             })
-            .map(|part| part.index);
-
-        let Some(part_index) = part_index else {
+            .map(|part| part.index)
+        else {
             error!(
                 "Could not find mesh part for mesh {}, object {}, primitive {}",
                 selection.mesh_id, selection.object_index, selection.primitive_index
@@ -65,12 +63,10 @@ pub fn remove_selected_mesh_primitive(
             continue;
         };
 
-        // Find the ECS entity for that mesh part.
-        let primitive_entity = parts.p0().iter().find_map(|(entity, part)| {
+        // Find the ECS entity belonging to that flat mesh part.
+        let Some(entity) = parts.iter().find_map(|(entity, part)| {
             (part.mesh_id == selection.mesh_id && part.part_index == part_index).then_some(entity)
-        });
-
-        let Some(primitive_entity) = primitive_entity else {
+        }) else {
             error!(
                 "Could not find ECS entity for mesh part {} of mesh {}",
                 part_index, selection.mesh_id
@@ -78,14 +74,14 @@ pub fn remove_selected_mesh_primitive(
             continue;
         };
 
-        // Remove the primitive from the imported scene.
+        // Remove the source primitive.
         object.primitives.remove(selection.primitive_index);
 
-        // Remove the corresponding mesh-part entry.
+        // Remove the corresponding flat mesh part.
         mesh.parts.retain(|part| part.index != part_index);
 
-        // The remaining primitives in the same source object shift down
-        // by one primitive index.
+        // Fix source primitive indices for the remaining parts belonging
+        // to the same source object.
         for part in &mut mesh.parts {
             if part.object_index == selection.object_index
                 && part.primitive_index > selection.primitive_index
@@ -94,33 +90,8 @@ pub fn remove_selected_mesh_primitive(
             }
         }
 
-        // Remove the renderable ECS entity.
-        commands.entity(primitive_entity).despawn();
-
-        // Update the primitive indices stored on the remaining ECS parts.
-        for mut part in parts.p1().iter_mut() {
-            if part.mesh_id == selection.mesh_id
-                && part.part_index != part_index
-                && part.primitive_index > selection.primitive_index
-            {
-                // Only update parts belonging to the same source object.
-                let Some(mesh_entry) = mesh_scene_state.get(selection.mesh_id) else {
-                    continue;
-                };
-
-                let Some(mesh_part) = mesh_entry
-                    .parts
-                    .iter()
-                    .find(|entry| entry.index == part.part_index)
-                else {
-                    continue;
-                };
-
-                if mesh_part.object_index == selection.object_index {
-                    part.primitive_index -= 1;
-                }
-            }
-        }
+        // Remove the corresponding renderable entity.
+        commands.entity(entity).despawn();
 
         mesh_preview.selected_primitive = None;
         mesh_preview.uv_revision = mesh_preview.uv_revision.wrapping_add(1);

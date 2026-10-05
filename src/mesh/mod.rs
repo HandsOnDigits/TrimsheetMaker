@@ -14,7 +14,6 @@ pub struct ImportedMesh;
 pub struct ImportedMeshPart {
     pub mesh_id: u64,
     pub part_index: usize,
-    pub primitive_index: usize,
     pub source_mesh: Handle<Mesh>,
     pub source_material: Option<MeshMaterialRef>,
 }
@@ -307,7 +306,6 @@ pub fn spawn_mesh_scene(
                     ImportedMeshPart {
                         mesh_id,
                         part_index,
-                        primitive_index,
                         source_mesh: mesh_handle.clone(),
                         source_material: primitive.material.clone(),
                     },
