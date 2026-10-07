@@ -212,39 +212,6 @@ pub struct EditorHistory {
 }
 
 impl EditorHistory {
-    pub fn begin(
-        &self,
-        atlas: &Atlas,
-        project_settings: &ProjectSettings,
-        mesh_scene_state: &MeshSceneState,
-    ) -> EditorSnapshot {
-        EditorSnapshot::capture(atlas, project_settings, mesh_scene_state)
-    }
-
-    pub fn commit(&mut self, before: EditorSnapshot, changed: bool) {
-        if changed {
-            self.undo.push(before);
-            self.redo.clear();
-        }
-    }
-
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn can_undo(&self) -> bool {
-        !self.undo.is_empty()
-    }
-
-    pub fn can_redo(&self) -> bool {
-        !self.redo.is_empty()
-    }
-
-    pub fn clear(&mut self) {
-        self.undo.clear();
-        self.redo.clear();
-    }
-
     pub fn push(&mut self, snapshot: EditorSnapshot) {
         self.undo.push(snapshot);
         self.redo.clear();

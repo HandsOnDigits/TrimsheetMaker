@@ -234,6 +234,8 @@ pub fn execute_action(
         }
 
         EditorAction::Undo => {
+            let view = mesh_preview.get_view();
+
             crate::viewport::despawn_all_meshes(commands, mesh_scene_state);
 
             if history.undo(
@@ -244,6 +246,8 @@ pub fn execute_action(
             ) {
                 project::restore_history_meshes(commands, meshes, mesh_scene_state, mesh_preview);
 
+                mesh_preview.set_view(view);
+
                 editor_ui.inspected_atlas_region = None;
                 editor_ui.dragging_atlas_region = None;
                 editor_ui.drag_offset = egui::Vec2::ZERO;
@@ -251,6 +255,8 @@ pub fn execute_action(
         }
 
         EditorAction::Redo => {
+            let view = mesh_preview.get_view();
+
             crate::viewport::despawn_all_meshes(commands, mesh_scene_state);
 
             if history.redo(
@@ -260,6 +266,8 @@ pub fn execute_action(
                 images,
             ) {
                 project::restore_history_meshes(commands, meshes, mesh_scene_state, mesh_preview);
+
+                mesh_preview.set_view(view);
 
                 editor_ui.inspected_atlas_region = None;
                 editor_ui.dragging_atlas_region = None;

@@ -16,6 +16,15 @@ pub struct MeshViewportInput {
 #[derive(Component)]
 pub struct MeshViewportSection;
 
+#[derive(Clone, Copy)]
+pub struct MeshPreviewView {
+    pub target: Vec3,
+    pub distance: f32,
+    pub target_distance: f32,
+    pub yaw: f32,
+    pub pitch: f32,
+}
+
 #[derive(Resource)]
 pub struct MeshPreview {
     pub camera: Entity,
@@ -36,6 +45,24 @@ impl MeshPreview {
     pub fn clear_selection(&mut self) {
         self.selected_mesh_id = None;
         self.selected_primitive = None;
+    }
+
+    pub fn get_view(&self) -> MeshPreviewView {
+        MeshPreviewView {
+            target: self.target,
+            distance: self.distance,
+            target_distance: self.target_distance,
+            yaw: self.yaw,
+            pitch: self.pitch,
+        }
+    }
+
+    pub fn set_view(&mut self, view: MeshPreviewView) {
+        self.target = view.target;
+        self.distance = view.distance;
+        self.target_distance = view.target_distance;
+        self.yaw = view.yaw;
+        self.pitch = view.pitch;
     }
 }
 

@@ -1,7 +1,7 @@
 mod topology;
 
 pub mod import;
-use import::{MeshMaterialRef, MeshScene};
+use import::MeshScene;
 
 use bevy::{asset::RenderAssetUsages, mesh::PrimitiveTopology, prelude::*};
 
@@ -15,7 +15,6 @@ pub struct ImportedMeshPart {
     pub mesh_id: u64,
     pub part_index: usize,
     pub source_mesh: Handle<Mesh>,
-    pub source_material: Option<MeshMaterialRef>,
 }
 
 #[derive(Debug, Clone)]
@@ -98,11 +97,6 @@ impl MeshSceneState {
             bounds_radius,
         );
         id
-    }
-
-    pub fn remove(&mut self, id: u64) -> Option<MeshEntry> {
-        let index = self.meshes.iter().position(|mesh| mesh.id == id)?;
-        Some(self.meshes.remove(index))
     }
 
     pub fn get(&self, id: u64) -> Option<&MeshEntry> {
@@ -331,7 +325,6 @@ pub fn spawn_mesh_scene(
                         mesh_id,
                         part_index,
                         source_mesh: mesh_handle.clone(),
-                        source_material: primitive.material.clone(),
                     },
                 ));
             });
@@ -359,19 +352,4 @@ pub fn spawn_mesh_scene(
     };
 
     (root, parts, bounds_center, bounds_radius)
-}
-
-pub fn create_imported_bevy_mesh(
-    meshes: &mut Assets<Mesh>,
-    primitive: &import::MeshPrimitive,
-    uvs: Vec<[f32; 2]>,
-) -> Handle<Mesh> {
-    create_bevy_mesh(
-        meshes,
-        primitive.positions.clone(),
-        primitive.normals.clone(),
-        primitive.tangents.clone(),
-        uvs,
-        primitive.indices.clone(),
-    )
 }
