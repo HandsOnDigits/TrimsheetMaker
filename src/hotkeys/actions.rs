@@ -5,6 +5,7 @@ use bevy_egui::egui;
 
 use crate::{
     data::Atlas,
+    history::{EditorHistory, EditorSnapshot},
     mesh::{MeshLight, MeshSceneState},
     project,
     project_settings::ProjectSettings,
@@ -66,6 +67,7 @@ pub fn execute_action(
     mesh_scene_state: &mut MeshSceneState,
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
+    history: &mut EditorHistory,
 ) {
     match action {
         EditorAction::NewAtlas => {
@@ -223,11 +225,37 @@ pub fn execute_action(
         }
 
         EditorAction::Undo => {
-            // TODO: Undo implementation.
+            crate::viewport::despawn_all_meshes(commands, mesh_scene_state);
+
+            if history.undo(
+                atlas,
+                &mut editor_ui.project_settings,
+                mesh_scene_state,
+                images,
+            ) {
+                project::restore_history_meshes(commands, meshes, mesh_scene_state, mesh_preview);
+
+                editor_ui.inspected_atlas_region = None;
+                editor_ui.dragging_atlas_region = None;
+                editor_ui.drag_offset = egui::Vec2::ZERO;
+            }
         }
 
         EditorAction::Redo => {
-            // TODO: Redo implementation.
+            crate::viewport::despawn_all_meshes(commands, mesh_scene_state);
+
+            if history.redo(
+                atlas,
+                &mut editor_ui.project_settings,
+                mesh_scene_state,
+                images,
+            ) {
+                project::restore_history_meshes(commands, meshes, mesh_scene_state, mesh_preview);
+
+                editor_ui.inspected_atlas_region = None;
+                editor_ui.dragging_atlas_region = None;
+                editor_ui.drag_offset = egui::Vec2::ZERO;
+            }
         }
 
         EditorAction::ImportMultipleMaterials => {
@@ -244,6 +272,12 @@ pub fn execute_action(
 
         EditorAction::RemoveAtlasRegion => {
             if let Some(index) = editor_ui.inspected_atlas_region {
+                history.push(EditorSnapshot::capture(
+                    atlas,
+                    &editor_ui.project_settings,
+                    mesh_scene_state,
+                ));
+
                 atlas.remove(index);
 
                 editor_ui.inspected_atlas_region = None;

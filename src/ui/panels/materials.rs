@@ -2,9 +2,19 @@ use bevy_egui::egui;
 
 use super::EditorUi;
 
-use crate::data::{Atlas, AtlasMaterial, TextureNaming};
+use crate::{
+    data::{Atlas, AtlasMaterial, TextureNaming},
+    history::{EditorHistory, EditorSnapshot},
+    mesh::MeshSceneState,
+};
 
-pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
+pub fn materials_panel(
+    ui: &mut egui::Ui,
+    editor_ui: &mut EditorUi,
+    atlas: &mut Atlas,
+    history: &mut EditorHistory,
+    mesh_scene_state: &MeshSceneState,
+) {
     ui.heading("Atlas Regions");
 
     ui.horizontal(|ui| {
@@ -49,6 +59,10 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
 
     let mut remove_group = None;
     let mut naming_changed = false;
+    let naming_before = None;
+
+    let pre_naming_snapshot =
+        EditorSnapshot::capture(atlas, &editor_ui.project_settings, mesh_scene_state);
 
     for (index, group) in editor_ui
         .project_settings
@@ -114,9 +128,29 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
             .project_settings
             .texture_naming
             .reclassify_atlas(atlas);
+
+        history.push(pre_naming_snapshot);
+    }
+
+    if naming_changed {
+        editor_ui
+            .project_settings
+            .texture_naming
+            .reclassify_materials(&mut editor_ui.import_materials);
+
+        editor_ui
+            .project_settings
+            .texture_naming
+            .reclassify_atlas(atlas);
+
+        if let Some(before) = naming_before {
+            history.push(before);
+        }
     }
 
     if let Some(index) = remove_group {
+        let before = EditorSnapshot::capture(atlas, &editor_ui.project_settings, mesh_scene_state);
+
         let removed_id = editor_ui.project_settings.texture_naming.groups[index]
             .id
             .clone();
@@ -143,9 +177,13 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
             .project_settings
             .texture_naming
             .reclassify_materials(&mut editor_ui.import_materials);
+
+        history.push(before);
     }
 
     if ui.button("+ Add Group").clicked() {
+        let before = EditorSnapshot::capture(atlas, &editor_ui.project_settings, mesh_scene_state);
+
         editor_ui
             .project_settings
             .texture_naming
@@ -156,6 +194,8 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
                 suffixes: vec!["_new".to_string()],
                 rendering: Default::default(),
             });
+
+        history.push(before);
     }
 
     ui.separator();
@@ -195,9 +235,13 @@ pub fn materials_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
         )
         .clicked()
     {
+        let before = EditorSnapshot::capture(atlas, &editor_ui.project_settings, mesh_scene_state);
+
         let index = atlas.add_placeholder();
 
         editor_ui.inspected_atlas_region = Some(index);
+
+        history.push(before);
     }
 }
 

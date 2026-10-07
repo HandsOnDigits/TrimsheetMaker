@@ -52,6 +52,30 @@ pub struct MeshSceneState {
 }
 
 impl MeshSceneState {
+    pub fn restore_document(
+        &mut self,
+        meshes: Vec<(u64, String, std::path::PathBuf, bool, import::MeshScene)>,
+    ) {
+        self.meshes.clear();
+        self.next_id = 0;
+
+        for (id, name, path, visible, scene) in meshes {
+            self.next_id = self.next_id.max(id.saturating_add(1));
+
+            self.meshes.push(MeshEntry {
+                id,
+                name,
+                path,
+                visible,
+                scene,
+                root: None,
+                parts: Vec::new(),
+                bounds_center: Vec3::ZERO,
+                bounds_radius: 0.0,
+            });
+        }
+    }
+
     pub fn add(
         &mut self,
         name: String,

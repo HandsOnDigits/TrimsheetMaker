@@ -2,6 +2,8 @@ use bevy_egui::egui;
 
 use crate::{
     data::{Atlas, AtlasMaterial},
+    history::{EditorHistory, EditorSnapshot},
+    mesh::MeshSceneState,
     ui::EditorUi,
 };
 
@@ -33,10 +35,18 @@ pub fn handle_material_drag(
     viewport: egui::Rect,
     editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
+    history: &mut EditorHistory,
+    mesh_scene_state: &MeshSceneState,
 ) {
     let atlas_rect = atlas_screen_rect(viewport, editor_ui, atlas);
 
     if response.drag_started_by(egui::PointerButton::Primary) {
+        editor_ui.atlas_drag_snapshot = Some(EditorSnapshot::capture(
+            atlas,
+            &editor_ui.project_settings,
+            mesh_scene_state,
+        ));
+
         start_atlas_region_drag(response, atlas_rect, editor_ui, atlas);
     }
 
@@ -49,6 +59,10 @@ pub fn handle_material_drag(
         editor_ui.drag_offset = egui::Vec2::ZERO;
 
         atlas.mark_bake_dirty();
+
+        if let Some(before) = editor_ui.atlas_drag_snapshot.take() {
+            history.push(before);
+        }
     }
 }
 

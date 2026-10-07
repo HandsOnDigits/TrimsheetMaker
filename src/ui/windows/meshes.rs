@@ -3,6 +3,7 @@ use bevy_egui::egui;
 
 use crate::{
     data::Atlas,
+    history::{EditorHistory, EditorSnapshot},
     hotkeys::{EditorAction, EditorActionMessage},
     mesh::MeshSceneState,
     ui::EditorUi,
@@ -18,6 +19,7 @@ pub fn meshes_window(
     mesh_scene_state: &mut MeshSceneState,
     mesh_preview: &mut MeshPreview,
     action_messages: &mut MessageWriter<EditorActionMessage>,
+    history: &mut EditorHistory,
 ) -> bool {
     let mut open = editor_ui.show_meshes_window;
 
@@ -198,18 +200,31 @@ pub fn meshes_window(
                     if ui.button("Unassign").clicked() {
                         if let Some(selection) = selected_primitive {
                             if let Some(region_index) = editor_ui.inspected_atlas_region {
-                                if let Some(region) = atlas
+                                if atlas
                                     .materials
-                                    .iter_mut()
-                                    .find(|region| region.index == region_index)
+                                    .iter()
+                                    .any(|region| region.index == region_index)
                                 {
-                                    region.unassign_mesh(
-                                        selection.mesh_id,
-                                        selection.object_index,
-                                        selection.primitive_index,
+                                    let before = EditorSnapshot::capture(
+                                        atlas,
+                                        &editor_ui.project_settings,
+                                        mesh_scene_state,
                                     );
 
-                                    atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
+                                    if let Some(region) = atlas
+                                        .materials
+                                        .iter_mut()
+                                        .find(|region| region.index == region_index)
+                                    {
+                                        region.unassign_mesh(
+                                            selection.mesh_id,
+                                            selection.object_index,
+                                            selection.primitive_index,
+                                        );
+
+                                        atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
+                                        history.push(before);
+                                    }
                                 }
                             }
                         }
@@ -226,6 +241,12 @@ pub fn meshes_window(
                         let Some(region_index) = editor_ui.inspected_atlas_region else {
                             return;
                         };
+
+                        let before = EditorSnapshot::capture(
+                            atlas,
+                            &editor_ui.project_settings,
+                            mesh_scene_state,
+                        );
 
                         /*
                          * Remove this primitive from every atlas region
@@ -257,6 +278,7 @@ pub fn meshes_window(
                             );
 
                             atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
+                            history.push(before);
                         }
                     }
                 }

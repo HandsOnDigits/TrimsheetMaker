@@ -5,6 +5,7 @@ use super::atlas_interaction;
 
 use crate::{
     data::{Atlas, AtlasMaterial, TextureNaming},
+    history::EditorHistory,
     mesh::MeshSceneState,
     transform::Rotation,
     ui::EditorUi,
@@ -18,6 +19,7 @@ pub fn atlas_view(
     keyboard: &ButtonInput<KeyCode>,
     mesh_preview: &MeshPreview,
     mesh_scene_state: &MeshSceneState,
+    history: &mut EditorHistory,
 ) {
     ui.horizontal(|ui| {
         ui.heading("Atlas");
@@ -86,7 +88,14 @@ pub fn atlas_view(
     }
 
     atlas_interaction::handle_material_selection(&response, viewport_rect, editor_ui, atlas);
-    atlas_interaction::handle_material_drag(&response, viewport_rect, editor_ui, atlas);
+    atlas_interaction::handle_material_drag(
+        &response,
+        viewport_rect,
+        editor_ui,
+        atlas,
+        history,
+        mesh_scene_state,
+    );
 
     let painter = ui.painter_at(viewport_rect);
 

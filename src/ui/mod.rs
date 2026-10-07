@@ -6,6 +6,7 @@ use bevy_egui::{EguiGlobalSettings, EguiPrimaryContextPass, PrimaryEguiContext, 
 use crate::{
     data,
     editor_settings::EditorSettings,
+    history::{EditorHistory, EditorSnapshot},
     hotkeys::{self, EditorAction, EditorActionMessage},
     mesh::{MeshLight, MeshSceneState},
     project_settings::ProjectSettings,
@@ -53,6 +54,7 @@ fn apply_editor_actions(
     mut mesh_scene_state: ResMut<MeshSceneState>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut history: ResMut<EditorHistory>,
 ) {
     for message in messages.read() {
         hotkeys::execute_action(
@@ -65,6 +67,7 @@ fn apply_editor_actions(
             &mut mesh_scene_state,
             &mut commands,
             &mut meshes,
+            &mut *history,
         );
     }
 }
@@ -72,6 +75,8 @@ fn apply_editor_actions(
 #[derive(Resource)]
 pub struct EditorUi {
     pub project_path: Option<std::path::PathBuf>,
+
+    pub atlas_drag_snapshot: Option<EditorSnapshot>,
 
     pub selected_mesh: Option<u64>,
 
@@ -136,6 +141,8 @@ impl Default for EditorUi {
     fn default() -> Self {
         Self {
             project_path: None,
+
+            atlas_drag_snapshot: None,
 
             selected_mesh: None,
 

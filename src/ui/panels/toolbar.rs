@@ -5,6 +5,7 @@ use super::{EditorUi, menu_action_button};
 
 use crate::{
     data::Atlas,
+    history::EditorHistory,
     hotkeys::{EditorAction, HotkeyManager, execute_action},
     mesh::{
         MeshLight, MeshSceneState,
@@ -24,6 +25,7 @@ pub fn toolbar(
     mesh_scene_state: &mut MeshSceneState,
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
+    history: &mut EditorHistory,
 ) {
     ui.horizontal(|ui| {
         ui.add_space(8.0);
@@ -40,6 +42,7 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
+                    history,
                 );
                 ui.close();
             }
@@ -55,6 +58,7 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
+                    history,
                 );
                 ui.close();
             }
@@ -70,6 +74,7 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
+                    history,
                 );
                 ui.close();
             }
@@ -85,6 +90,7 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
+                    history,
                 );
                 ui.close();
             }
@@ -107,6 +113,7 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
+                    history,
                 );
                 ui.close();
             }
@@ -127,6 +134,7 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
+                    history,
                 );
                 ui.close();
             }
@@ -142,6 +150,7 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
+                    history,
                 );
                 ui.close();
             }
@@ -159,6 +168,7 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
+                    history,
                 );
                 ui.close();
             }
@@ -183,6 +193,7 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
+                    history,
                 );
                 ui.close();
             }
@@ -198,6 +209,7 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
+                    history,
                 );
                 ui.close();
             }
@@ -254,6 +266,7 @@ pub fn toolbar(
                     mesh_scene_state,
                     commands,
                     meshes,
+                    history,
                 );
                 ui.close();
             }

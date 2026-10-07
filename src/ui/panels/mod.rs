@@ -26,6 +26,7 @@ use super::EditorUi;
 
 use crate::{
     data::Atlas,
+    history::EditorHistory,
     hotkeys::{EditorAction, EditorActionMessage, HotkeyManager},
     mesh::{MeshLight, MeshSceneState},
     ui::windows,
@@ -47,6 +48,7 @@ pub fn editor_ui(
     mut meshes: ResMut<Assets<Mesh>>,
     mut mesh_scene_state: ResMut<MeshSceneState>,
     mut action_messages: MessageWriter<EditorActionMessage>,
+    mut history: ResMut<EditorHistory>,
 ) -> Result {
     mesh_input.pointer_over_ui = false;
     mesh_input.floating_window_dragging = false;
@@ -92,6 +94,7 @@ pub fn editor_ui(
                 &mut mesh_scene_state,
                 &mut commands,
                 &mut meshes,
+                &mut *history,
             );
         });
 
@@ -109,7 +112,13 @@ pub fn editor_ui(
             .default_size(230.0)
             .size_range(180.0..=400.0)
             .show(&mut root_ui, |ui| {
-                materials_panel(ui, &mut editor_ui, &mut atlas);
+                materials_panel(
+                    ui,
+                    &mut editor_ui,
+                    &mut atlas,
+                    &mut *history,
+                    &mesh_scene_state,
+                );
             });
     }
 
@@ -202,6 +211,7 @@ pub fn editor_ui(
             &keyboard,
             &mesh_preview,
             &mesh_scene_state,
+            &mut *history,
         );
     });
 
@@ -241,6 +251,7 @@ pub fn editor_ui(
         &mut mesh_scene_state,
         &mut mesh_preview,
         &mut action_messages,
+        &mut *history,
     );
 
     Ok(())

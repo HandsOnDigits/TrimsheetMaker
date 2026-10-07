@@ -5,21 +5,25 @@ mod ui;
 use ui::EditorUiPlugin;
 
 mod data;
+mod editor_settings;
+
+mod history;
+use history::EditorHistory;
+
 mod image;
 mod mesh;
-
-mod hotkeys;
-use hotkeys::HotkeyPlugin;
-
-mod editor_settings;
 mod project;
 mod project_settings;
 mod rendering;
 mod transform;
 mod viewport;
 
+mod hotkeys;
+use hotkeys::HotkeyPlugin;
+
 fn main() {
     App::new()
+        .insert_resource(EditorHistory::default())
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Trimsheet Maker".into(),

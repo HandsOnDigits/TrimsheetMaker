@@ -99,11 +99,13 @@ pub fn remove_selected_mesh_primitive(
 }
 
 pub fn despawn_all_meshes(commands: &mut Commands, scene_state: &mut MeshSceneState) {
-    for mesh in scene_state.meshes.drain(..) {
-        if let Some(root) = mesh.root {
+    for mesh in &mut scene_state.meshes {
+        if let Some(root) = mesh.root.take() {
             commands.entity(root).despawn();
         }
-    }
 
-    scene_state.next_id = 0;
+        mesh.parts.clear();
+        mesh.bounds_center = Vec3::ZERO;
+        mesh.bounds_radius = 0.0;
+    }
 }
