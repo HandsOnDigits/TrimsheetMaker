@@ -184,7 +184,7 @@ fn all_editable_actions() -> &'static [EditorAction] {
         EditorAction::ImportSingleMaterial,
         EditorAction::ImportMesh,
         EditorAction::RemoveAtlasRegion,
-        EditorAction::RemoveSelectedMeshPrimitive,
+        EditorAction::RemoveSelectedMesh,
         EditorAction::PackAtlas,
         EditorAction::ResetViewport,
         EditorAction::ToggleMaterialsPanel,
@@ -209,7 +209,7 @@ fn action_display_name(action: EditorAction) -> &'static str {
         EditorAction::ImportMesh => "Import Mesh",
 
         EditorAction::RemoveAtlasRegion => "Remove Atlas Region",
-        EditorAction::RemoveSelectedMeshPrimitive => "Remove Selected Mesh Primitive",
+        EditorAction::RemoveSelectedMesh => "Remove Selected Mesh",
 
         EditorAction::PackAtlas => "Pack Atlas",
 

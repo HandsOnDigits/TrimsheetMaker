@@ -15,7 +15,7 @@ pub fn remove_selected_mesh_primitive(
     parts: Query<(Entity, &ImportedMeshPart)>,
 ) {
     for message in messages.read() {
-        if message.action != EditorAction::RemoveSelectedMeshPrimitive {
+        if message.action != EditorAction::RemoveSelectedMesh {
             continue;
         }
 
@@ -46,7 +46,6 @@ pub fn remove_selected_mesh_primitive(
             continue;
         }
 
-        // Find the flat mesh part corresponding to this source primitive.
         let Some(part_index) = mesh
             .parts
             .iter()
@@ -60,10 +59,10 @@ pub fn remove_selected_mesh_primitive(
                 "Could not find mesh part for mesh {}, object {}, primitive {}",
                 selection.mesh_id, selection.object_index, selection.primitive_index
             );
+            mesh_preview.selected_primitive = None;
             continue;
         };
 
-        // Find the ECS entity belonging to that flat mesh part.
         let Some(entity) = parts.iter().find_map(|(entity, part)| {
             (part.mesh_id == selection.mesh_id && part.part_index == part_index).then_some(entity)
         }) else {
@@ -71,17 +70,17 @@ pub fn remove_selected_mesh_primitive(
                 "Could not find ECS entity for mesh part {} of mesh {}",
                 part_index, selection.mesh_id
             );
+            mesh_preview.selected_primitive = None;
             continue;
         };
 
         // Remove the source primitive.
         object.primitives.remove(selection.primitive_index);
 
-        // Remove the corresponding flat mesh part.
+        // Remove its flat part entry.
         mesh.parts.retain(|part| part.index != part_index);
 
-        // Fix source primitive indices for the remaining parts belonging
-        // to the same source object.
+        // Re-number primitive indices within this source object.
         for part in &mut mesh.parts {
             if part.object_index == selection.object_index
                 && part.primitive_index > selection.primitive_index
@@ -90,7 +89,7 @@ pub fn remove_selected_mesh_primitive(
             }
         }
 
-        // Remove the corresponding renderable entity.
+        // Remove the corresponding render entity.
         commands.entity(entity).despawn();
 
         mesh_preview.selected_primitive = None;

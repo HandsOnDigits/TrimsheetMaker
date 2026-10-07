@@ -15,34 +15,47 @@ pub struct Hotkey {
     pub shift: bool,
     pub alt: bool,
     pub super_key: bool,
+    pub delete: bool,
 }
 
 #[allow(unused)]
 impl Hotkey {
-    pub const fn new(key: KeyCode, ctrl: bool, shift: bool, alt: bool, super_key: bool) -> Self {
+    pub const fn new(
+        key: KeyCode,
+        ctrl: bool,
+        shift: bool,
+        alt: bool,
+        super_key: bool,
+        delete: bool,
+    ) -> Self {
         Self {
             key,
             ctrl,
             shift,
             alt,
             super_key,
+            delete,
         }
     }
 
     pub const fn plain(key: KeyCode) -> Self {
-        Self::new(key, false, false, false, false)
+        Self::new(key, false, false, false, false, false)
     }
 
     pub const fn ctrl(key: KeyCode) -> Self {
-        Self::new(key, true, false, false, false)
+        Self::new(key, true, false, false, false, false)
     }
 
     pub const fn ctrl_shift(key: KeyCode) -> Self {
-        Self::new(key, true, true, false, false)
+        Self::new(key, true, true, false, false, false)
     }
 
     pub const fn shift(key: KeyCode) -> Self {
-        Self::new(key, false, true, false, false)
+        Self::new(key, false, true, false, false, false)
+    }
+
+    pub const fn delete(key: KeyCode) -> Self {
+        Self::new(key, false, false, false, false, true)
     }
 
     /// Returns a readable representation of the shortcut.
@@ -65,6 +78,10 @@ impl Hotkey {
             parts.push("Super");
         }
 
+        if self.delete {
+            parts.push("Delete");
+        }
+
         parts.push(key_display_name(self.key));
 
         parts.join("+")
@@ -77,6 +94,7 @@ impl Hotkey {
             shift: self.shift,
             alt: self.alt,
             super_key: self.super_key,
+            delete: self.delete,
         }
     }
 
@@ -89,6 +107,7 @@ impl Hotkey {
             saved.shift,
             saved.alt,
             saved.super_key,
+            saved.delete,
         ))
     }
 }
@@ -143,11 +162,17 @@ impl HotkeyManager {
         // Atlas
         self.bindings.insert(
             EditorAction::RemoveAtlasRegion,
-            Hotkey::plain(KeyCode::Delete),
+            Hotkey::delete(KeyCode::KeyR),
         );
 
         self.bindings
             .insert(EditorAction::PackAtlas, Hotkey::plain(KeyCode::KeyP));
+
+        // Mesh
+        self.bindings.insert(
+            EditorAction::RemoveSelectedMesh,
+            Hotkey::delete(KeyCode::KeyM),
+        );
 
         // View
         self.bindings
@@ -240,6 +265,7 @@ impl HotkeyManager {
             keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight),
             keyboard.pressed(KeyCode::AltLeft) || keyboard.pressed(KeyCode::AltRight),
             keyboard.pressed(KeyCode::SuperLeft) || keyboard.pressed(KeyCode::SuperRight),
+            keyboard.pressed(KeyCode::Delete),
         );
 
         match self.set_binding(action, hotkey) {
@@ -375,14 +401,22 @@ pub fn hotkey_system(
 
     let super_key = keyboard.pressed(KeyCode::SuperLeft) || keyboard.pressed(KeyCode::SuperRight);
 
-    let modifiers = (ctrl, shift, alt, super_key);
+    let delete = keyboard.pressed(KeyCode::Delete);
+
+    let modifiers = (ctrl, shift, alt, super_key, delete);
 
     for (&action, &hotkey) in hotkeys.bindings() {
         if !keyboard.just_pressed(hotkey.key) {
             continue;
         }
 
-        let expected_modifiers = (hotkey.ctrl, hotkey.shift, hotkey.alt, hotkey.super_key);
+        let expected_modifiers = (
+            hotkey.ctrl,
+            hotkey.shift,
+            hotkey.alt,
+            hotkey.super_key,
+            hotkey.delete,
+        );
 
         if modifiers == expected_modifiers {
             action_writer.write(EditorActionMessage::new(action));

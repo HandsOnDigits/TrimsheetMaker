@@ -11,7 +11,7 @@ use crate::{
     data::{Atlas, AtlasMaterial, MaterialMeshAssignment, MaterialTexture},
     mesh::{
         MeshSceneState,
-        import::{self, MeshImportSettings},
+        import::{self},
         spawn_mesh_scene,
     },
     project_settings::ProjectSettings,
@@ -24,12 +24,26 @@ pub const PROJECT_EXTENSION: &str = "tsm";
 pub const PROJECT_FORMAT_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProjectMeshPart {
-    pub object_index: usize,
-    pub primitive_index: usize,
+pub struct ProjectMeshPrimitive {
+    pub positions: Vec<[f32; 3]>,
+    pub normals: Vec<[f32; 3]>,
+    pub tangents: Vec<[f32; 4]>,
+    pub uvs: Vec<[f32; 2]>,
+    pub indices: Vec<u32>,
+
+    #[serde(default)]
+    pub material: Option<import::MeshMaterialRef>,
 
     #[serde(default = "default_mesh_visibility")]
     pub visible: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectMeshObject {
+    pub name: String,
+
+    #[serde(default)]
+    pub primitives: Vec<ProjectMeshPrimitive>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,11 +56,7 @@ pub struct ProjectMesh {
     pub visible: bool,
 
     #[serde(default)]
-    pub parts: Vec<ProjectMeshPart>,
-}
-
-fn default_mesh_visibility() -> bool {
-    true
+    pub objects: Vec<ProjectMeshObject>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -70,6 +80,10 @@ pub struct ProjectMaterial {
 
     #[serde(default)]
     pub mesh_assignments: Vec<ProjectMaterialMeshAssignment>,
+}
+
+fn default_mesh_visibility() -> bool {
+    true
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -102,13 +116,13 @@ impl ProjectFile {
                     path: make_project_relative_path(project_path, &mesh.path),
                     visible: mesh.visible,
 
-                    parts: mesh
-                        .parts
+                    objects: mesh
+                        .scene
+                        .objects
                         .iter()
-                        .map(|part| ProjectMeshPart {
-                            object_index: part.object_index,
-                            primitive_index: part.primitive_index,
-                            visible: part.visible,
+                        .enumerate()
+                        .map(|(object_index, object)| {
+                            project_mesh_object_from_runtime(object, object_index, &mesh.parts)
                         })
                         .collect(),
                 })
@@ -250,12 +264,6 @@ pub fn load_project_meshes(
 
     editor_ui.mesh_import_path = None;
 
-    let settings = MeshImportSettings {
-        assimp_library: editor_ui.editor_settings.assimp_library_path.clone(),
-    };
-
-    let mut errors = Vec::new();
-
     for project_mesh in project_meshes {
         let resolved_path = if project_mesh.path.is_absolute() {
             project_mesh.path.clone()
@@ -266,78 +274,60 @@ pub fn load_project_meshes(
                 .join(&project_mesh.path)
         };
 
-        if !resolved_path.exists() {
-            errors.push(format!(
-                "{}: saved mesh file does not exist: {}",
-                project_mesh.name,
-                resolved_path.display()
-            ));
-            continue;
-        }
+        // The project contains the actual mesh primitives.
+        // Do not re-import the source file and do not split again.
+        let scene = runtime_mesh_scene_from_project(project_mesh);
 
-        match import::import(&resolved_path, editor_ui.mesh_import_backend, &settings) {
-            Ok(mut scene) => {
-                let mesh_id = project_mesh.id;
+        let (root, parts, bounds_center, bounds_radius) = spawn_mesh_scene(
+            commands,
+            meshes,
+            &scene,
+            project_mesh.id,
+            mesh_preview.material.clone(),
+        );
 
-                apply_saved_mesh_parts(&mut scene, &project_mesh.parts);
+        mesh_scene_state.add_with_id(
+            project_mesh.id,
+            project_mesh.name.clone(),
+            resolved_path,
+            scene,
+            root,
+            parts,
+            bounds_center,
+            bounds_radius,
+        );
 
-                let (root, parts, bounds_center, bounds_radius) = spawn_mesh_scene(
-                    commands,
-                    meshes,
-                    &scene,
-                    mesh_id,
-                    mesh_preview.material.clone(),
-                );
+        if let Some(mesh) = mesh_scene_state.get_mut(project_mesh.id) {
+            mesh.visible = project_mesh.visible;
 
-                mesh_scene_state.add_with_id(
-                    project_mesh.id,
-                    project_mesh.name.clone(),
-                    resolved_path.clone(),
-                    scene,
-                    root,
-                    parts,
-                    bounds_center,
-                    bounds_radius,
-                );
-
-                if let Some(mesh) = mesh_scene_state.get_mut(mesh_id) {
-                    mesh.visible = project_mesh.visible;
-
-                    for saved_part in &project_mesh.parts {
-                        if let Some(part) = mesh.parts.iter_mut().find(|part| {
-                            part.object_index == saved_part.object_index
-                                && part.primitive_index == saved_part.primitive_index
-                        }) {
-                            part.visible = saved_part.visible;
-                        }
+            for (object_index, object) in project_mesh.objects.iter().enumerate() {
+                for (primitive_index, primitive) in object.primitives.iter().enumerate() {
+                    if let Some(part) = mesh.parts.iter_mut().find(|part| {
+                        part.object_index == object_index && part.primitive_index == primitive_index
+                    }) {
+                        part.visible = primitive.visible;
                     }
                 }
-            }
-
-            Err(error) => {
-                errors.push(format!("{}: failed to import: {error}", project_mesh.name));
             }
         }
     }
 
-    if let Some((bounds_center, bounds_radius)) = mesh_scene_state.visible_bounds() {
-        mesh_preview.target = bounds_center;
+    if let Some((center, radius)) = mesh_scene_state.visible_bounds() {
+        mesh_preview.target = center;
 
-        let fit_distance = (bounds_radius * 2.5).max(0.25);
+        let distance = (radius * 2.5).max(0.25);
 
-        mesh_preview.distance = fit_distance;
-        mesh_preview.target_distance = fit_distance;
+        mesh_preview.distance = distance;
+        mesh_preview.target_distance = distance;
     } else {
         mesh_preview.target = Vec3::ZERO;
         mesh_preview.distance = 4.0;
         mesh_preview.target_distance = 4.0;
     }
 
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        Err(errors.join("\n").into())
-    }
+    mesh_preview.selected_primitive = None;
+
+    Ok(())
 }
 
 pub fn restore_history_meshes(
@@ -470,20 +460,65 @@ fn make_project_relative_path(project_path: &Path, asset_path: &Path) -> PathBuf
     }
 }
 
-fn apply_saved_mesh_parts(scene: &mut import::MeshScene, saved_parts: &[ProjectMeshPart]) {
-    for (object_index, object) in scene.objects.iter_mut().enumerate() {
-        let mut saved_indices: Vec<usize> = saved_parts
+fn project_mesh_object_from_runtime(
+    mesh: &crate::mesh::import::MeshObject,
+    object_index: usize,
+    parts: &[crate::mesh::MeshPartEntry],
+) -> ProjectMeshObject {
+    ProjectMeshObject {
+        name: mesh.name.clone(),
+
+        primitives: mesh
+            .primitives
             .iter()
-            .filter(|part| part.object_index == object_index)
-            .map(|part| part.primitive_index)
-            .collect();
+            .enumerate()
+            .map(|(primitive_index, primitive)| {
+                let visible = parts
+                    .iter()
+                    .find(|part| {
+                        part.object_index == object_index && part.primitive_index == primitive_index
+                    })
+                    .map(|part| part.visible)
+                    .unwrap_or(true);
 
-        saved_indices.sort_unstable();
-        saved_indices.dedup();
+                ProjectMeshPrimitive {
+                    positions: primitive.positions.clone(),
+                    normals: primitive.normals.clone(),
+                    tangents: primitive.tangents.clone(),
+                    uvs: primitive.uvs.clone(),
+                    indices: primitive.indices.clone(),
+                    material: primitive.material.clone(),
+                    visible,
+                }
+            })
+            .collect(),
+    }
+}
 
-        object.primitives = saved_indices
-            .into_iter()
-            .filter_map(|primitive_index| object.primitives.get(primitive_index).cloned())
-            .collect();
+fn runtime_mesh_scene_from_project(project_mesh: &ProjectMesh) -> crate::mesh::import::MeshScene {
+    crate::mesh::import::MeshScene {
+        objects: project_mesh
+            .objects
+            .iter()
+            .map(|object| crate::mesh::import::MeshObject {
+                name: object.name.clone(),
+
+                // ProjectMeshObject currently does not serialize transforms.
+                transform: crate::mesh::import::MeshTransform::default(),
+
+                primitives: object
+                    .primitives
+                    .iter()
+                    .map(|primitive| crate::mesh::import::MeshPrimitive {
+                        positions: primitive.positions.clone(),
+                        normals: primitive.normals.clone(),
+                        tangents: primitive.tangents.clone(),
+                        uvs: primitive.uvs.clone(),
+                        indices: primitive.indices.clone(),
+                        material: primitive.material.clone(),
+                    })
+                    .collect(),
+            })
+            .collect(),
     }
 }

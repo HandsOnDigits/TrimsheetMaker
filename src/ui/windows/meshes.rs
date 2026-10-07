@@ -90,51 +90,140 @@ pub fn meshes_window(
 
                         if response.clicked() {
                             editor_ui.selected_mesh = Some(mesh_id);
+                            editor_ui.selected_mesh_object = None;
+
                             mesh_preview.selected_mesh_id = Some(mesh_id);
                             mesh_preview.selected_primitive = None;
                         }
                     });
 
                     if expanded {
-                        ui.indent(egui::Id::new(("mesh_parts", mesh_id)), |ui| {
+                        ui.indent(egui::Id::new(("mesh_objects", mesh_id)), |ui| {
                             egui::Frame::NONE.show(ui, |ui| {
                                 egui::ScrollArea::vertical()
-                                    .max_height(150.0)
+                                    .max_height(250.0)
                                     .auto_shrink([false, true])
                                     .show(ui, |ui| {
                                         ui.spacing_mut().item_spacing.y = 2.0;
 
-                                        for part in &mut mesh.parts {
-                                            let selected = mesh_preview.selected_primitive
-                                                == Some(MeshPrimitiveSelection {
-                                                    mesh_id,
-                                                    object_index: part.object_index,
-                                                    primitive_index: part.primitive_index,
-                                                });
+                                        for (object_index, object) in
+                                            mesh.scene.objects.iter().enumerate()
+                                        {
+                                            let object_key = (mesh_id, object_index);
+
+                                            let object_name = if object.name.is_empty() {
+                                                format!("Object {}", object_index + 1)
+                                            } else {
+                                                object.name.clone()
+                                            };
+
+                                            let object_selected =
+                                                editor_ui.selected_mesh_object == Some(object_key);
+                                            let object_expanded = editor_ui
+                                                .expanded_mesh_objects
+                                                .contains(&object_key);
 
                                             ui.horizontal(|ui| {
-                                                ui.add_space(4.0);
+                                                let arrow = if object_expanded { "v" } else { ">" };
 
-                                                ui.checkbox(&mut part.visible, "");
+                                                if ui
+                                                    .add(
+                                                        egui::Button::new(arrow)
+                                                            .frame(false)
+                                                            .min_size(egui::vec2(18.0, 18.0)),
+                                                    )
+                                                    .clicked()
+                                                {
+                                                    if object_expanded {
+                                                        editor_ui
+                                                            .expanded_mesh_objects
+                                                            .remove(&object_key);
+                                                    } else {
+                                                        editor_ui
+                                                            .expanded_mesh_objects
+                                                            .insert(object_key);
+                                                    }
+                                                }
 
                                                 if ui
                                                     .selectable_label(
-                                                        selected,
-                                                        egui::RichText::new(part.name.clone())
+                                                        object_selected,
+                                                        egui::RichText::new(object_name)
+                                                            .strong()
                                                             .small(),
                                                     )
                                                     .clicked()
                                                 {
                                                     editor_ui.selected_mesh = Some(mesh_id);
+                                                    editor_ui.selected_mesh_object =
+                                                        Some(object_key);
+
                                                     mesh_preview.selected_mesh_id = Some(mesh_id);
-                                                    mesh_preview.selected_primitive =
-                                                        Some(MeshPrimitiveSelection {
-                                                            mesh_id,
-                                                            object_index: part.object_index,
-                                                            primitive_index: part.primitive_index,
-                                                        });
+                                                    mesh_preview.selected_primitive = None;
                                                 }
                                             });
+
+                                            if object_expanded {
+                                                ui.indent(
+                                                    egui::Id::new((
+                                                        "mesh_object_parts",
+                                                        mesh_id,
+                                                        object_index,
+                                                    )),
+                                                    |ui| {
+                                                        for part in
+                                                            mesh.parts.iter_mut().filter(|part| {
+                                                                part.object_index == object_index
+                                                            })
+                                                        {
+                                                            let selected = mesh_preview
+                                                                .selected_primitive
+                                                                == Some(MeshPrimitiveSelection {
+                                                                    mesh_id,
+                                                                    object_index: part.object_index,
+                                                                    primitive_index: part
+                                                                        .primitive_index,
+                                                                });
+
+                                                            ui.horizontal(|ui| {
+                                                                ui.add_space(4.0);
+
+                                                                ui.checkbox(&mut part.visible, "");
+
+                                                                if ui
+                                                                    .selectable_label(
+                                                                        selected,
+                                                                        egui::RichText::new(
+                                                                            part.name.clone(),
+                                                                        )
+                                                                        .small(),
+                                                                    )
+                                                                    .clicked()
+                                                                {
+                                                                    editor_ui.selected_mesh =
+                                                                        Some(mesh_id);
+                                                                    editor_ui
+                                                                        .selected_mesh_object =
+                                                                        None;
+
+                                                                    mesh_preview.selected_mesh_id =
+                                                                        Some(mesh_id);
+                                                                    mesh_preview
+                                                                        .selected_primitive = Some(
+                                                                        MeshPrimitiveSelection {
+                                                                            mesh_id,
+                                                                            object_index: part
+                                                                                .object_index,
+                                                                            primitive_index: part
+                                                                                .primitive_index,
+                                                                        },
+                                                                    );
+                                                                }
+                                                            });
+                                                        }
+                                                    },
+                                                );
+                                            }
                                         }
                                     });
                             });
@@ -145,15 +234,32 @@ pub fn meshes_window(
 
             ui.separator();
 
-            /*
-             * Atlas assignment
-             *
-             * Mesh selection and primitive selection in this window are strictly
-             * isolated from the rendering graph. Inspected atlas regions serve
-             * as target regions for mesh mapping assignments and do not modify
-             * or interact with active graph nodes or material selections.
-             */
-            let selected_primitive = mesh_preview.selected_primitive;
+            // Atlas assignment
+            let selected_primitives: Vec<MeshPrimitiveSelection> =
+                if let Some(selection) = mesh_preview.selected_primitive {
+                    vec![selection]
+                } else if let Some((mesh_id, object_index)) = editor_ui.selected_mesh_object {
+                    mesh_scene_state
+                        .meshes
+                        .iter()
+                        .find(|mesh| mesh.id == mesh_id)
+                        .map(|mesh| {
+                            mesh.parts
+                                .iter()
+                                .filter(|part| part.object_index == object_index)
+                                .map(|part| MeshPrimitiveSelection {
+                                    mesh_id,
+                                    object_index: part.object_index,
+                                    primitive_index: part.primitive_index,
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
+
+            let has_selection = !selected_primitives.is_empty();
 
             let inspected_region = editor_ui.inspected_atlas_region.and_then(|index| {
                 atlas
@@ -168,26 +274,21 @@ pub fn meshes_window(
                 ui.label("Inspect an atlas region first");
             }
 
-            if selected_primitive.is_none() {
-                ui.label("Select a mesh");
+            if !has_selection {
+                ui.label("Select a mesh object or primitive");
             }
 
-            let can_assign = inspected_region.is_some() && selected_primitive.is_some();
+            let can_assign = inspected_region.is_some() && has_selection;
 
-            /*
-             * Determine whether the selected primitive is currently
-             * assigned to the inspected atlas region.
-             */
-            let is_assigned =
-                if let (Some(region), Some(selection)) = (inspected_region, selected_primitive) {
-                    region.has_mesh_assignment(
+            let is_assigned = inspected_region.is_some()
+                && has_selection
+                && selected_primitives.iter().all(|selection| {
+                    inspected_region.unwrap().has_mesh_assignment(
                         selection.mesh_id,
                         selection.object_index,
                         selection.primitive_index,
                     )
-                } else {
-                    false
-                };
+                });
 
             ui.horizontal(|ui| {
                 if is_assigned {
@@ -198,46 +299,30 @@ pub fn meshes_window(
                     );
 
                     if ui.button("Unassign").clicked() {
-                        if let Some(selection) = selected_primitive {
-                            if let Some(region_index) = editor_ui.inspected_atlas_region {
-                                if atlas
-                                    .materials
-                                    .iter()
-                                    .any(|region| region.index == region_index)
-                                {
-                                    let before = EditorSnapshot::capture(
-                                        atlas,
-                                        &editor_ui.project_settings,
-                                        mesh_scene_state,
-                                    );
+                        let before = EditorSnapshot::capture(
+                            atlas,
+                            &editor_ui.project_settings,
+                            mesh_scene_state,
+                        );
 
-                                    if let Some(region) = atlas
-                                        .materials
-                                        .iter_mut()
-                                        .find(|region| region.index == region_index)
-                                    {
-                                        region.unassign_mesh(
-                                            selection.mesh_id,
-                                            selection.object_index,
-                                            selection.primitive_index,
-                                        );
-
-                                        atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
-                                        history.push(before);
-                                    }
-                                }
+                        for selection in &selected_primitives {
+                            for region in &mut atlas.materials {
+                                region.unassign_mesh(
+                                    selection.mesh_id,
+                                    selection.object_index,
+                                    selection.primitive_index,
+                                );
                             }
                         }
+
+                        atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
+                        history.push(before);
                     }
                 } else {
                     let response =
                         ui.add_enabled(can_assign, egui::Button::new("Assign to Atlas Region"));
 
                     if response.clicked() {
-                        let Some(selection) = selected_primitive else {
-                            return;
-                        };
-
                         let Some(region_index) = editor_ui.inspected_atlas_region else {
                             return;
                         };
@@ -249,33 +334,33 @@ pub fn meshes_window(
                         );
 
                         /*
-                         * Remove this primitive from every atlas region
-                         * before assigning it to the new region.
-                         *
-                         * This maintains the invariant that a primitive
-                         * has at most one atlas assignment.
+                         * A primitive may only belong to one atlas region.
                          */
-                        for region in &mut atlas.materials {
-                            region.unassign_mesh(
-                                selection.mesh_id,
-                                selection.object_index,
-                                selection.primitive_index,
-                            );
+                        for selection in &selected_primitives {
+                            for region in &mut atlas.materials {
+                                region.unassign_mesh(
+                                    selection.mesh_id,
+                                    selection.object_index,
+                                    selection.primitive_index,
+                                );
+                            }
                         }
 
                         /*
-                         * Assign the primitive to the inspected atlas region.
+                         * Assign all selected primitives to the inspected region.
                          */
                         if let Some(region) = atlas
                             .materials
                             .iter_mut()
                             .find(|region| region.index == region_index)
                         {
-                            region.assign_mesh(
-                                selection.mesh_id,
-                                selection.object_index,
-                                selection.primitive_index,
-                            );
+                            for selection in &selected_primitives {
+                                region.assign_mesh(
+                                    selection.mesh_id,
+                                    selection.object_index,
+                                    selection.primitive_index,
+                                );
+                            }
 
                             atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
                             history.push(before);
@@ -286,15 +371,14 @@ pub fn meshes_window(
 
             ui.separator();
 
-            let has_selection = mesh_preview.selected_primitive.is_some();
+            let has_selection = mesh_preview.selected_primitive.is_some()
+                || editor_ui.selected_mesh_object.is_some();
 
             if ui
                 .add_enabled(has_selection, egui::Button::new("Delete Selected"))
                 .clicked()
             {
-                action_messages.write(EditorActionMessage::new(
-                    EditorAction::RemoveSelectedMeshPrimitive,
-                ));
+                action_messages.write(EditorActionMessage::new(EditorAction::RemoveSelectedMesh));
             }
         });
 

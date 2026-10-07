@@ -6,7 +6,7 @@ use bevy_egui::egui;
 use crate::{
     data::Atlas,
     history::{EditorHistory, EditorSnapshot},
-    mesh::{MeshLight, MeshSceneState},
+    mesh::{MeshLight, MeshSceneState, spawn_mesh_scene},
     project,
     project_settings::ProjectSettings,
     ui::EditorUi,
@@ -30,7 +30,7 @@ pub enum EditorAction {
     Redo,
 
     RemoveAtlasRegion,
-    RemoveSelectedMeshPrimitive,
+    RemoveSelectedMesh,
 
     PackAtlas,
 
@@ -290,8 +290,148 @@ pub fn execute_action(
             }
         }
 
-        EditorAction::RemoveSelectedMeshPrimitive => {
-            // Handled by the mesh viewport deletion system.
+        EditorAction::RemoveSelectedMesh => {
+            let Some((mesh_id, object_index)) = editor_ui.selected_mesh_object else {
+                // Primitive deletion is still handled by the viewport deletion system.
+                return;
+            };
+
+            let Some(mesh_position) = mesh_scene_state
+                .meshes
+                .iter()
+                .position(|mesh| mesh.id == mesh_id)
+            else {
+                editor_ui.selected_mesh_object = None;
+                return;
+            };
+
+            let before =
+                EditorSnapshot::capture(atlas, &editor_ui.project_settings, mesh_scene_state);
+
+            // Remove the object's atlas assignments and shift assignments
+            // belonging to objects that come after it.
+            for material in &mut atlas.materials {
+                material.mesh_assignments.retain_mut(|assignment| {
+                    if assignment.mesh_id != mesh_id {
+                        return true;
+                    }
+
+                    if assignment.object_index == object_index {
+                        return false;
+                    }
+
+                    if assignment.object_index > object_index {
+                        assignment.object_index -= 1;
+                    }
+
+                    true
+                });
+            }
+
+            // Remove the object from the source scene.
+            let mesh = &mut mesh_scene_state.meshes[mesh_position];
+
+            if object_index >= mesh.scene.objects.len() {
+                editor_ui.selected_mesh_object = None;
+                return;
+            }
+
+            mesh.scene.objects.remove(object_index);
+
+            // The previous part coordinates are no longer reliable after removing
+            // an object, so rebuild the part entries from the scene.
+            //
+            // Preserve visibility by matching the old entries using their old
+            // coordinates before replacing the list.
+            let old_parts = std::mem::take(&mut mesh.parts);
+
+            let mut parts = Vec::new();
+            let mut flat_index = 0;
+
+            for (new_object_index, object) in mesh.scene.objects.iter().enumerate() {
+                for (primitive_index, _) in object.primitives.iter().enumerate() {
+                    let old_object_index = if new_object_index >= object_index {
+                        new_object_index + 1
+                    } else {
+                        new_object_index
+                    };
+
+                    let visible = old_parts
+                        .iter()
+                        .find(|part| {
+                            part.object_index == old_object_index
+                                && part.primitive_index == primitive_index
+                        })
+                        .map(|part| part.visible)
+                        .unwrap_or(true);
+
+                    parts.push(crate::mesh::MeshPartEntry {
+                        index: flat_index,
+                        name: format!("Primitive {}", primitive_index + 1),
+                        visible,
+                        object_index: new_object_index,
+                        primitive_index,
+                    });
+
+                    flat_index += 1;
+                }
+            }
+
+            mesh.parts = parts;
+
+            // Remove the old ECS hierarchy.
+            if let Some(root) = mesh.root.take() {
+                commands.entity(root).despawn();
+            }
+
+            mesh.bounds_center = Vec3::ZERO;
+            mesh.bounds_radius = 0.0;
+
+            // Recreate the ECS hierarchy from the updated source scene.
+            let (root, parts, bounds_center, bounds_radius) = spawn_mesh_scene(
+                commands,
+                meshes,
+                &mesh.scene,
+                mesh.id,
+                mesh_preview.material.clone(),
+            );
+
+            mesh.root = Some(root);
+            mesh.parts = parts;
+            mesh.bounds_center = bounds_center;
+            mesh.bounds_radius = bounds_radius;
+
+            // Remove the deleted object from the expanded-object state and shift
+            // later object indices down by one.
+            let mut expanded_objects = std::collections::HashSet::new();
+
+            for &(expanded_mesh_id, expanded_object_index) in &editor_ui.expanded_mesh_objects {
+                if expanded_mesh_id != mesh_id {
+                    expanded_objects.insert((expanded_mesh_id, expanded_object_index));
+                    continue;
+                }
+
+                if expanded_object_index == object_index {
+                    continue;
+                }
+
+                let new_index = if expanded_object_index > object_index {
+                    expanded_object_index - 1
+                } else {
+                    expanded_object_index
+                };
+
+                expanded_objects.insert((expanded_mesh_id, new_index));
+            }
+
+            editor_ui.expanded_mesh_objects = expanded_objects;
+
+            editor_ui.selected_mesh_object = None;
+            mesh_preview.selected_primitive = None;
+            mesh_preview.selected_mesh_id = Some(mesh_id);
+            mesh_preview.uv_revision = mesh_preview.uv_revision.wrapping_add(1);
+
+            history.push(before);
         }
 
         EditorAction::PackAtlas => {

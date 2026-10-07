@@ -23,6 +23,7 @@ pub struct SavedHotkey {
     pub shift: bool,
     pub alt: bool,
     pub super_key: bool,
+    pub delete: bool,
 }
 
 impl Default for EditorSettings {

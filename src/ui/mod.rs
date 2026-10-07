@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use bevy::prelude::*;
 use bevy_egui::{EguiGlobalSettings, EguiPrimaryContextPass, PrimaryEguiContext, egui};
@@ -79,6 +79,8 @@ pub struct EditorUi {
     pub atlas_drag_snapshot: Option<EditorSnapshot>,
 
     pub selected_mesh: Option<u64>,
+    pub selected_mesh_object: Option<(u64, usize)>,
+    pub expanded_mesh_objects: HashSet<(u64, usize)>,
 
     pub expanded_meshes: std::collections::BTreeSet<u64>,
 
@@ -145,6 +147,8 @@ impl Default for EditorUi {
             atlas_drag_snapshot: None,
 
             selected_mesh: None,
+            selected_mesh_object: None,
+            expanded_mesh_objects: HashSet::new(),
 
             expanded_meshes: std::collections::BTreeSet::new(),
 
