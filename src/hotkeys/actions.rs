@@ -78,15 +78,13 @@ pub fn execute_action(
             editor_ui.dragging_atlas_region = None;
             editor_ui.drag_offset = egui::Vec2::ZERO;
 
-            editor_ui.selected_mesh = None;
-
             editor_ui.project_settings = ProjectSettings::default();
             editor_ui.project_path = None;
 
             editor_ui.atlas_zoom = 1.0;
             editor_ui.atlas_pan = egui::Vec2::ZERO;
 
-            crate::viewport::despawn_all_meshes(commands, mesh_scene_state);
+            crate::viewport::clear_all_meshes(commands, mesh_scene_state);
 
             editor_ui.mesh_import_path = None;
             editor_ui.mesh_import_paths.clear();
@@ -97,11 +95,21 @@ pub fn execute_action(
             mesh_preview.yaw = 0.0;
             mesh_preview.pitch = 0.3;
             mesh_preview.selected_primitive = None;
+
+            mesh_preview.clear_selection();
+
+            editor_ui.clear_mesh_selection();
         }
 
         EditorAction::OpenProject => match project::open_project_dialog() {
             Ok(Some(path)) => match project::ProjectFile::load(&path, images) {
                 Ok((mut loaded_atlas, project_settings, project_meshes)) => {
+                    crate::viewport::clear_all_meshes(commands, mesh_scene_state);
+
+                    mesh_preview.clear_selection();
+
+                    editor_ui.clear_mesh_selection();
+
                     loaded_atlas.load_textures(images);
 
                     *atlas = loaded_atlas;

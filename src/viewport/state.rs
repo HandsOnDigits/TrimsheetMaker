@@ -37,6 +37,15 @@ pub struct MeshPreview {
     pub uv_revision: u64,
 }
 
+impl MeshPreview {
+    pub fn clear_selection(&mut self) {
+        self.selected_mesh_id = None;
+        self.selected_primitive = None;
+        self.unwrapped_mesh_id = None;
+        self.unwrapped_scene = None;
+    }
+}
+
 #[derive(Resource, Default)]
 pub struct MeshViewportLayout {
     pub x: f32,

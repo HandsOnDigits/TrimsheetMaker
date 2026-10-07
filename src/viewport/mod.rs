@@ -86,3 +86,13 @@ impl Plugin for MeshPreviewPlugin {
             );
     }
 }
+
+pub fn clear_all_meshes(commands: &mut Commands, mesh_scene_state: &mut MeshSceneState) {
+    for mesh in &mut mesh_scene_state.meshes {
+        if let Some(root) = mesh.root.take() {
+            commands.entity(root).despawn();
+        }
+    }
+
+    mesh_scene_state.meshes.clear();
+}

@@ -139,6 +139,15 @@ pub struct EditorUi {
     pub show_status: bool,
 }
 
+impl EditorUi {
+    pub fn clear_mesh_selection(&mut self) {
+        self.selected_mesh = None;
+        self.selected_mesh_object = None;
+        self.expanded_meshes.clear();
+        self.expanded_mesh_objects.clear();
+    }
+}
+
 impl Default for EditorUi {
     fn default() -> Self {
         Self {

@@ -47,6 +47,9 @@ pub fn meshes_window(
             ui.separator();
 
             if mesh_scene_state.meshes.is_empty() {
+                editor_ui.clear_mesh_selection();
+                mesh_preview.clear_selection();
+
                 ui.label(egui::RichText::new("No meshes imported.").italics().weak());
                 return;
             }
