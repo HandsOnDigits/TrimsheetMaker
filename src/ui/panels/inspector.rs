@@ -2,9 +2,15 @@ use bevy_egui::egui;
 
 use super::{EditorUi, properties::properties_panel, rendering::rendering_panel};
 
-use crate::{data::Atlas, ui::InspectorTab};
+use crate::{data::Atlas, history::EditorHistory, mesh::MeshSceneState, ui::InspectorTab};
 
-pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
+pub fn inspector_panel(
+    ui: &mut egui::Ui,
+    editor_ui: &mut EditorUi,
+    atlas: &mut Atlas,
+    history: &mut EditorHistory,
+    mesh_scene_state: &MeshSceneState,
+) {
     ui.heading("Inspector");
 
     ui.horizontal(|ui| {
@@ -33,7 +39,7 @@ pub fn inspector_panel(ui: &mut egui::Ui, editor_ui: &mut EditorUi, atlas: &mut 
 
     match editor_ui.inspector_tab {
         InspectorTab::Properties => {
-            properties_panel(ui, editor_ui, atlas);
+            properties_panel(ui, editor_ui, atlas, history, mesh_scene_state);
         }
 
         InspectorTab::Rendering => {

@@ -77,6 +77,7 @@ pub struct EditorUi {
     pub project_path: Option<std::path::PathBuf>,
 
     pub atlas_drag_snapshot: Option<EditorSnapshot>,
+    pub properties_snapshot: Option<EditorSnapshot>,
 
     pub selected_mesh: Option<u64>,
     pub selected_mesh_object: Option<(u64, usize)>,
@@ -154,6 +155,7 @@ impl Default for EditorUi {
             project_path: None,
 
             atlas_drag_snapshot: None,
+            properties_snapshot: None,
 
             selected_mesh: None,
             selected_mesh_object: None,

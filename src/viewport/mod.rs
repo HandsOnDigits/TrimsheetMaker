@@ -1,4 +1,8 @@
 mod atlas;
+pub use atlas::{
+    AtlasRefresh, ensure_atlas_build_requested, finish_atlas_build, sync_atlas_images,
+};
+
 mod camera;
 mod deletion;
 mod lighting;
@@ -6,11 +10,11 @@ mod materials;
 mod picking;
 mod setup;
 mod state;
-mod visibility;
 
-pub use atlas::{
-    AtlasRefresh, ensure_atlas_build_requested, finish_atlas_build, sync_atlas_images,
-};
+mod uv;
+pub use uv::{MeshUvSyncState, sync_mesh_uvs};
+
+mod visibility;
 
 pub use camera::orbit_camera;
 
@@ -54,6 +58,7 @@ impl Plugin for MeshPreviewPlugin {
             .init_resource::<MeshSceneState>()
             .init_resource::<AtlasRefresh>()
             .init_resource::<MeshPreviewMaterials>()
+            .init_resource::<MeshUvSyncState>()
             .add_systems(Startup, (setup_mesh_preview, spawn_mesh_viewport).chain())
             .add_systems(
                 EguiPrimaryContextPass,
@@ -75,6 +80,7 @@ impl Plugin for MeshPreviewPlugin {
                     sync_atlas_to_mesh_preview_material.after(finish_atlas_build),
                     sync_mesh_preview_material_assignments
                         .after(sync_atlas_to_mesh_preview_material),
+                    sync_mesh_uvs.after(sync_mesh_preview_material_assignments),
                     update_mesh_light,
                 ),
             );

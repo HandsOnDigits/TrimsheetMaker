@@ -129,7 +129,13 @@ pub fn editor_ui(
                 .default_size(320.0)
                 .size_range(220.0..=500.0)
                 .show(&mut root_ui, |ui| {
-                    inspector_panel(ui, &mut editor_ui, &mut atlas);
+                    inspector_panel(
+                        ui,
+                        &mut editor_ui,
+                        &mut atlas,
+                        &mut *history,
+                        &mesh_scene_state,
+                    );
                 });
         }
     }
