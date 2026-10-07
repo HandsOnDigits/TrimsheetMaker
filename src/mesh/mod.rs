@@ -1,3 +1,5 @@
+mod topology;
+
 pub mod import;
 use import::{MeshMaterialRef, MeshScene};
 

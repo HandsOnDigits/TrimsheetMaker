@@ -212,6 +212,7 @@ fn action_display_name(action: EditorAction) -> &'static str {
         EditorAction::RemoveSelectedMeshPrimitive => "Remove Selected Mesh Primitive",
 
         EditorAction::PackAtlas => "Pack Atlas",
+
         EditorAction::ResetViewport => "Reset Atlas View",
 
         EditorAction::Undo => "Undo",

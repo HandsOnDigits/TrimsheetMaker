@@ -864,6 +864,31 @@ impl Atlas {
             self.image_revision = self.image_revision.wrapping_add(1);
         }
     }
+
+    pub fn add_material_from_existing(&mut self, source: &AtlasMaterial, name: String) -> usize {
+        let index = self.next_index();
+
+        self.materials.push(AtlasMaterial {
+            index,
+            name,
+            material_ref: source.material_ref.clone(),
+            textures: source
+                .textures
+                .iter()
+                .map(|texture| MaterialTexture {
+                    id: texture.id.clone(),
+                    path: texture.path.clone(),
+                    group_id: texture.group_id.clone(),
+                    image: texture.image.clone(),
+                    egui_texture: None,
+                })
+                .collect(),
+            transform: Transform::default(),
+            mesh_assignments: Vec::new(),
+        });
+
+        index
+    }
 }
 
 impl Default for Atlas {

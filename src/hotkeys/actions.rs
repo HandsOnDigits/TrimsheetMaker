@@ -31,6 +31,7 @@ pub enum EditorAction {
 
     RemoveAtlasRegion,
     RemoveSelectedMeshPrimitive,
+
     PackAtlas,
 
     ResetViewport,
