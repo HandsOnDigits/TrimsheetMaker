@@ -209,7 +209,6 @@ pub fn editor_ui(
             &mut editor_ui,
             &mut atlas,
             &keyboard,
-            &mesh_preview,
             &mesh_scene_state,
             &mut *history,
         );

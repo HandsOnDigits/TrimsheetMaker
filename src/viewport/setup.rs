@@ -71,10 +71,7 @@ pub fn setup_mesh_preview(
         yaw: 0.0,
         pitch: 0.3,
 
-        uv_mode: crate::mesh::unwrap::MeshUvMode::Imported,
-        unwrapped_scene: None,
         selected_mesh_id: None,
-        unwrapped_mesh_id: None,
         selected_primitive: None,
 
         material,

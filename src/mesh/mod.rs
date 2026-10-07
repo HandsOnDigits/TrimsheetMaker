@@ -3,8 +3,6 @@ mod topology;
 pub mod import;
 use import::{MeshMaterialRef, MeshScene};
 
-pub mod unwrap;
-
 use bevy::{asset::RenderAssetUsages, mesh::PrimitiveTopology, prelude::*};
 
 use crate::viewport::MeshPreviewMaterial;

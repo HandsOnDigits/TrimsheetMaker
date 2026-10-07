@@ -6,7 +6,6 @@ use crate::{
         MeshSceneState,
         import::{self, MeshBackend, MeshImportSettings},
         spawn_mesh_scene,
-        unwrap::MeshUvMode,
     },
     ui::EditorUi,
     viewport::MeshPreview,
@@ -165,9 +164,6 @@ pub fn import_mesh_window(
                                 );
 
                                 mesh_preview.selected_mesh_id = Some(mesh_id);
-                                mesh_preview.uv_mode = MeshUvMode::Imported;
-                                mesh_preview.unwrapped_mesh_id = None;
-                                mesh_preview.unwrapped_scene = None;
 
                                 imported += 1;
                             }

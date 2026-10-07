@@ -7,10 +7,7 @@ use crate::{
     data::Atlas,
     history::EditorHistory,
     hotkeys::{EditorAction, HotkeyManager, execute_action},
-    mesh::{
-        MeshLight, MeshSceneState,
-        unwrap::{MeshUvMode, unwrap_current_mesh},
-    },
+    mesh::{MeshLight, MeshSceneState},
     viewport::MeshPreview,
 };
 
@@ -214,37 +211,6 @@ pub fn toolbar(
                 ui.close();
             }
         });
-
-        ui.separator();
-
-        ui.label("UVs:");
-
-        egui::ComboBox::from_id_salt("mesh_uv_mode")
-            .selected_text(match mesh_preview.uv_mode {
-                MeshUvMode::Imported => "Imported",
-                MeshUvMode::Unwrapped => "Unwrapped",
-            })
-            .show_ui(ui, |ui| {
-                ui.selectable_value(&mut mesh_preview.uv_mode, MeshUvMode::Imported, "Imported");
-
-                if mesh_preview.unwrapped_mesh_id.is_some() {
-                    ui.selectable_value(
-                        &mut mesh_preview.uv_mode,
-                        MeshUvMode::Unwrapped,
-                        "Unwrapped",
-                    );
-                }
-            });
-
-        if ui.button("Unwrap UVs").clicked() {
-            if let Some(mesh_id) = mesh_preview.selected_mesh_id {
-                if let Some(mesh) = mesh_scene_state.get(mesh_id) {
-                    if let Err(error) = unwrap_current_mesh(mesh_preview, mesh_id, &mesh.scene) {
-                        error!("Failed to unwrap mesh: {error:#}");
-                    }
-                }
-            }
-        }
 
         ui.separator();
 

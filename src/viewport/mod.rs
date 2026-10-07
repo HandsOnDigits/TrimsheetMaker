@@ -6,7 +6,6 @@ mod materials;
 mod picking;
 mod setup;
 mod state;
-mod uv;
 mod visibility;
 
 pub use atlas::{
@@ -33,11 +32,8 @@ pub use setup::{
 
 pub use state::{
     MeshPreview, MeshPreviewCamera, MeshPreviewLightSource, MeshPreviewMaterials,
-    MeshPreviewRenderTarget, MeshUvSyncState, MeshViewportInput, MeshViewportLayout,
-    MeshViewportSection,
+    MeshPreviewRenderTarget, MeshViewportInput, MeshViewportLayout, MeshViewportSection,
 };
-
-pub use uv::sync_mesh_uv_mode;
 
 pub use visibility::sync_mesh_visibility;
 
@@ -56,7 +52,6 @@ impl Plugin for MeshPreviewPlugin {
             .init_resource::<MeshViewportInput>()
             .init_resource::<MeshViewportPicking>()
             .init_resource::<MeshSceneState>()
-            .init_resource::<MeshUvSyncState>()
             .init_resource::<AtlasRefresh>()
             .init_resource::<MeshPreviewMaterials>()
             .add_systems(Startup, (setup_mesh_preview, spawn_mesh_viewport).chain())
@@ -74,7 +69,6 @@ impl Plugin for MeshPreviewPlugin {
                 (
                     resize_mesh_preview_render_target,
                     sync_mesh_visibility,
-                    sync_mesh_uv_mode,
                     ensure_atlas_build_requested,
                     sync_atlas_images,
                     finish_atlas_build,

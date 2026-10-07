@@ -9,7 +9,6 @@ use crate::{
     mesh::MeshSceneState,
     transform::Rotation,
     ui::EditorUi,
-    viewport::MeshPreview,
 };
 
 pub fn atlas_view(
@@ -17,7 +16,6 @@ pub fn atlas_view(
     editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
     keyboard: &ButtonInput<KeyCode>,
-    mesh_preview: &MeshPreview,
     mesh_scene_state: &MeshSceneState,
     history: &mut EditorHistory,
 ) {
@@ -104,7 +102,6 @@ pub fn atlas_view(
         viewport_rect,
         editor_ui,
         atlas,
-        mesh_preview,
         mesh_scene_state,
         &editor_ui.project_settings.texture_naming,
     );
@@ -115,7 +112,6 @@ fn draw_atlas(
     viewport: egui::Rect,
     editor_ui: &EditorUi,
     atlas: &Atlas,
-    mesh_preview: &MeshPreview,
     mesh_scene_state: &MeshSceneState,
     texture_naming: &TextureNaming,
 ) {
@@ -149,13 +145,7 @@ fn draw_atlas(
 
         draw_material_region(painter, rect, atlas_material, preview_group, texture_naming);
 
-        draw_uv_overlay(
-            painter,
-            rect,
-            atlas_material,
-            mesh_preview,
-            mesh_scene_state,
-        );
+        draw_uv_overlay(painter, rect, atlas_material, mesh_scene_state);
     }
 }
 
@@ -300,7 +290,6 @@ fn draw_uv_overlay(
     painter: &egui::Painter,
     material_rect: egui::Rect,
     material: &AtlasMaterial,
-    mesh_preview: &MeshPreview,
     mesh_scene_state: &MeshSceneState,
 ) {
     let stroke = egui::Stroke::new(
@@ -321,24 +310,8 @@ fn draw_uv_overlay(
             continue;
         };
 
-        let (uvs, indices): (&[[f32; 2]], &[u32]) = if mesh_preview.uv_mode
-            == crate::mesh::unwrap::MeshUvMode::Unwrapped
-            && mesh_preview.unwrapped_mesh_id == Some(assignment.mesh_id)
-        {
-            let Some(unwrapped_scene) = mesh_preview.unwrapped_scene.as_ref() else {
-                continue;
-            };
-
-            let Some(unwrapped) =
-                unwrapped_scene.primitive(assignment.object_index, assignment.primitive_index)
-            else {
-                continue;
-            };
-
-            (&unwrapped.uvs, &unwrapped.indices)
-        } else {
-            (&primitive.uvs, &primitive.indices)
-        };
+        let uvs = &primitive.uvs;
+        let indices = &primitive.indices;
 
         for triangle in indices.chunks_exact(3) {
             let ia = triangle[0] as usize;
@@ -358,15 +331,11 @@ fn draw_uv_overlay(
             };
 
             let a = transform_material_uv(a, material.transform.rotation);
-
             let b = transform_material_uv(b, material.transform.rotation);
-
             let c = transform_material_uv(c, material.transform.rotation);
 
             let a = material_uv_to_screen(a, material_rect);
-
             let b = material_uv_to_screen(b, material_rect);
-
             let c = material_uv_to_screen(c, material_rect);
 
             painter.line_segment([a, b], stroke);
