@@ -2,8 +2,6 @@ use std::collections::HashMap;
 
 use super::{MeshScene, import::MeshPrimitive};
 
-use crate::transform::UvTransform;
-
 fn connected_face_components(indices: &[u32]) -> Vec<Vec<usize>> {
     let face_count = indices.len() / 3;
 
@@ -132,7 +130,6 @@ impl MeshPrimitive {
                     uvs,
                     indices,
                     material: self.material.clone(),
-                    uv_transform: UvTransform::default(),
                 }
             })
             .collect()

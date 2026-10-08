@@ -15,8 +15,7 @@ use crate::{
         spawn_mesh_scene,
     },
     project_settings::ProjectSettings,
-    transform::Transform,
-    transform::UvTransform,
+    transform::{Transform, UvTransform},
     ui::EditorUi,
     viewport::MeshPreview,
 };
@@ -37,9 +36,6 @@ pub struct ProjectMeshPrimitive {
 
     #[serde(default)]
     pub visible: bool,
-
-    #[serde(default)]
-    pub uv_transform: UvTransform,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -153,6 +149,7 @@ impl ProjectFile {
                             mesh_id: assignment.mesh_id,
                             object_index: assignment.object_index,
                             primitive_index: assignment.primitive_index,
+                            uv_transform: assignment.uv_transform,
                         })
                         .collect(),
                 })
@@ -241,6 +238,7 @@ impl ProjectFile {
                         mesh_id: assignment.mesh_id,
                         object_index: assignment.object_index,
                         primitive_index: assignment.primitive_index,
+                        uv_transform: assignment.uv_transform,
                     })
                     .collect(),
             })
@@ -408,6 +406,9 @@ pub struct ProjectMaterialMeshAssignment {
     pub mesh_id: u64,
     pub object_index: usize,
     pub primitive_index: usize,
+
+    #[serde(default)]
+    pub uv_transform: UvTransform,
 }
 
 pub fn save_project_as_dialog(
@@ -493,7 +494,6 @@ fn project_mesh_object_from_runtime(
                     indices: primitive.indices.clone(),
                     material: primitive.material.clone(),
                     visible,
-                    uv_transform: primitive.uv_transform,
                 }
             })
             .collect(),
@@ -521,7 +521,6 @@ fn runtime_mesh_scene_from_project(project_mesh: &ProjectMesh) -> crate::mesh::i
                         uvs: primitive.uvs.clone(),
                         indices: primitive.indices.clone(),
                         material: primitive.material.clone(),
-                        uv_transform: primitive.uv_transform,
                     })
                     .collect(),
             })

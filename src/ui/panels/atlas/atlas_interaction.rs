@@ -5,6 +5,7 @@ use crate::{
     data::{Atlas, AtlasMaterial},
     history::{EditorHistory, EditorSnapshot},
     mesh::MeshSceneState,
+    transform::UvTransform,
     ui::EditorUi,
     viewport::{MeshPreview, TransformMode},
 };
@@ -44,13 +45,6 @@ pub fn handle_material_drag(
     let atlas_rect = atlas_screen_rect(viewport, editor_ui, atlas);
 
     if response.drag_started_by(egui::PointerButton::Primary) {
-        // Select the region immediately when dragging starts.
-        if let Some(pointer) = response.interact_pointer_pos() {
-            if let Some(index) = atlas_material_at_position(pointer, atlas_rect, editor_ui, atlas) {
-                editor_ui.inspected_atlas_region = Some(index);
-            }
-        }
-
         editor_ui.atlas_drag_snapshot = Some(EditorSnapshot::capture(
             atlas,
             &editor_ui.project_settings,
@@ -66,7 +60,7 @@ pub fn handle_material_drag(
 
     if response.dragged_by(egui::PointerButton::Primary) {
         if mesh_preview.transform_mode == TransformMode::Uv {
-            drag_uv(response, editor_ui, atlas, mesh_scene_state);
+            drag_uv(response, editor_ui, atlas);
         } else {
             drag_atlas_region(response, atlas_rect, editor_ui, atlas);
         }
@@ -102,53 +96,54 @@ fn start_uv_drag(
         return;
     };
 
-    editor_ui.inspected_atlas_region = Some(index);
-
     let Some(material) = atlas.materials.iter().find(|m| m.index == index) else {
         return;
     };
 
-    let mut starts = Vec::new();
+    let Some((mesh_id, object_index, primitive_index, uv_transform)) =
+        material.mesh_assignments.iter().find_map(|assignment| {
+            let mesh = mesh_scene_state.get(assignment.mesh_id)?;
 
-    for assignment in &material.mesh_assignments {
-        let Some(mesh) = mesh_scene_state.get(assignment.mesh_id) else {
-            continue;
-        };
+            let object = mesh.scene.objects.get(assignment.object_index)?;
 
-        let Some(object) = mesh.scene.objects.get(assignment.object_index) else {
-            continue;
-        };
+            let primitive = object.primitives.get(assignment.primitive_index)?;
 
-        let Some(primitive) = object.primitives.get(assignment.primitive_index) else {
-            continue;
-        };
+            if uv_assignment_contains_pointer(
+                pointer,
+                atlas_rect,
+                editor_ui,
+                material,
+                primitive,
+                assignment.uv_transform,
+            ) {
+                Some((
+                    assignment.mesh_id,
+                    assignment.object_index,
+                    assignment.primitive_index,
+                    assignment.uv_transform,
+                ))
+            } else {
+                None
+            }
+        })
+    else {
+        return;
+    };
 
-        starts.push((
-            assignment.mesh_id,
-            assignment.object_index,
-            assignment.primitive_index,
-            primitive.uv_transform,
-        ));
-    }
+    editor_ui.inspected_atlas_region = Some(index);
 
-    editor_ui.atlas_uv_drag_start = Some(starts);
+    editor_ui.selected_uv_assignment = Some((mesh_id, object_index, primitive_index));
+
+    editor_ui.atlas_uv_drag_start =
+        Some(vec![(mesh_id, object_index, primitive_index, uv_transform)]);
 }
 
-fn drag_uv(
-    response: &egui::Response,
-    editor_ui: &EditorUi,
-    atlas: &Atlas,
-    mesh_scene_state: &mut MeshSceneState,
-) {
+fn drag_uv(response: &egui::Response, editor_ui: &EditorUi, atlas: &mut Atlas) {
     let Some(index) = editor_ui.inspected_atlas_region else {
         return;
     };
 
     let Some(starts) = &editor_ui.atlas_uv_drag_start else {
-        return;
-    };
-
-    let Some(material) = atlas.materials.iter().find(|m| m.index == index) else {
         return;
     };
 
@@ -160,32 +155,44 @@ fn drag_uv(
         return;
     };
 
+    let Some(material) = atlas
+        .materials
+        .iter()
+        .find(|material| material.index == index)
+    else {
+        return;
+    };
+
     let delta = pointer - start_pointer;
 
     let atlas_zoom = editor_ui.atlas_zoom.max(0.0001);
 
-    let width = material.transform.rotated_width().max(1) as f32;
-    let height = material.transform.rotated_height().max(1) as f32;
+    let width = material.transform.width.max(1) as f32;
+    let height = material.transform.height.max(1) as f32;
 
     let uv_delta = Vec2::new(delta.x / atlas_zoom / width, -delta.y / atlas_zoom / height);
 
+    let Some(material) = atlas
+        .materials
+        .iter_mut()
+        .find(|material| material.index == index)
+    else {
+        return;
+    };
+
     for &(mesh_id, object_index, primitive_index, start) in starts {
-        let Some(mesh) = mesh_scene_state.get_mut(mesh_id) else {
+        let Some(assignment) = material.mesh_assignments.iter_mut().find(|assignment| {
+            assignment.mesh_id == mesh_id
+                && assignment.object_index == object_index
+                && assignment.primitive_index == primitive_index
+        }) else {
             continue;
         };
 
-        let Some(object) = mesh.scene.objects.get_mut(object_index) else {
-            continue;
-        };
-
-        let Some(primitive) = object.primitives.get_mut(primitive_index) else {
-            continue;
-        };
-
-        primitive.uv_transform.translation = start.translation + uv_delta;
+        assignment.uv_transform.translation = start.translation + uv_delta;
     }
 
-    mesh_scene_state.mark_uv_dirty();
+    atlas.mark_uv_dirty();
 }
 
 fn start_atlas_region_drag(
@@ -201,6 +208,8 @@ fn start_atlas_region_drag(
     let Some(index) = atlas_material_at_position(pointer, atlas_rect, editor_ui, atlas) else {
         return;
     };
+
+    editor_ui.inspected_atlas_region = Some(index);
 
     let atlas_position = screen_to_atlas(pointer, atlas_rect, editor_ui.atlas_zoom);
 
@@ -292,4 +301,121 @@ pub fn material_rect_in_atlas(atlas_material: &AtlasMaterial) -> egui::Rect {
         egui::pos2(transform.x as f32, transform.y as f32),
         egui::vec2(width, height),
     )
+}
+
+fn uv_assignment_contains_pointer(
+    pointer: egui::Pos2,
+    atlas_rect: egui::Rect,
+    editor_ui: &EditorUi,
+    material: &AtlasMaterial,
+    primitive: &crate::mesh::import::MeshPrimitive,
+    uv_transform: crate::transform::UvTransform,
+) -> bool {
+    if primitive.uvs.is_empty() || primitive.indices.is_empty() {
+        return false;
+    }
+
+    let atlas_position = screen_to_atlas(pointer, atlas_rect, editor_ui.atlas_zoom);
+
+    let transform = &material.transform;
+
+    let material_width = transform.rotated_width() as f32;
+    let material_height = transform.rotated_height() as f32;
+
+    if material_width <= 0.0 || material_height <= 0.0 {
+        return false;
+    }
+
+    let local_x = (atlas_position.x - transform.x as f32) / material_width;
+
+    let local_y = (atlas_position.y - transform.y as f32) / material_height;
+
+    if !(0.0..=1.0).contains(&local_x) || !(0.0..=1.0).contains(&local_y) {
+        return false;
+    }
+
+    let material_uv =
+        inverse_material_rotation(Vec2::new(local_x, 1.0 - local_y), transform.rotation);
+
+    let pivot = UvTransform::uv_center(&primitive.uvs);
+
+    let uv = inverse_uv_transform(material_uv, pivot, uv_transform);
+
+    for triangle in primitive.indices.chunks_exact(3) {
+        let a = triangle[0] as usize;
+        let b = triangle[1] as usize;
+        let c = triangle[2] as usize;
+
+        let Some(&a) = primitive.uvs.get(a) else {
+            continue;
+        };
+
+        let Some(&b) = primitive.uvs.get(b) else {
+            continue;
+        };
+
+        let Some(&c) = primitive.uvs.get(c) else {
+            continue;
+        };
+
+        if point_in_triangle(
+            uv,
+            Vec2::from_array(a),
+            Vec2::from_array(b),
+            Vec2::from_array(c),
+        ) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn inverse_uv_transform(uv: Vec2, pivot: Vec2, transform: crate::transform::UvTransform) -> Vec2 {
+    let mut result = uv - pivot - transform.translation;
+
+    let inverse_rotation = bevy::math::Mat2::from_angle(-transform.rotation);
+
+    result = inverse_rotation * result;
+
+    if transform.scale.x.abs() > f32::EPSILON {
+        result.x /= transform.scale.x;
+    }
+
+    if transform.scale.y.abs() > f32::EPSILON {
+        result.y /= transform.scale.y;
+    }
+
+    result + pivot
+}
+
+fn inverse_material_rotation(uv: Vec2, rotation: crate::transform::Rotation) -> Vec2 {
+    match rotation {
+        crate::transform::Rotation::Deg0 => uv,
+
+        crate::transform::Rotation::Deg90 => Vec2::new(uv.y, 1.0 - uv.x),
+
+        crate::transform::Rotation::Deg180 => Vec2::new(1.0 - uv.x, 1.0 - uv.y),
+
+        crate::transform::Rotation::Deg270 => Vec2::new(1.0 - uv.y, uv.x),
+    }
+}
+
+fn point_in_triangle(point: Vec2, a: Vec2, b: Vec2, c: Vec2) -> bool {
+    let ab = b - a;
+    let bc = c - b;
+    let ca = a - c;
+
+    let ap = point - a;
+    let bp = point - b;
+    let cp = point - c;
+
+    let cross1 = ab.perp_dot(ap);
+    let cross2 = bc.perp_dot(bp);
+    let cross3 = ca.perp_dot(cp);
+
+    let epsilon = 0.00001;
+
+    (cross1 >= -epsilon && cross2 >= -epsilon && cross3 >= -epsilon)
+        || (cross1 <= epsilon && cross2 <= epsilon && cross3 <= epsilon)
 }

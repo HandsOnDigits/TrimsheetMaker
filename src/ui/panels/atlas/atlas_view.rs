@@ -353,21 +353,21 @@ fn draw_uv_overlay(
             let a = transform_uv(
                 a,
                 pivot,
-                primitive.uv_transform,
+                assignment.uv_transform,
                 material.transform.rotation,
             );
 
             let b = transform_uv(
                 b,
                 pivot,
-                primitive.uv_transform,
+                assignment.uv_transform,
                 material.transform.rotation,
             );
 
             let c = transform_uv(
                 c,
                 pivot,
-                primitive.uv_transform,
+                assignment.uv_transform,
                 material.transform.rotation,
             );
 

@@ -14,7 +14,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::transform::{Rotation, Transform};
+use crate::transform::{Rotation, Transform, UvTransform};
 
 use super::{
     mesh::import::MeshMaterialRef,
@@ -882,6 +882,7 @@ pub struct MaterialMeshAssignment {
     pub mesh_id: u64,
     pub object_index: usize,
     pub primitive_index: usize,
+    pub uv_transform: UvTransform,
 }
 
 pub struct AtlasMaterial {
@@ -919,6 +920,7 @@ impl AtlasMaterial {
             mesh_id,
             object_index,
             primitive_index,
+            uv_transform: UvTransform::default(),
         });
     }
 

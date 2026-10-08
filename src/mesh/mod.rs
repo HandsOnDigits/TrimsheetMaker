@@ -48,21 +48,15 @@ pub struct ImportedMeshRoot {
 pub struct MeshSceneState {
     pub meshes: Vec<MeshEntry>,
     pub next_id: u64,
-    pub uv_revision: u64,
 }
 
 impl MeshSceneState {
-    pub fn mark_uv_dirty(&mut self) {
-        self.uv_revision = self.uv_revision.wrapping_add(1);
-    }
-
     pub fn restore_document(
         &mut self,
         meshes: Vec<(u64, String, std::path::PathBuf, bool, import::MeshScene)>,
     ) {
         self.meshes.clear();
         self.next_id = 0;
-        self.uv_revision = 0;
 
         for (id, name, path, visible, scene) in meshes {
             self.next_id = self.next_id.max(id.saturating_add(1));

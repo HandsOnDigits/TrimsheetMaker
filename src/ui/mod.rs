@@ -84,6 +84,7 @@ pub struct EditorUi {
     pub selected_mesh: Option<u64>,
     pub selected_mesh_object: Option<(u64, usize)>,
     pub expanded_mesh_objects: HashSet<(u64, usize)>,
+    pub selected_uv_assignment: Option<(u64, usize, usize)>,
 
     pub expanded_meshes: std::collections::BTreeSet<u64>,
 
@@ -159,6 +160,7 @@ impl Default for EditorUi {
             atlas_drag_snapshot: None,
             atlas_uv_drag_start: None,
             properties_snapshot: None,
+            selected_uv_assignment: None,
 
             selected_mesh: None,
             selected_mesh_object: None,

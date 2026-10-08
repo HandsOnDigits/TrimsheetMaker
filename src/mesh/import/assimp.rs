@@ -7,17 +7,14 @@ use std::{
 
 use libloading::Library;
 
-use crate::{
-    mesh::{
-        import::assimp_sys::{
-            AI_PROCESS_CALC_TANGENT_SPACE, AI_PROCESS_GEN_SMOOTH_NORMALS,
-            AI_PROCESS_JOIN_IDENTICAL_VERTICES, AI_PROCESS_TRIANGULATE, AiScene,
-        },
-        import::{
-            MeshImportError, MeshMaterialRef, MeshObject, MeshPrimitive, MeshScene, MeshTransform,
-        },
+use crate::mesh::{
+    import::assimp_sys::{
+        AI_PROCESS_CALC_TANGENT_SPACE, AI_PROCESS_GEN_SMOOTH_NORMALS,
+        AI_PROCESS_JOIN_IDENTICAL_VERTICES, AI_PROCESS_TRIANGULATE, AiScene,
     },
-    transform::UvTransform,
+    import::{
+        MeshImportError, MeshMaterialRef, MeshObject, MeshPrimitive, MeshScene, MeshTransform,
+    },
 };
 
 #[derive(Debug)]
@@ -501,7 +498,6 @@ unsafe fn convert_mesh(
         uvs,
         indices,
         material,
-        uv_transform: UvTransform::default(),
     }))
 }
 

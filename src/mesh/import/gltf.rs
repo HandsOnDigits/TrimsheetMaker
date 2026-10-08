@@ -7,8 +7,6 @@ use super::{
     generate_mikktspace_tangents,
 };
 
-use crate::transform::UvTransform;
-
 pub fn import(path: &Path) -> Result<MeshScene, MeshImportError> {
     let (document, buffers, _images) =
         gltf::import(path).map_err(|error| MeshImportError::Other(error.to_string()))?;
@@ -183,7 +181,6 @@ fn convert_primitive(
         uvs,
         indices,
         material,
-        uv_transform: UvTransform::default(),
     })
 }
 

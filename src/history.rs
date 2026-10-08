@@ -9,7 +9,7 @@ use crate::{
         import::{MeshMaterialRef, MeshScene},
     },
     project_settings::ProjectSettings,
-    transform::Transform,
+    transform::{Transform, UvTransform},
 };
 
 #[derive(Debug, Clone)]
@@ -132,6 +132,7 @@ impl AtlasMaterialSnapshot {
                     mesh_id: assignment.mesh_id,
                     object_index: assignment.object_index,
                     primitive_index: assignment.primitive_index,
+                    uv_transform: assignment.uv_transform,
                 })
                 .collect(),
         }
@@ -164,6 +165,7 @@ impl AtlasMaterialSnapshot {
                     mesh_id: assignment.mesh_id,
                     object_index: assignment.object_index,
                     primitive_index: assignment.primitive_index,
+                    uv_transform: assignment.uv_transform,
                 })
                 .collect(),
         }
@@ -194,6 +196,7 @@ pub struct MaterialMeshAssignmentSnapshot {
     pub mesh_id: u64,
     pub object_index: usize,
     pub primitive_index: usize,
+    pub uv_transform: UvTransform,
 }
 
 #[derive(Debug, Clone)]
