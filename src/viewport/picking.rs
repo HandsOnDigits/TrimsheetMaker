@@ -1,6 +1,13 @@
-use bevy::{prelude::*, window::PrimaryWindow};
+use bevy::{
+    pbr::wireframe::{Wireframe, WireframeColor, WireframeLineWidth},
+    prelude::*,
+    window::PrimaryWindow,
+};
 
-use crate::mesh::{ImportedMeshPart, MeshSceneState};
+use crate::{
+    mesh::{ImportedMeshPart, MeshSceneState},
+    ui::EditorUi,
+};
 
 use super::{MeshPreview, MeshPreviewCamera, MeshViewportInput, MeshViewportLayout};
 
@@ -236,5 +243,59 @@ fn ray_triangle_intersection(
         Some(distance)
     } else {
         None
+    }
+}
+
+pub fn sync_mesh_primitive_wireframe(
+    mesh_preview: Res<MeshPreview>,
+    mesh_scene_state: Res<MeshSceneState>,
+    editor_ui: Res<EditorUi>,
+    mut commands: Commands,
+    parts: Query<(Entity, &ImportedMeshPart)>,
+) {
+    let selected = mesh_preview.selected_primitive;
+
+    for (entity, part) in &parts {
+        let is_selected = selected.is_some_and(|selected| {
+            if selected.mesh_id != part.mesh_id {
+                return false;
+            }
+
+            let Some(mesh_entry) = mesh_scene_state.get(part.mesh_id) else {
+                return false;
+            };
+
+            let Some(mesh_part) = mesh_entry
+                .parts
+                .iter()
+                .find(|entry| entry.index == part.part_index)
+            else {
+                return false;
+            };
+
+            selected.object_index == mesh_part.object_index
+                && selected.primitive_index == mesh_part.primitive_index
+        });
+
+        if is_selected && editor_ui.project_settings.highlights.mesh.enabled {
+            let highlight = &editor_ui.project_settings.highlights.mesh;
+
+            commands.entity(entity).insert((
+                Wireframe,
+                WireframeColor {
+                    color: Color::srgba(
+                        highlight.color[0],
+                        highlight.color[1],
+                        highlight.color[2],
+                        highlight.color[3] * highlight.strength,
+                    ),
+                },
+                WireframeLineWidth { width: 1.0 },
+            ));
+        } else {
+            commands
+                .entity(entity)
+                .remove::<(Wireframe, WireframeColor, WireframeLineWidth)>();
+        }
     }
 }

@@ -8,7 +8,6 @@ use bevy::{
 
 use crate::{
     data::{Atlas, AtlasMaterial, TextureNaming},
-    mesh::{ImportedMeshPart, MeshSceneState},
     rendering::DefaultTextures,
     ui::EditorUi,
 };
@@ -79,77 +78,16 @@ pub fn sync_atlas_to_mesh_preview_material(
             handle
         };
 
-        let Some(mut material) = materials.get_mut(&handle) else {
-            continue;
-        };
-
-        sync_preview_material(
-            &mut material.extension,
-            atlas_material,
-            &atlas,
-            &editor_ui.project_settings.texture_naming,
-            &default_textures,
-        );
-    }
-}
-
-pub fn sync_mesh_preview_material_assignments(
-    atlas: Res<Atlas>,
-    preview_materials: Res<MeshPreviewMaterials>,
-    mesh_scene_state: Res<MeshSceneState>,
-    mut commands: Commands,
-    parts: Query<(Entity, &ImportedMeshPart)>,
-) {
-    for (entity, part) in parts.iter() {
-        let Some(mesh_entry) = mesh_scene_state.get(part.mesh_id) else {
-            if let Some(handle) = &preview_materials.default {
-                commands
-                    .entity(entity)
-                    .insert(MeshMaterial3d(handle.clone()));
-            }
-
-            continue;
-        };
-
-        let Some(mesh_part) = mesh_entry
-            .parts
-            .iter()
-            .find(|entry| entry.index == part.part_index)
-        else {
-            if let Some(handle) = &preview_materials.default {
-                commands
-                    .entity(entity)
-                    .insert(MeshMaterial3d(handle.clone()));
-            }
-
-            continue;
-        };
-
-        let object_index = mesh_part.object_index;
-        let primitive_index = mesh_part.primitive_index;
-
-        let Some(atlas_material) = atlas.materials.iter().find(|material| {
-            material.has_mesh_assignment(part.mesh_id, object_index, primitive_index)
-        }) else {
-            if let Some(handle) = &preview_materials.default {
-                commands
-                    .entity(entity)
-                    .insert(MeshMaterial3d(handle.clone()));
-            }
-
-            continue;
-        };
-
-        let Some(handle) = preview_materials
-            .by_atlas_material
-            .get(&atlas_material.index)
-        else {
-            continue;
-        };
-
-        commands
-            .entity(entity)
-            .insert(MeshMaterial3d(handle.clone()));
+        // Normal material.
+        if let Some(mut material) = materials.get_mut(&handle) {
+            sync_preview_material(
+                &mut material.extension,
+                atlas_material,
+                &atlas,
+                &editor_ui.project_settings.texture_naming,
+                &default_textures,
+            );
+        }
     }
 }
 
