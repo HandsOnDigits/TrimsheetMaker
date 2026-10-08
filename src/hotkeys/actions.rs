@@ -235,7 +235,11 @@ pub fn execute_action(
         EditorAction::Undo => {
             let view = mesh_preview.get_view();
 
-            crate::viewport::despawn_all_meshes(commands, mesh_scene_state);
+            let old_roots = mesh_scene_state
+                .meshes
+                .iter()
+                .filter_map(|mesh| mesh.root)
+                .collect::<Vec<_>>();
 
             if history.undo(
                 atlas,
@@ -243,6 +247,10 @@ pub fn execute_action(
                 mesh_scene_state,
                 images,
             ) {
+                for root in old_roots {
+                    commands.entity(root).despawn();
+                }
+
                 project::restore_history_meshes(commands, meshes, mesh_scene_state, mesh_preview);
 
                 mesh_preview.set_view(view);
@@ -256,7 +264,11 @@ pub fn execute_action(
         EditorAction::Redo => {
             let view = mesh_preview.get_view();
 
-            crate::viewport::despawn_all_meshes(commands, mesh_scene_state);
+            let old_roots = mesh_scene_state
+                .meshes
+                .iter()
+                .filter_map(|mesh| mesh.root)
+                .collect::<Vec<_>>();
 
             if history.redo(
                 atlas,
@@ -264,6 +276,10 @@ pub fn execute_action(
                 mesh_scene_state,
                 images,
             ) {
+                for root in old_roots {
+                    commands.entity(root).despawn();
+                }
+
                 project::restore_history_meshes(commands, meshes, mesh_scene_state, mesh_preview);
 
                 mesh_preview.set_view(view);
@@ -306,8 +322,90 @@ pub fn execute_action(
         }
 
         EditorAction::RemoveSelectedMesh => {
+            // Primitive deletion takes priority when a primitive is selected.
+            if let Some(selection) = mesh_preview.selected_primitive {
+                let before =
+                    EditorSnapshot::capture(atlas, &editor_ui.project_settings, mesh_scene_state);
+
+                let Some(mesh) = mesh_scene_state.get_mut(selection.mesh_id) else {
+                    mesh_preview.selected_primitive = None;
+                    return;
+                };
+
+                let Some(object) = mesh.scene.objects.get_mut(selection.object_index) else {
+                    error!(
+                        "Mesh {} has no object {}",
+                        selection.mesh_id, selection.object_index
+                    );
+                    mesh_preview.selected_primitive = None;
+                    return;
+                };
+
+                if selection.primitive_index >= object.primitives.len() {
+                    error!(
+                        "Mesh {} object {} has no primitive {}",
+                        selection.mesh_id, selection.object_index, selection.primitive_index
+                    );
+                    mesh_preview.selected_primitive = None;
+                    return;
+                }
+
+                // Remove atlas assignments belonging to this primitive.
+                for material in &mut atlas.materials {
+                    material.mesh_assignments.retain_mut(|assignment| {
+                        if assignment.mesh_id != selection.mesh_id
+                            || assignment.object_index != selection.object_index
+                        {
+                            return true;
+                        }
+
+                        if assignment.primitive_index == selection.primitive_index {
+                            return false;
+                        }
+
+                        if assignment.primitive_index > selection.primitive_index {
+                            assignment.primitive_index -= 1;
+                        }
+
+                        true
+                    });
+                }
+
+                // Remove the source primitive.
+                object.primitives.remove(selection.primitive_index);
+
+                let id = mesh.id;
+                let visible = mesh.visible;
+                let scene = mesh.scene.clone();
+
+                // Remove the old runtime hierarchy.
+                if let Some(root) = mesh.root.take() {
+                    commands.entity(root).despawn();
+                }
+
+                // Rebuild the runtime hierarchy from the updated source scene.
+                let (root, parts, bounds_center, bounds_radius) =
+                    spawn_mesh_scene(commands, meshes, &scene, id, mesh_preview.material.clone());
+
+                mesh.root = Some(root);
+                mesh.parts = parts;
+                mesh.bounds_center = bounds_center;
+                mesh.bounds_radius = bounds_radius;
+                mesh.visible = visible;
+
+                mesh_preview.selected_primitive = None;
+                mesh_preview.uv_revision = mesh_preview.uv_revision.wrapping_add(1);
+
+                atlas.mark_uv_dirty();
+
+                // Store the state from BEFORE the deletion.
+                history.push(before);
+
+                return;
+            }
+
+            // Otherwise delete the selected object.
             let Some((mesh_id, object_index)) = editor_ui.selected_mesh_object else {
-                // Primitive deletion is still handled by the viewport deletion system.
                 return;
             };
 

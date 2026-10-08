@@ -5,8 +5,10 @@ use bevy::{
 };
 
 use crate::{
+    data::Atlas,
     mesh::{ImportedMeshPart, MeshSceneState},
     ui::EditorUi,
+    viewport::TransformMode,
 };
 
 use super::{MeshPreview, MeshPreviewCamera, MeshViewportInput, MeshViewportLayout};
@@ -35,6 +37,8 @@ pub fn pick_mesh_primitive(
     mut picking: ResMut<MeshViewportPicking>,
     viewport_input: Res<MeshViewportInput>,
     mesh_scene_state: Res<MeshSceneState>,
+    mut editor_ui: ResMut<EditorUi>,
+    atlas: Res<Atlas>,
     parts: Query<(&ImportedMeshPart, &GlobalTransform, &Mesh3d)>,
     meshes: Res<Assets<Mesh>>,
 ) {
@@ -138,7 +142,41 @@ pub fn pick_mesh_primitive(
         }
     }
 
-    mesh_preview.selected_primitive = closest.map(|(_, selection)| selection);
+    let Some((_, selection)) = closest else {
+        mesh_preview.selected_primitive = None;
+
+        if mesh_preview.transform_mode == TransformMode::Uv {
+            editor_ui.selected_uv_assignment = None;
+        }
+
+        return;
+    };
+
+    mesh_preview.selected_primitive = Some(selection);
+
+    let material_index = atlas.materials.iter().find_map(|material| {
+        material
+            .mesh_assignments
+            .iter()
+            .any(|assignment| {
+                assignment.mesh_id == selection.mesh_id
+                    && assignment.object_index == selection.object_index
+                    && assignment.primitive_index == selection.primitive_index
+            })
+            .then_some(material.index)
+    });
+
+    editor_ui.inspected_atlas_region = material_index;
+
+    if mesh_preview.transform_mode == TransformMode::Uv {
+        editor_ui.selected_uv_assignment = Some((
+            selection.mesh_id,
+            selection.object_index,
+            selection.primitive_index,
+        ));
+    } else {
+        editor_ui.selected_uv_assignment = None;
+    }
 }
 
 fn ray_mesh_intersection(ray: &Ray3d, mesh: &Mesh, transform: &GlobalTransform) -> Option<f32> {

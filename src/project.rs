@@ -341,51 +341,20 @@ pub fn restore_history_meshes(
     let mesh_data = mesh_scene_state
         .meshes
         .iter()
-        .map(|mesh| {
-            (
-                mesh.id,
-                mesh.name.clone(),
-                mesh.path.clone(),
-                mesh.visible,
-                mesh.scene.clone(),
-            )
-        })
+        .map(|mesh| (mesh.id, mesh.visible, mesh.scene.clone()))
         .collect::<Vec<_>>();
 
-    mesh_scene_state.meshes.clear();
-    mesh_scene_state.next_id = 0;
-
-    for (id, name, path, visible, scene) in mesh_data {
+    for (id, visible, scene) in mesh_data {
         let (root, parts, bounds_center, bounds_radius) =
             spawn_mesh_scene(commands, meshes, &scene, id, mesh_preview.material.clone());
 
-        mesh_scene_state.add_with_id(
-            id,
-            name,
-            path,
-            scene,
-            root,
-            parts,
-            bounds_center,
-            bounds_radius,
-        );
-
         if let Some(mesh) = mesh_scene_state.get_mut(id) {
+            mesh.root = Some(root);
+            mesh.parts = parts;
+            mesh.bounds_center = bounds_center;
+            mesh.bounds_radius = bounds_radius;
             mesh.visible = visible;
         }
-    }
-
-    if let Some((center, radius)) = mesh_scene_state.visible_bounds() {
-        mesh_preview.target = center;
-
-        let distance = (radius * 2.5).max(0.25);
-
-        mesh_preview.distance = distance;
-        mesh_preview.target_distance = distance;
-    } else {
-        mesh_preview.target = Vec3::ZERO;
-        mesh_preview.distance = 4.0;
-        mesh_preview.target_distance = 4.0;
     }
 
     mesh_preview.selected_primitive = None;
@@ -525,5 +494,13 @@ fn runtime_mesh_scene_from_project(project_mesh: &ProjectMesh) -> crate::mesh::i
                     .collect(),
             })
             .collect(),
+    }
+}
+
+pub fn despawn_mesh_roots(commands: &mut Commands, mesh_scene_state: &MeshSceneState) {
+    for mesh in &mesh_scene_state.meshes {
+        if let Some(root) = mesh.root {
+            commands.entity(root).despawn();
+        }
     }
 }

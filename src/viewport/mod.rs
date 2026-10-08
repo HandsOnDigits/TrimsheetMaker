@@ -24,7 +24,7 @@ pub use materials::{
     MeshPreviewExtension, MeshPreviewMaterial, sync_atlas_to_mesh_preview_material,
 };
 
-pub use deletion::{despawn_all_meshes, remove_selected_mesh_primitive};
+pub use deletion::despawn_all_meshes;
 
 pub use picking::{
     MeshPrimitiveSelection, MeshViewportPicking, pick_mesh_primitive, sync_mesh_primitive_wireframe,
@@ -78,7 +78,6 @@ impl Plugin for MeshPreviewPlugin {
                 orbit_camera.after(crate::ui::panels::editor_ui),
                 pick_mesh_primitive.after(orbit_camera),
                 sync_mesh_primitive_wireframe.after(pick_mesh_primitive),
-                remove_selected_mesh_primitive.after(sync_mesh_primitive_wireframe),
             ),
         )
         .add_systems(

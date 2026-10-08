@@ -15,6 +15,8 @@ pub fn handle_material_selection(
     viewport: egui::Rect,
     editor_ui: &mut EditorUi,
     atlas: &Atlas,
+    mesh_scene_state: &MeshSceneState,
+    mesh_preview: &MeshPreview,
 ) {
     if !response.clicked_by(egui::PointerButton::Primary) {
         return;
@@ -25,6 +27,19 @@ pub fn handle_material_selection(
     let Some(pointer) = response.interact_pointer_pos() else {
         return;
     };
+
+    if mesh_preview.transform_mode == TransformMode::Uv {
+        if let Some((material_index, assignment)) =
+            uv_assignment_at_position(pointer, atlas_rect, editor_ui, atlas, mesh_scene_state)
+        {
+            editor_ui.inspected_atlas_region = Some(material_index);
+            editor_ui.selected_uv_assignment = Some(assignment);
+        } else {
+            editor_ui.selected_uv_assignment = None;
+        }
+
+        return;
+    }
 
     let Some(index) = atlas_material_at_position(pointer, atlas_rect, editor_ui, atlas) else {
         return;
@@ -92,50 +107,37 @@ fn start_uv_drag(
         return;
     };
 
-    let Some(index) = atlas_material_at_position(pointer, atlas_rect, editor_ui, atlas) else {
-        return;
-    };
-
-    let Some(material) = atlas.materials.iter().find(|m| m.index == index) else {
-        return;
-    };
-
-    let Some((mesh_id, object_index, primitive_index, uv_transform)) =
-        material.mesh_assignments.iter().find_map(|assignment| {
-            let mesh = mesh_scene_state.get(assignment.mesh_id)?;
-
-            let object = mesh.scene.objects.get(assignment.object_index)?;
-
-            let primitive = object.primitives.get(assignment.primitive_index)?;
-
-            if uv_assignment_contains_pointer(
-                pointer,
-                atlas_rect,
-                editor_ui,
-                material,
-                primitive,
-                assignment.uv_transform,
-            ) {
-                Some((
-                    assignment.mesh_id,
-                    assignment.object_index,
-                    assignment.primitive_index,
-                    assignment.uv_transform,
-                ))
-            } else {
-                None
-            }
-        })
+    let Some((material_index, (mesh_id, object_index, primitive_index))) =
+        uv_assignment_at_position(pointer, atlas_rect, editor_ui, atlas, mesh_scene_state)
     else {
         return;
     };
 
-    editor_ui.inspected_atlas_region = Some(index);
+    let Some(material) = atlas
+        .materials
+        .iter()
+        .find(|material| material.index == material_index)
+    else {
+        return;
+    };
 
+    let Some(assignment) = material.mesh_assignments.iter().find(|assignment| {
+        assignment.mesh_id == mesh_id
+            && assignment.object_index == object_index
+            && assignment.primitive_index == primitive_index
+    }) else {
+        return;
+    };
+
+    editor_ui.inspected_atlas_region = Some(material_index);
     editor_ui.selected_uv_assignment = Some((mesh_id, object_index, primitive_index));
 
-    editor_ui.atlas_uv_drag_start =
-        Some(vec![(mesh_id, object_index, primitive_index, uv_transform)]);
+    editor_ui.atlas_uv_drag_start = Some(vec![(
+        mesh_id,
+        object_index,
+        primitive_index,
+        assignment.uv_transform,
+    )]);
 }
 
 fn drag_uv(response: &egui::Response, editor_ui: &EditorUi, atlas: &mut Atlas) {
@@ -301,6 +303,50 @@ pub fn material_rect_in_atlas(atlas_material: &AtlasMaterial) -> egui::Rect {
         egui::pos2(transform.x as f32, transform.y as f32),
         egui::vec2(width, height),
     )
+}
+
+fn uv_assignment_at_position(
+    pointer: egui::Pos2,
+    atlas_rect: egui::Rect,
+    editor_ui: &EditorUi,
+    atlas: &Atlas,
+    mesh_scene_state: &MeshSceneState,
+) -> Option<(usize, (u64, usize, usize))> {
+    for material in atlas.materials.iter().rev() {
+        for assignment in material.mesh_assignments.iter().rev() {
+            let Some(mesh) = mesh_scene_state.get(assignment.mesh_id) else {
+                continue;
+            };
+
+            let Some(object) = mesh.scene.objects.get(assignment.object_index) else {
+                continue;
+            };
+
+            let Some(primitive) = object.primitives.get(assignment.primitive_index) else {
+                continue;
+            };
+
+            if uv_assignment_contains_pointer(
+                pointer,
+                atlas_rect,
+                editor_ui,
+                material,
+                primitive,
+                assignment.uv_transform,
+            ) {
+                return Some((
+                    material.index,
+                    (
+                        assignment.mesh_id,
+                        assignment.object_index,
+                        assignment.primitive_index,
+                    ),
+                ));
+            }
+        }
+    }
+
+    None
 }
 
 fn uv_assignment_contains_pointer(

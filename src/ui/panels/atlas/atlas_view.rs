@@ -102,7 +102,15 @@ pub fn atlas_view(
         }
     }
 
-    atlas_interaction::handle_material_selection(&response, viewport_rect, editor_ui, atlas);
+    atlas_interaction::handle_material_selection(
+        &response,
+        viewport_rect,
+        editor_ui,
+        atlas,
+        mesh_scene_state,
+        mesh_preview,
+    );
+
     atlas_interaction::handle_material_drag(
         &response,
         viewport_rect,
@@ -161,9 +169,22 @@ fn draw_atlas(
     for atlas_material in &atlas.materials {
         let rect = atlas_material_rect(atlas_material, atlas_rect, zoom);
 
-        draw_material_region(painter, rect, atlas_material, preview_group, texture_naming);
+        draw_material_region(
+            painter,
+            rect,
+            atlas_material,
+            preview_group,
+            texture_naming,
+            editor_ui.inspected_atlas_region == Some(atlas_material.index),
+        );
 
-        draw_uv_overlay(painter, rect, atlas_material, mesh_scene_state);
+        draw_uv_overlay(
+            painter,
+            rect,
+            atlas_material,
+            mesh_scene_state,
+            editor_ui.selected_uv_assignment,
+        );
     }
 }
 
@@ -201,6 +222,7 @@ fn draw_material_region(
     material: &AtlasMaterial,
     preview_group: Option<&str>,
     texture_naming: &TextureNaming,
+    selected: bool,
 ) {
     /*
      * Every AtlasMaterial is an atlas region.
@@ -221,7 +243,11 @@ fn draw_material_region(
         draw_rotated_texture(painter, rect, texture_id, material.transform.rotation);
     }
 
-    let stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(170, 170, 170));
+    let stroke = if selected {
+        egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 200, 50))
+    } else {
+        egui::Stroke::new(1.0, egui::Color32::from_rgb(170, 170, 170))
+    };
 
     painter.rect_stroke(rect, 0.0, stroke, egui::StrokeKind::Inside);
 }
@@ -309,12 +335,8 @@ fn draw_uv_overlay(
     material_rect: egui::Rect,
     material: &AtlasMaterial,
     mesh_scene_state: &MeshSceneState,
+    selected_uv_assignment: Option<(u64, usize, usize)>,
 ) {
-    let stroke = egui::Stroke::new(
-        1.0,
-        egui::Color32::from_rgba_unmultiplied(255, 255, 255, 180),
-    );
-
     for assignment in &material.mesh_assignments {
         let Some(mesh) = mesh_scene_state.get(assignment.mesh_id) else {
             continue;
@@ -326,6 +348,22 @@ fn draw_uv_overlay(
 
         let Some(primitive) = object.primitives.get(assignment.primitive_index) else {
             continue;
+        };
+
+        let selected = selected_uv_assignment
+            == Some((
+                assignment.mesh_id,
+                assignment.object_index,
+                assignment.primitive_index,
+            ));
+
+        let stroke = if selected {
+            egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 200, 50))
+        } else {
+            egui::Stroke::new(
+                1.0,
+                egui::Color32::from_rgba_unmultiplied(255, 255, 255, 180),
+            )
         };
 
         let uvs = &primitive.uvs;
