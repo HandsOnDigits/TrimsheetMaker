@@ -44,6 +44,13 @@ pub fn handle_material_drag(
     let atlas_rect = atlas_screen_rect(viewport, editor_ui, atlas);
 
     if response.drag_started_by(egui::PointerButton::Primary) {
+        // Select the region immediately when dragging starts.
+        if let Some(pointer) = response.interact_pointer_pos() {
+            if let Some(index) = atlas_material_at_position(pointer, atlas_rect, editor_ui, atlas) {
+                editor_ui.inspected_atlas_region = Some(index);
+            }
+        }
+
         editor_ui.atlas_drag_snapshot = Some(EditorSnapshot::capture(
             atlas,
             &editor_ui.project_settings,

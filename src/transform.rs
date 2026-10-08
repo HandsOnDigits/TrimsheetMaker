@@ -100,7 +100,7 @@ impl Transform {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct UvTransform {
     pub translation: Vec2,
     pub rotation: f32,

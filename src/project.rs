@@ -35,8 +35,11 @@ pub struct ProjectMeshPrimitive {
     #[serde(default)]
     pub material: Option<import::MeshMaterialRef>,
 
-    #[serde(default = "default_mesh_visibility")]
+    #[serde(default)]
     pub visible: bool,
+
+    #[serde(default)]
+    pub uv_transform: UvTransform,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -490,6 +493,7 @@ fn project_mesh_object_from_runtime(
                     indices: primitive.indices.clone(),
                     material: primitive.material.clone(),
                     visible,
+                    uv_transform: primitive.uv_transform,
                 }
             })
             .collect(),
@@ -517,7 +521,7 @@ fn runtime_mesh_scene_from_project(project_mesh: &ProjectMesh) -> crate::mesh::i
                         uvs: primitive.uvs.clone(),
                         indices: primitive.indices.clone(),
                         material: primitive.material.clone(),
-                        uv_transform: UvTransform::default(),
+                        uv_transform: primitive.uv_transform,
                     })
                     .collect(),
             })

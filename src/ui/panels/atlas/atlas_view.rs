@@ -12,7 +12,7 @@ use crate::{
     mesh::MeshSceneState,
     transform::{Rotation, UvTransform},
     ui::EditorUi,
-    viewport::MeshPreview,
+    viewport::{MeshPreview, TransformMode},
 };
 
 pub fn atlas_view(
@@ -48,6 +48,18 @@ pub fn atlas_view(
         if ui.button("Reset").clicked() {
             editor_ui.atlas_zoom = 1.0;
             editor_ui.atlas_pan = egui::Vec2::ZERO;
+        }
+
+        ui.separator();
+
+        let mut uv_mode = mesh_preview.transform_mode == TransformMode::Uv;
+
+        if ui.checkbox(&mut uv_mode, "UV Transform").changed() {
+            mesh_preview.transform_mode = if uv_mode {
+                TransformMode::Uv
+            } else {
+                TransformMode::None
+            };
         }
     });
 
