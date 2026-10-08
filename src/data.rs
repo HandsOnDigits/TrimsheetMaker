@@ -566,12 +566,6 @@ impl Atlas {
         self.image_revision = self.image_revision.wrapping_add(1);
     }
 
-    /// Call this whenever a material's transform (x, y, width, height, rotation) is modified.
-    pub fn mark_dirty(&mut self) {
-        self.mark_uv_dirty();
-        self.mark_image_dirty();
-    }
-
     pub fn mark_bake_dirty(&mut self) {
         self.image_revision = self.image_revision.wrapping_add(1);
         self.bake_revision = self.bake_revision.wrapping_add(1);

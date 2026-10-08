@@ -32,8 +32,6 @@ pub enum EditorAction {
     RemoveAtlasRegion,
     RemoveSelectedMesh,
 
-    PackAtlas,
-
     ResetViewport,
 
     ToggleMaterialsPanel,
@@ -449,10 +447,6 @@ pub fn execute_action(
             mesh_preview.uv_revision = mesh_preview.uv_revision.wrapping_add(1);
 
             history.push(before);
-        }
-
-        EditorAction::PackAtlas => {
-            // TODO: Real atlas packing implementation.
         }
 
         EditorAction::ResetViewport => {

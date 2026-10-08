@@ -165,9 +165,6 @@ impl HotkeyManager {
             Hotkey::delete(KeyCode::KeyR),
         );
 
-        self.bindings
-            .insert(EditorAction::PackAtlas, Hotkey::plain(KeyCode::KeyP));
-
         // Mesh
         self.bindings.insert(
             EditorAction::RemoveSelectedMesh,

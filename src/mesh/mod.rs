@@ -15,7 +15,6 @@ pub struct ImportedMeshPart {
     pub mesh_id: u64,
     pub part_index: usize,
     pub source_mesh: Handle<Mesh>,
-    pub initialized: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -332,7 +331,6 @@ pub fn spawn_mesh_scene(
                         mesh_id,
                         part_index,
                         source_mesh: mesh_handle.clone(),
-                        initialized: false,
                     },
                 ));
             });
