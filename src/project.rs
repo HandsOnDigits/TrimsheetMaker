@@ -496,11 +496,3 @@ fn runtime_mesh_scene_from_project(project_mesh: &ProjectMesh) -> crate::mesh::i
             .collect(),
     }
 }
-
-pub fn despawn_mesh_roots(commands: &mut Commands, mesh_scene_state: &MeshSceneState) {
-    for mesh in &mesh_scene_state.meshes {
-        if let Some(root) = mesh.root {
-            commands.entity(root).despawn();
-        }
-    }
-}

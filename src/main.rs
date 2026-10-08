@@ -16,7 +16,9 @@ mod project;
 mod project_settings;
 mod rendering;
 mod transform;
+
 mod viewport;
+use viewport::MeshPreviewPlugin;
 
 mod hotkeys;
 use hotkeys::HotkeyPlugin;
@@ -35,7 +37,7 @@ fn main() {
         }))
         .add_plugins(EguiPlugin::default())
         .add_plugins(HotkeyPlugin)
-        .add_plugins(viewport::MeshPreviewPlugin)
+        .add_plugins(MeshPreviewPlugin)
         .add_plugins(EditorUiPlugin)
         .run();
 }

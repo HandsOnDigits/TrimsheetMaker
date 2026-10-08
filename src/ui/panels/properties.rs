@@ -324,23 +324,37 @@ pub fn properties_panel(
     if !mesh_assignments.is_empty() {
         ui.label(egui::RichText::new("UV Transform").strong());
 
-        // For now, display/edit the first assignment.
-        //
-        // The transform belongs to the MaterialMeshAssignment, not the
-        // imported MeshPrimitive, so each assignment can be transformed
-        // independently.
-        let first_assignment = mesh_assignments.first();
+        let selected_assignment = editor_ui
+            .selected_uv_assignment
+            .and_then(|selected| {
+                mesh_assignments.iter().find(|assignment| {
+                    (
+                        assignment.mesh_id,
+                        assignment.object_index,
+                        assignment.primitive_index,
+                    ) == selected
+                })
+            })
+            .or_else(|| mesh_assignments.first());
 
-        if let Some(first_assignment) = first_assignment {
+        if let Some(selected_assignment) = selected_assignment {
+            let assignment_id = (
+                selected_assignment.mesh_id,
+                selected_assignment.object_index,
+                selected_assignment.primitive_index,
+            );
+
             let assignment_transform = atlas
                 .materials
                 .iter()
                 .find(|material| material.index == index)
                 .and_then(|material| {
                     material.mesh_assignments.iter().find(|assignment| {
-                        assignment.mesh_id == first_assignment.mesh_id
-                            && assignment.object_index == first_assignment.object_index
-                            && assignment.primitive_index == first_assignment.primitive_index
+                        (
+                            assignment.mesh_id,
+                            assignment.object_index,
+                            assignment.primitive_index,
+                        ) == assignment_id
                     })
                 })
                 .map(|assignment| assignment.uv_transform);
@@ -373,10 +387,11 @@ pub fn properties_panel(
                         {
                             if let Some(assignment) =
                                 material.mesh_assignments.iter_mut().find(|assignment| {
-                                    assignment.mesh_id == first_assignment.mesh_id
-                                        && assignment.object_index == first_assignment.object_index
-                                        && assignment.primitive_index
-                                            == first_assignment.primitive_index
+                                    (
+                                        assignment.mesh_id,
+                                        assignment.object_index,
+                                        assignment.primitive_index,
+                                    ) == assignment_id
                                 })
                             {
                                 assignment.uv_transform.translation.x = value;
@@ -411,10 +426,11 @@ pub fn properties_panel(
                         {
                             if let Some(assignment) =
                                 material.mesh_assignments.iter_mut().find(|assignment| {
-                                    assignment.mesh_id == first_assignment.mesh_id
-                                        && assignment.object_index == first_assignment.object_index
-                                        && assignment.primitive_index
-                                            == first_assignment.primitive_index
+                                    (
+                                        assignment.mesh_id,
+                                        assignment.object_index,
+                                        assignment.primitive_index,
+                                    ) == assignment_id
                                 })
                             {
                                 assignment.uv_transform.translation.y = value;
@@ -456,10 +472,11 @@ pub fn properties_panel(
                         {
                             if let Some(assignment) =
                                 material.mesh_assignments.iter_mut().find(|assignment| {
-                                    assignment.mesh_id == first_assignment.mesh_id
-                                        && assignment.object_index == first_assignment.object_index
-                                        && assignment.primitive_index
-                                            == first_assignment.primitive_index
+                                    (
+                                        assignment.mesh_id,
+                                        assignment.object_index,
+                                        assignment.primitive_index,
+                                    ) == assignment_id
                                 })
                             {
                                 assignment.uv_transform.scale.x = value;
@@ -481,11 +498,6 @@ pub fn properties_panel(
 
                     let response = ui.add(egui::DragValue::new(&mut value).speed(0.01));
 
-                    if response.drag_started() {
-                        editor_ui.properties_snapshot =
-                            Some(capture_snapshot(atlas, editor_ui, mesh_scene_state));
-                    }
-
                     if response.changed() {
                         if let Some(material) = atlas
                             .materials
@@ -494,10 +506,11 @@ pub fn properties_panel(
                         {
                             if let Some(assignment) =
                                 material.mesh_assignments.iter_mut().find(|assignment| {
-                                    assignment.mesh_id == first_assignment.mesh_id
-                                        && assignment.object_index == first_assignment.object_index
-                                        && assignment.primitive_index
-                                            == first_assignment.primitive_index
+                                    (
+                                        assignment.mesh_id,
+                                        assignment.object_index,
+                                        assignment.primitive_index,
+                                    ) == assignment_id
                                 })
                             {
                                 assignment.uv_transform.scale.y = value;
@@ -505,6 +518,11 @@ pub fn properties_panel(
                         }
 
                         uv_changed = true;
+                    }
+
+                    if response.drag_started() {
+                        editor_ui.properties_snapshot =
+                            Some(capture_snapshot(atlas, editor_ui, mesh_scene_state));
                     }
 
                     if response.drag_stopped() {
@@ -539,10 +557,11 @@ pub fn properties_panel(
                         {
                             if let Some(assignment) =
                                 material.mesh_assignments.iter_mut().find(|assignment| {
-                                    assignment.mesh_id == first_assignment.mesh_id
-                                        && assignment.object_index == first_assignment.object_index
-                                        && assignment.primitive_index
-                                            == first_assignment.primitive_index
+                                    (
+                                        assignment.mesh_id,
+                                        assignment.object_index,
+                                        assignment.primitive_index,
+                                    ) == assignment_id
                                 })
                             {
                                 assignment.uv_transform.rotation = rotation;
