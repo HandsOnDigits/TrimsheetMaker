@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use std::path::{Path, PathBuf};
 
+use crate::transform::UvTransform;
+
 pub mod assimp;
 pub mod assimp_sys;
 pub mod gltf;
@@ -69,6 +71,8 @@ pub struct MeshPrimitive {
 
     /// Material name/index from the imported scene.
     pub material: Option<MeshMaterialRef>,
+
+    pub uv_transform: UvTransform,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Reflect)]

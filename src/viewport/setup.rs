@@ -9,6 +9,7 @@ use bevy::{
 use super::{
     MeshPreview, MeshPreviewCamera, MeshPreviewExtension, MeshPreviewLightSource,
     MeshPreviewMaterial, MeshPreviewRenderTarget, MeshViewportLayout, MeshViewportSection,
+    TransformMode,
 };
 
 use crate::rendering::DefaultTextures;
@@ -76,6 +77,9 @@ pub fn setup_mesh_preview(
 
         material,
         uv_revision: 0,
+
+        transform_mode: TransformMode::None,
+        uv_history_active: false,
     });
 
     commands.spawn((

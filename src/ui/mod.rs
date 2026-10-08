@@ -10,6 +10,7 @@ use crate::{
     hotkeys::{self, EditorAction, EditorActionMessage},
     mesh::{MeshLight, MeshSceneState},
     project_settings::ProjectSettings,
+    transform::UvTransform,
 };
 
 pub mod panels;
@@ -77,6 +78,7 @@ pub struct EditorUi {
     pub project_path: Option<std::path::PathBuf>,
 
     pub atlas_drag_snapshot: Option<EditorSnapshot>,
+    pub atlas_uv_drag_start: Option<Vec<(u64, usize, usize, UvTransform)>>,
     pub properties_snapshot: Option<EditorSnapshot>,
 
     pub selected_mesh: Option<u64>,
@@ -155,6 +157,7 @@ impl Default for EditorUi {
             project_path: None,
 
             atlas_drag_snapshot: None,
+            atlas_uv_drag_start: None,
             properties_snapshot: None,
 
             selected_mesh: None,

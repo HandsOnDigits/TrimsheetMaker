@@ -193,6 +193,7 @@ fn all_editable_actions() -> &'static [EditorAction] {
         EditorAction::ToggleMeshLightFollowCamera,
         EditorAction::ToggleMeshWindow,
         EditorAction::ToggleMeshPartsVisibility,
+        EditorAction::ToggleUvTransformMode,
     ]
 }
 
@@ -224,5 +225,6 @@ fn action_display_name(action: EditorAction) -> &'static str {
         EditorAction::ToggleMeshLightFollowCamera => "Toggle Light Follow Camera",
         EditorAction::ToggleMeshWindow => "Toggle Mesh Window",
         EditorAction::ToggleMeshPartsVisibility => "Toggle All Mesh Parts",
+        EditorAction::ToggleUvTransformMode => "Toggle UV Transform Mode",
     }
 }

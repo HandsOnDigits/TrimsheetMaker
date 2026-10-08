@@ -37,6 +37,7 @@ pub use setup::{
 pub use state::{
     MeshPreview, MeshPreviewCamera, MeshPreviewLightSource, MeshPreviewMaterials,
     MeshPreviewRenderTarget, MeshViewportInput, MeshViewportLayout, MeshViewportSection,
+    TransformMode,
 };
 
 pub use visibility::sync_mesh_visibility;

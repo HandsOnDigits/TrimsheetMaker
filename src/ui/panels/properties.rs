@@ -1,9 +1,7 @@
-use std::path::PathBuf;
-
 use bevy_egui::egui;
 
 use crate::{
-    data::{Atlas, MaterialTexture},
+    data::Atlas,
     history::{EditorHistory, EditorSnapshot},
     mesh::MeshSceneState,
 };
@@ -15,7 +13,7 @@ pub fn properties_panel(
     editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
     history: &mut EditorHistory,
-    mesh_scene_state: &MeshSceneState,
+    mesh_scene_state: &mut MeshSceneState,
 ) {
     let Some(index) = editor_ui.inspected_atlas_region else {
         ui.vertical_centered(|ui| {
@@ -314,114 +312,251 @@ pub fn properties_panel(
     ui.separator();
 
     /*
-     * TEXTURES
+     * UV TRANSFORM
      */
-    ui.horizontal(|ui| {
-        ui.label(egui::RichText::new("Textures").strong());
+    let mesh_assignments = atlas
+        .materials
+        .iter()
+        .find(|material| material.index == index)
+        .map(|material| material.mesh_assignments.clone())
+        .unwrap_or_default();
 
-        if ui.button("+").clicked() {
-            let snapshot = capture_snapshot(atlas, editor_ui, mesh_scene_state);
+    if !mesh_assignments.is_empty() {
+        ui.label(egui::RichText::new("UV Transform").strong());
 
-            if let Some(material) = atlas
-                .materials
-                .iter_mut()
-                .find(|material| material.index == index)
-            {
-                material.textures.push(MaterialTexture {
-                    id: String::new(),
-                    path: PathBuf::new(),
-                    group_id: None,
-                    image: None,
-                    egui_texture: None,
-                });
-            }
+        let first_transform = mesh_assignments.iter().find_map(|assignment| {
+            mesh_scene_state
+                .get(assignment.mesh_id)
+                .and_then(|mesh| mesh.scene.objects.get(assignment.object_index))
+                .and_then(|object| object.primitives.get(assignment.primitive_index))
+                .map(|primitive| primitive.uv_transform)
+        });
 
-            history.push(snapshot);
-        }
-    });
+        if let Some(uv_transform) = first_transform {
+            let mut uv_changed = false;
 
-    ui.add_space(8.0);
+            /*
+             * POSITION
+             */
+            ui.label("Position");
 
-    let mut remove_texture_index = None;
+            ui.horizontal(|ui| {
+                ui.label("X");
 
-    /*
-     * Render texture list.
-     */
-    {
-        let Some(material) = atlas
-            .materials
-            .iter()
-            .find(|material| material.index == index)
-        else {
-            return;
-        };
+                let mut value = uv_transform.translation.x;
 
-        for (i, texture) in material.textures.iter().enumerate() {
-            ui.group(|ui| {
-                ui.horizontal(|ui| {
-                    let display_name = texture
-                        .group_id
-                        .as_ref()
-                        .and_then(|group_id| {
-                            editor_ui
-                                .project_settings
-                                .texture_naming
-                                .groups
-                                .iter()
-                                .find(|group| &group.id == group_id)
-                        })
-                        .map(|group| group.name.as_str())
-                        .unwrap_or("Unclassified");
+                let response = ui.add(egui::DragValue::new(&mut value).speed(0.01));
 
-                    ui.label(egui::RichText::new(display_name).strong());
+                if response.drag_started() {
+                    editor_ui.properties_snapshot =
+                        Some(capture_snapshot(atlas, editor_ui, mesh_scene_state));
+                }
 
-                    if ui.small_button("×").clicked() {
-                        remove_texture_index = Some(i);
+                if response.changed() {
+                    for assignment in &mesh_assignments {
+                        let Some(mesh) = mesh_scene_state.get_mut(assignment.mesh_id) else {
+                            continue;
+                        };
+
+                        let Some(object) = mesh.scene.objects.get_mut(assignment.object_index)
+                        else {
+                            continue;
+                        };
+
+                        let Some(primitive) = object.primitives.get_mut(assignment.primitive_index)
+                        else {
+                            continue;
+                        };
+
+                        primitive.uv_transform.translation.x = value;
                     }
-                });
 
-                ui.add_space(4.0);
+                    uv_changed = true;
+                }
 
-                ui.horizontal(|ui| {
-                    ui.label("File");
+                if response.drag_stopped() {
+                    if let Some(snapshot) = editor_ui.properties_snapshot.take() {
+                        history.push(snapshot);
+                    }
+                }
 
-                    let path = texture.path.display().to_string();
+                ui.label("Y");
 
-                    ui.add(egui::TextEdit::singleline(&mut path.clone()).interactive(false));
-                });
+                let mut value = uv_transform.translation.y;
+
+                let response = ui.add(egui::DragValue::new(&mut value).speed(0.01));
+
+                if response.drag_started() {
+                    editor_ui.properties_snapshot =
+                        Some(capture_snapshot(atlas, editor_ui, mesh_scene_state));
+                }
+
+                if response.changed() {
+                    for assignment in &mesh_assignments {
+                        let Some(mesh) = mesh_scene_state.get_mut(assignment.mesh_id) else {
+                            continue;
+                        };
+
+                        let Some(object) = mesh.scene.objects.get_mut(assignment.object_index)
+                        else {
+                            continue;
+                        };
+
+                        let Some(primitive) = object.primitives.get_mut(assignment.primitive_index)
+                        else {
+                            continue;
+                        };
+
+                        primitive.uv_transform.translation.y = value;
+                    }
+
+                    uv_changed = true;
+                }
+
+                if response.drag_stopped() {
+                    if let Some(snapshot) = editor_ui.properties_snapshot.take() {
+                        history.push(snapshot);
+                    }
+                }
             });
 
-            ui.add_space(6.0);
-        }
-    }
+            /*
+             * SCALE
+             */
+            ui.label("Scale");
 
-    /*
-     * Remove texture after the immutable rendering pass.
-     */
-    if let Some(texture_index) = remove_texture_index {
-        let texture_exists = atlas
-            .materials
-            .iter()
-            .find(|material| material.index == index)
-            .map(|material| texture_index < material.textures.len())
-            .unwrap_or(false);
+            ui.horizontal(|ui| {
+                ui.label("X");
 
-        if texture_exists {
-            let snapshot = capture_snapshot(atlas, editor_ui, mesh_scene_state);
+                let mut value = uv_transform.scale.x;
 
-            if let Some(material) = atlas
-                .materials
-                .iter_mut()
-                .find(|material| material.index == index)
-            {
-                material.textures.remove(texture_index);
+                let response = ui.add(egui::DragValue::new(&mut value).speed(0.01));
+
+                if response.drag_started() {
+                    editor_ui.properties_snapshot =
+                        Some(capture_snapshot(atlas, editor_ui, mesh_scene_state));
+                }
+
+                if response.changed() {
+                    for assignment in &mesh_assignments {
+                        let Some(mesh) = mesh_scene_state.get_mut(assignment.mesh_id) else {
+                            continue;
+                        };
+
+                        let Some(object) = mesh.scene.objects.get_mut(assignment.object_index)
+                        else {
+                            continue;
+                        };
+
+                        let Some(primitive) = object.primitives.get_mut(assignment.primitive_index)
+                        else {
+                            continue;
+                        };
+
+                        primitive.uv_transform.scale.x = value;
+                    }
+
+                    uv_changed = true;
+                }
+
+                if response.drag_stopped() {
+                    if let Some(snapshot) = editor_ui.properties_snapshot.take() {
+                        history.push(snapshot);
+                    }
+                }
+
+                ui.label("Y");
+
+                let mut value = uv_transform.scale.y;
+
+                let response = ui.add(egui::DragValue::new(&mut value).speed(0.01));
+
+                if response.drag_started() {
+                    editor_ui.properties_snapshot =
+                        Some(capture_snapshot(atlas, editor_ui, mesh_scene_state));
+                }
+
+                if response.changed() {
+                    for assignment in &mesh_assignments {
+                        let Some(mesh) = mesh_scene_state.get_mut(assignment.mesh_id) else {
+                            continue;
+                        };
+
+                        let Some(object) = mesh.scene.objects.get_mut(assignment.object_index)
+                        else {
+                            continue;
+                        };
+
+                        let Some(primitive) = object.primitives.get_mut(assignment.primitive_index)
+                        else {
+                            continue;
+                        };
+
+                        primitive.uv_transform.scale.y = value;
+                    }
+
+                    uv_changed = true;
+                }
+
+                if response.drag_stopped() {
+                    if let Some(snapshot) = editor_ui.properties_snapshot.take() {
+                        history.push(snapshot);
+                    }
+                }
+            });
+
+            /*
+             * ROTATION
+             */
+            ui.label("Rotation");
+
+            ui.horizontal(|ui| {
+                let mut value = uv_transform.rotation.to_degrees();
+
+                let response = ui.add(egui::DragValue::new(&mut value).speed(1.0).suffix("°"));
+
+                if response.drag_started() {
+                    editor_ui.properties_snapshot =
+                        Some(capture_snapshot(atlas, editor_ui, mesh_scene_state));
+                }
+
+                if response.changed() {
+                    let rotation = value.to_radians();
+
+                    for assignment in &mesh_assignments {
+                        let Some(mesh) = mesh_scene_state.get_mut(assignment.mesh_id) else {
+                            continue;
+                        };
+
+                        let Some(object) = mesh.scene.objects.get_mut(assignment.object_index)
+                        else {
+                            continue;
+                        };
+
+                        let Some(primitive) = object.primitives.get_mut(assignment.primitive_index)
+                        else {
+                            continue;
+                        };
+
+                        primitive.uv_transform.rotation = rotation;
+                    }
+
+                    uv_changed = true;
+                }
+
+                if response.drag_stopped() {
+                    if let Some(snapshot) = editor_ui.properties_snapshot.take() {
+                        history.push(snapshot);
+                    }
+                }
+            });
+
+            if uv_changed {
+                mesh_scene_state.mark_uv_dirty();
             }
 
-            history.push(snapshot);
+            ui.add_space(16.0);
+            ui.separator();
         }
-    }
-
-    if transform_changed {
-        atlas.mark_dirty();
     }
 }

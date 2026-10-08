@@ -16,6 +16,7 @@ use crate::{
     },
     project_settings::ProjectSettings,
     transform::Transform,
+    transform::UvTransform,
     ui::EditorUi,
     viewport::MeshPreview,
 };
@@ -516,6 +517,7 @@ fn runtime_mesh_scene_from_project(project_mesh: &ProjectMesh) -> crate::mesh::i
                         uvs: primitive.uvs.clone(),
                         indices: primitive.indices.clone(),
                         material: primitive.material.clone(),
+                        uv_transform: UvTransform::default(),
                     })
                     .collect(),
             })

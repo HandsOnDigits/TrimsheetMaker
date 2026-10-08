@@ -134,7 +134,7 @@ pub fn editor_ui(
                         &mut editor_ui,
                         &mut atlas,
                         &mut *history,
-                        &mesh_scene_state,
+                        &mut mesh_scene_state,
                     );
                 });
         }
@@ -215,8 +215,9 @@ pub fn editor_ui(
             &mut editor_ui,
             &mut atlas,
             &keyboard,
-            &mesh_scene_state,
+            &mut mesh_scene_state,
             &mut *history,
+            &mut mesh_preview,
         );
     });
 

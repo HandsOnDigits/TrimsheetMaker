@@ -10,7 +10,7 @@ use crate::{
     project,
     project_settings::ProjectSettings,
     ui::EditorUi,
-    viewport::MeshPreview,
+    viewport::{MeshPreview, TransformMode},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -42,6 +42,7 @@ pub enum EditorAction {
     ToggleMeshLightFollowCamera,
     ToggleMeshWindow,
     ToggleMeshPartsVisibility,
+    ToggleUvTransformMode,
 }
 
 #[derive(Message, Debug, Clone, Copy)]
@@ -495,6 +496,15 @@ pub fn execute_action(
                     }
                 }
             }
+        }
+
+        EditorAction::ToggleUvTransformMode => {
+            mesh_preview.transform_mode = match mesh_preview.transform_mode {
+                TransformMode::None => TransformMode::Uv,
+                TransformMode::Uv => TransformMode::None,
+            };
+
+            mesh_preview.uv_history_active = false;
         }
     }
 }

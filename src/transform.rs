@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use bevy::prelude::*;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Rotation {
     #[default]
@@ -50,7 +52,6 @@ pub struct Transform {
 }
 
 impl Transform {
-    /// Center of the original, unrotated source rectangle.
     pub fn center(&self) -> (i64, i64) {
         (
             self.x as i64 + self.width as i64 / 2,
@@ -58,7 +59,6 @@ impl Transform {
         )
     }
 
-    /// Width occupied by the material in the atlas after rotation.
     pub fn rotated_width(&self) -> u32 {
         match self.rotation {
             Rotation::Deg0 | Rotation::Deg180 => self.width,
@@ -66,7 +66,6 @@ impl Transform {
         }
     }
 
-    /// Height occupied by the material in the atlas after rotation.
     pub fn rotated_height(&self) -> u32 {
         match self.rotation {
             Rotation::Deg0 | Rotation::Deg180 => self.height,
@@ -74,10 +73,6 @@ impl Transform {
         }
     }
 
-    /// Rectangle occupied by the material in atlas space.
-    ///
-    /// `width` and `height` remain the original source dimensions.
-    /// Rotation only changes the occupied rectangle around the same center.
     pub fn atlas_rect(&self) -> (i64, i64, u32, u32) {
         let (center_x, center_y) = self.center();
 
@@ -102,5 +97,52 @@ impl Transform {
 
     pub fn rotate_ccw(&mut self) {
         self.rotation = self.rotation.previous();
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct UvTransform {
+    pub translation: Vec2,
+    pub rotation: f32,
+    pub scale: Vec2,
+}
+
+impl Default for UvTransform {
+    fn default() -> Self {
+        Self {
+            translation: Vec2::ZERO,
+            rotation: 0.0,
+            scale: Vec2::ONE,
+        }
+    }
+}
+
+impl UvTransform {
+    pub fn uv_center(uvs: &[[f32; 2]]) -> Vec2 {
+        if uvs.is_empty() {
+            return Vec2::splat(0.5);
+        }
+
+        let mut min = Vec2::splat(f32::INFINITY);
+        let mut max = Vec2::splat(f32::NEG_INFINITY);
+
+        for &[x, y] in uvs {
+            let uv = Vec2::new(x, y);
+            min = min.min(uv);
+            max = max.max(uv);
+        }
+
+        (min + max) * 0.5
+    }
+
+    pub fn apply(&self, uv: Vec2, pivot: Vec2) -> Vec2 {
+        let mut result = uv - pivot;
+
+        result *= self.scale;
+
+        let rotation = Mat2::from_angle(self.rotation);
+        result = rotation * result;
+
+        result + pivot + self.translation
     }
 }

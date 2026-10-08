@@ -25,6 +25,13 @@ pub struct MeshPreviewView {
     pub pitch: f32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TransformMode {
+    #[default]
+    None,
+    Uv,
+}
+
 #[derive(Resource)]
 pub struct MeshPreview {
     pub camera: Entity,
@@ -39,6 +46,9 @@ pub struct MeshPreview {
 
     pub material: Handle<MeshPreviewMaterial>,
     pub uv_revision: u64,
+
+    pub transform_mode: TransformMode,
+    pub uv_history_active: bool,
 }
 
 impl MeshPreview {

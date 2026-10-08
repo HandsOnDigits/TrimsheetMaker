@@ -9,7 +9,7 @@ pub fn inspector_panel(
     editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
     history: &mut EditorHistory,
-    mesh_scene_state: &MeshSceneState,
+    mesh_scene_state: &mut MeshSceneState,
 ) {
     ui.heading("Inspector");
 

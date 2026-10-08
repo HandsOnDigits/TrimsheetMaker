@@ -57,6 +57,7 @@ pub fn orbit_camera(
         cursor_inside && !mesh_input.pointer_over_ui && !mesh_input.floating_window_dragging;
 
     if can_interact {
+        // Camera orbit.
         if mouse_delta != Vec2::ZERO {
             let orbit_button = mouse_buttons.pressed(MouseButton::Left)
                 || mouse_buttons.pressed(MouseButton::Right);
@@ -70,6 +71,7 @@ pub fn orbit_camera(
                     (mesh_preview.pitch - mouse_delta.y * sensitivity).clamp(-1.5, 1.5);
             }
 
+            // Camera pan.
             if mouse_buttons.pressed(MouseButton::Middle) {
                 let right = *camera_global.right();
                 let up = *camera_global.up();
@@ -79,6 +81,7 @@ pub fn orbit_camera(
             }
         }
 
+        // Camera zoom / vertical pan.
         if scroll != 0.0 {
             if keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight) {
                 let zoom_speed = editor_ui.editor_settings.mouse_scroll_speed;

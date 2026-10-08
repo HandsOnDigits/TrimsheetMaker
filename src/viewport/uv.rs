@@ -3,12 +3,13 @@ use bevy::prelude::*;
 use crate::{
     data::Atlas,
     mesh::{ImportedMeshPart, MeshSceneState},
-    transform::Rotation,
+    transform::{Rotation, UvTransform},
 };
 
 #[derive(Resource, Default)]
 pub struct MeshUvSyncState {
     pub atlas_revision: u64,
+    pub mesh_uv_revision: u64,
     pub initialized: bool,
 }
 
@@ -19,7 +20,9 @@ pub fn sync_mesh_uvs(
     mut meshes: ResMut<Assets<Mesh>>,
     parts: Query<&ImportedMeshPart>,
 ) {
-    let needs_sync = !sync_state.initialized || sync_state.atlas_revision != atlas.uv_revision;
+    let needs_sync = !sync_state.initialized
+        || sync_state.atlas_revision != atlas.uv_revision
+        || sync_state.mesh_uv_revision != mesh_scene_state.uv_revision;
 
     if !needs_sync {
         return;
@@ -57,11 +60,12 @@ pub fn sync_mesh_uvs(
         let uvs = match atlas_material {
             Some(material) => transform_uvs(
                 &primitive.uvs,
+                &primitive.uv_transform,
                 &material.transform,
                 atlas.width,
                 atlas.height,
             ),
-            None => primitive.uvs.clone(),
+            None => transform_source_uvs(&primitive.uvs, &primitive.uv_transform),
         };
 
         if let Some(mut mesh) = meshes.get_mut(&part.source_mesh) {
@@ -70,11 +74,26 @@ pub fn sync_mesh_uvs(
     }
 
     sync_state.atlas_revision = atlas.uv_revision;
+    sync_state.mesh_uv_revision = mesh_scene_state.uv_revision;
     sync_state.initialized = true;
+}
+
+fn transform_source_uvs(source_uvs: &[[f32; 2]], uv_transform: &UvTransform) -> Vec<[f32; 2]> {
+    let pivot = UvTransform::uv_center(source_uvs);
+
+    source_uvs
+        .iter()
+        .map(|&uv| {
+            let uv = uv_transform.apply(Vec2::new(uv[0], uv[1]), pivot);
+
+            [uv.x, uv.y]
+        })
+        .collect()
 }
 
 fn transform_uvs(
     source_uvs: &[[f32; 2]],
+    uv_transform: &UvTransform,
     transform: &crate::transform::Transform,
     atlas_width: u32,
     atlas_height: u32,
@@ -83,7 +102,7 @@ fn transform_uvs(
     let atlas_height = atlas_height as f32;
 
     if atlas_width <= 0.0 || atlas_height <= 0.0 {
-        return source_uvs.to_vec();
+        return transform_source_uvs(source_uvs, uv_transform);
     }
 
     let x = transform.x as f32;
@@ -91,14 +110,18 @@ fn transform_uvs(
     let width = transform.width as f32;
     let height = transform.height as f32;
 
+    let pivot = UvTransform::uv_center(source_uvs);
+
     source_uvs
         .iter()
         .map(|&uv| {
+            let uv = uv_transform.apply(Vec2::new(uv[0], uv[1]), pivot);
+
             let uv = match transform.rotation {
-                Rotation::Deg0 => uv,
-                Rotation::Deg90 => [uv[1], 1.0 - uv[0]],
-                Rotation::Deg180 => [1.0 - uv[0], 1.0 - uv[1]],
-                Rotation::Deg270 => [1.0 - uv[1], uv[0]],
+                Rotation::Deg0 => [uv.x, uv.y],
+                Rotation::Deg90 => [uv.y, 1.0 - uv.x],
+                Rotation::Deg180 => [1.0 - uv.x, 1.0 - uv.y],
+                Rotation::Deg270 => [1.0 - uv.y, uv.x],
             };
 
             [

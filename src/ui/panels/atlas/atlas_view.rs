@@ -1,4 +1,7 @@
-use bevy::{input::ButtonInput, prelude::KeyCode};
+use bevy::{
+    input::ButtonInput,
+    prelude::{KeyCode, Vec2},
+};
 use bevy_egui::egui;
 
 use super::atlas_interaction;
@@ -7,8 +10,9 @@ use crate::{
     data::{Atlas, AtlasMaterial, TextureNaming},
     history::EditorHistory,
     mesh::MeshSceneState,
-    transform::Rotation,
+    transform::{Rotation, UvTransform},
     ui::EditorUi,
+    viewport::MeshPreview,
 };
 
 pub fn atlas_view(
@@ -16,8 +20,9 @@ pub fn atlas_view(
     editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
     keyboard: &ButtonInput<KeyCode>,
-    mesh_scene_state: &MeshSceneState,
+    mesh_scene_state: &mut MeshSceneState,
     history: &mut EditorHistory,
+    mesh_preview: &mut MeshPreview,
 ) {
     ui.horizontal(|ui| {
         ui.heading("Atlas");
@@ -93,6 +98,7 @@ pub fn atlas_view(
         atlas,
         history,
         mesh_scene_state,
+        mesh_preview,
     );
 
     let painter = ui.painter_at(viewport_rect);
@@ -313,6 +319,8 @@ fn draw_uv_overlay(
         let uvs = &primitive.uvs;
         let indices = &primitive.indices;
 
+        let pivot = UvTransform::uv_center(uvs);
+
         for triangle in indices.chunks_exact(3) {
             let ia = triangle[0] as usize;
             let ib = triangle[1] as usize;
@@ -330,9 +338,26 @@ fn draw_uv_overlay(
                 continue;
             };
 
-            let a = transform_material_uv(a, material.transform.rotation);
-            let b = transform_material_uv(b, material.transform.rotation);
-            let c = transform_material_uv(c, material.transform.rotation);
+            let a = transform_uv(
+                a,
+                pivot,
+                primitive.uv_transform,
+                material.transform.rotation,
+            );
+
+            let b = transform_uv(
+                b,
+                pivot,
+                primitive.uv_transform,
+                material.transform.rotation,
+            );
+
+            let c = transform_uv(
+                c,
+                pivot,
+                primitive.uv_transform,
+                material.transform.rotation,
+            );
 
             let a = material_uv_to_screen(a, material_rect);
             let b = material_uv_to_screen(b, material_rect);
@@ -350,6 +375,17 @@ fn material_uv_to_screen(uv: [f32; 2], material_rect: egui::Rect) -> egui::Pos2 
         material_rect.left() + uv[0] * material_rect.width(),
         material_rect.bottom() - uv[1] * material_rect.height(),
     )
+}
+
+fn transform_uv(
+    uv: [f32; 2],
+    pivot: Vec2,
+    uv_transform: UvTransform,
+    rotation: Rotation,
+) -> [f32; 2] {
+    let uv = uv_transform.apply(Vec2::new(uv[0], uv[1]), pivot);
+
+    transform_material_uv([uv.x, uv.y], rotation)
 }
 
 fn transform_material_uv(uv: [f32; 2], rotation: Rotation) -> [f32; 2] {

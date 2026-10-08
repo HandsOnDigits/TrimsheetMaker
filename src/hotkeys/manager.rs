@@ -190,6 +190,11 @@ impl HotkeyManager {
             EditorAction::ToggleMeshPartsVisibility,
             Hotkey::shift(KeyCode::KeyH),
         );
+
+        self.bindings.insert(
+            EditorAction::ToggleUvTransformMode,
+            Hotkey::plain(KeyCode::KeyT),
+        );
     }
 
     pub fn binding(&self, action: EditorAction) -> Option<Hotkey> {
