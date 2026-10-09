@@ -180,50 +180,36 @@ pub fn meshes_window(
                                                                 part.object_index == object_index
                                                             })
                                                         {
-                                                            let selected = mesh_preview
-                                                                .selected_primitive
-                                                                == Some(MeshPrimitiveSelection {
+                                                            let selection =
+                                                                MeshPrimitiveSelection {
                                                                     mesh_id,
                                                                     object_index: part.object_index,
                                                                     primitive_index: part
                                                                         .primitive_index,
-                                                                });
+                                                                };
 
-                                                            ui.horizontal(|ui| {
-                                                                ui.add_space(4.0);
+                                                            let selected = mesh_preview
+                                                                .selected_primitive
+                                                                == Some(selection);
 
-                                                                ui.checkbox(&mut part.visible, "");
+                                                            let response = ui.selectable_label(
+                                                                selected,
+                                                                egui::RichText::new(
+                                                                    part.name.clone(),
+                                                                )
+                                                                .small(),
+                                                            );
 
-                                                                if ui
-                                                                    .selectable_label(
-                                                                        selected,
-                                                                        egui::RichText::new(
-                                                                            part.name.clone(),
-                                                                        )
-                                                                        .small(),
-                                                                    )
-                                                                    .clicked()
-                                                                {
-                                                                    editor_ui.selected_mesh =
-                                                                        Some(mesh_id);
-                                                                    editor_ui
-                                                                        .selected_mesh_object =
-                                                                        None;
-
-                                                                    mesh_preview.selected_mesh_id =
-                                                                        Some(mesh_id);
-                                                                    mesh_preview
-                                                                        .selected_primitive = Some(
-                                                                        MeshPrimitiveSelection {
-                                                                            mesh_id,
-                                                                            object_index: part
-                                                                                .object_index,
-                                                                            primitive_index: part
-                                                                                .primitive_index,
-                                                                        },
-                                                                    );
-                                                                }
-                                                            });
+                                                            if response.clicked() {
+                                                                editor_ui.selected_mesh =
+                                                                    Some(mesh_id);
+                                                                editor_ui.selected_mesh_object =
+                                                                    None;
+                                                                mesh_preview.selected_mesh_id =
+                                                                    Some(mesh_id);
+                                                                mesh_preview.selected_primitive =
+                                                                    Some(selection);
+                                                            }
                                                         }
                                                     },
                                                 );

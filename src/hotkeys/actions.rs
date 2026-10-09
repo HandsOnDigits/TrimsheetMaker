@@ -32,9 +32,25 @@ pub enum EditorAction {
 
     AssignMaterial,
     UnassignMaterial,
+    UnassignMeshPrimitive {
+        mesh_id: u64,
+        object_index: usize,
+        primitive_index: usize,
+    },
 
     RemoveAtlasRegion,
     RemoveSelectedMesh,
+
+    RemoveMeshPrimitive {
+        mesh_id: u64,
+        object_index: usize,
+        primitive_index: usize,
+    },
+
+    RemoveMeshObject {
+        mesh_id: u64,
+        object_index: usize,
+    },
 
     ResetViewport,
 
@@ -319,6 +335,22 @@ pub fn execute_action(
             );
         }
 
+        EditorAction::UnassignMeshPrimitive {
+            mesh_id,
+            object_index,
+            primitive_index,
+        } => {
+            let before =
+                EditorSnapshot::capture(atlas, &editor_ui.project_settings, mesh_scene_state);
+
+            for region in &mut atlas.materials {
+                region.unassign_mesh(mesh_id, object_index, primitive_index);
+            }
+
+            atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
+            history.push(before);
+        }
+
         EditorAction::ImportMultipleMaterials => {
             editor_ui.show_import_multiple_materials_window = true;
         }
@@ -574,6 +606,79 @@ pub fn execute_action(
             mesh_preview.uv_revision = mesh_preview.uv_revision.wrapping_add(1);
 
             history.push(before);
+        }
+
+        EditorAction::RemoveMeshPrimitive {
+            mesh_id,
+            object_index,
+            primitive_index,
+        } => {
+            let previous_mesh = editor_ui.selected_mesh;
+            let previous_object = editor_ui.selected_mesh_object;
+            let previous_primitive = mesh_preview.selected_primitive;
+            let previous_preview_mesh = mesh_preview.selected_mesh_id;
+
+            editor_ui.selected_mesh = Some(mesh_id);
+            editor_ui.selected_mesh_object = None;
+            mesh_preview.selected_mesh_id = Some(mesh_id);
+            mesh_preview.selected_primitive = Some(crate::viewport::MeshPrimitiveSelection {
+                mesh_id,
+                object_index,
+                primitive_index,
+            });
+
+            execute_action(
+                EditorAction::RemoveSelectedMesh,
+                editor_ui,
+                atlas,
+                images,
+                mesh_preview,
+                mesh_light,
+                mesh_scene_state,
+                commands,
+                meshes,
+                history,
+            );
+
+            // Restore the previous selection after deleting the target.
+            editor_ui.selected_mesh = previous_mesh;
+            editor_ui.selected_mesh_object = previous_object;
+            mesh_preview.selected_primitive = previous_primitive;
+            mesh_preview.selected_mesh_id = previous_preview_mesh;
+        }
+
+        EditorAction::RemoveMeshObject {
+            mesh_id,
+            object_index,
+        } => {
+            let previous_mesh = editor_ui.selected_mesh;
+            let previous_object = editor_ui.selected_mesh_object;
+            let previous_primitive = mesh_preview.selected_primitive;
+            let previous_preview_mesh = mesh_preview.selected_mesh_id;
+
+            editor_ui.selected_mesh = Some(mesh_id);
+            editor_ui.selected_mesh_object = Some((mesh_id, object_index));
+            mesh_preview.selected_mesh_id = Some(mesh_id);
+            mesh_preview.selected_primitive = None;
+
+            execute_action(
+                EditorAction::RemoveSelectedMesh,
+                editor_ui,
+                atlas,
+                images,
+                mesh_preview,
+                mesh_light,
+                mesh_scene_state,
+                commands,
+                meshes,
+                history,
+            );
+
+            // Restore the previous selection after deleting the target.
+            editor_ui.selected_mesh = previous_mesh;
+            editor_ui.selected_mesh_object = previous_object;
+            mesh_preview.selected_primitive = previous_primitive;
+            mesh_preview.selected_mesh_id = previous_preview_mesh;
         }
 
         EditorAction::ResetViewport => {

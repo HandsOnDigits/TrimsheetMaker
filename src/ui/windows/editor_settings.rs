@@ -215,9 +215,12 @@ fn action_display_name(action: EditorAction) -> &'static str {
 
         EditorAction::RemoveAtlasRegion => "Remove Atlas Region",
         EditorAction::RemoveSelectedMesh => "Remove Selected Mesh",
+        EditorAction::RemoveMeshPrimitive { .. } => "Delete Mesh Primitive",
+        EditorAction::RemoveMeshObject { .. } => "Delete Mesh Object",
 
         EditorAction::AssignMaterial => "Assign Material",
         EditorAction::UnassignMaterial => "Unassign Material",
+        EditorAction::UnassignMeshPrimitive { .. } => "Unassign Mesh Primitive",
 
         EditorAction::ResetViewport => "Reset Atlas View",
 

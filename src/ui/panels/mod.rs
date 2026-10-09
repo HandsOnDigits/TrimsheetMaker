@@ -30,7 +30,7 @@ use crate::{
     hotkeys::{EditorActionMessage, HotkeyManager},
     mesh::{MeshLight, MeshSceneState},
     ui::windows,
-    viewport::{MeshPreview, MeshViewportInput, MeshViewportLayout},
+    viewport::{MeshPreview, MeshViewportContextMenu, MeshViewportInput, MeshViewportLayout},
 };
 
 pub fn editor_ui(
@@ -49,6 +49,7 @@ pub fn editor_ui(
     mut mesh_scene_state: ResMut<MeshSceneState>,
     mut action_messages: MessageWriter<EditorActionMessage>,
     mut history: ResMut<EditorHistory>,
+    mut context_menu: ResMut<MeshViewportContextMenu>,
 ) -> Result {
     mesh_input.pointer_over_ui = false;
     mesh_input.floating_window_dragging = false;
@@ -259,6 +260,9 @@ pub fn editor_ui(
         &mut action_messages,
         &mut *history,
     );
+
+    // 3D viewport primitive context menu.
+    windows::viewport_primitive_context_menu(ctx, &mut context_menu, &mut action_messages);
 
     // Prevent viewport interactions while an egui popup or dropdown is open.
     mesh_input.pointer_over_ui |= egui::Popup::is_any_open(ctx);
