@@ -10,6 +10,7 @@ use crate::{
     data::{Atlas, AtlasMaterial, TextureNaming},
     history::EditorHistory,
     mesh::MeshSceneState,
+    project_settings::HighlightMaterial,
     transform::{Rotation, UvTransform},
     ui::EditorUi,
     viewport::{MeshPreview, TransformMode},
@@ -176,6 +177,7 @@ fn draw_atlas(
             preview_group,
             texture_naming,
             editor_ui.inspected_atlas_region == Some(atlas_material.index),
+            &editor_ui.project_settings.highlights.atlas_region,
         );
 
         draw_uv_overlay(
@@ -184,6 +186,7 @@ fn draw_atlas(
             atlas_material,
             mesh_scene_state,
             editor_ui.selected_uv_assignment,
+            &editor_ui.project_settings.highlights.uv,
         );
     }
 }
@@ -223,6 +226,7 @@ fn draw_material_region(
     preview_group: Option<&str>,
     texture_naming: &TextureNaming,
     selected: bool,
+    highlight: &HighlightMaterial,
 ) {
     /*
      * Every AtlasMaterial is an atlas region.
@@ -243,8 +247,16 @@ fn draw_material_region(
         draw_rotated_texture(painter, rect, texture_id, material.transform.rotation);
     }
 
-    let stroke = if selected {
-        egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 200, 50))
+    let stroke = if selected && highlight.enabled {
+        egui::Stroke::new(
+            1.0 + highlight.strength * 3.0,
+            egui::Color32::from_rgba_unmultiplied(
+                (highlight.color[0].clamp(0.0, 1.0) * 255.0) as u8,
+                (highlight.color[1].clamp(0.0, 1.0) * 255.0) as u8,
+                (highlight.color[2].clamp(0.0, 1.0) * 255.0) as u8,
+                (highlight.color[3].clamp(0.0, 1.0) * 255.0) as u8,
+            ),
+        )
     } else {
         egui::Stroke::new(1.0, egui::Color32::from_rgb(170, 170, 170))
     };
@@ -336,6 +348,7 @@ fn draw_uv_overlay(
     material: &AtlasMaterial,
     mesh_scene_state: &MeshSceneState,
     selected_uv_assignment: Option<(u64, usize, usize)>,
+    highlight: &HighlightMaterial,
 ) {
     for assignment in &material.mesh_assignments {
         let Some(mesh) = mesh_scene_state.get(assignment.mesh_id) else {
@@ -357,8 +370,16 @@ fn draw_uv_overlay(
                 assignment.primitive_index,
             ));
 
-        let stroke = if selected {
-            egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 200, 50))
+        let stroke = if selected && highlight.enabled {
+            egui::Stroke::new(
+                1.0 + highlight.strength * 3.0,
+                egui::Color32::from_rgba_unmultiplied(
+                    (highlight.color[0].clamp(0.0, 1.0) * 255.0) as u8,
+                    (highlight.color[1].clamp(0.0, 1.0) * 255.0) as u8,
+                    (highlight.color[2].clamp(0.0, 1.0) * 255.0) as u8,
+                    (highlight.color[3].clamp(0.0, 1.0) * 255.0) as u8,
+                ),
+            )
         } else {
             egui::Stroke::new(
                 1.0,

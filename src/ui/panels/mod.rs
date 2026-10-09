@@ -260,6 +260,9 @@ pub fn editor_ui(
         &mut *history,
     );
 
+    // Prevent viewport interactions while an egui popup or dropdown is open.
+    mesh_input.pointer_over_ui |= egui::Popup::is_any_open(ctx);
+
     Ok(())
 }
 

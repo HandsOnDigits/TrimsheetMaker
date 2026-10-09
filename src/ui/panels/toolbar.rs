@@ -8,6 +8,7 @@ use crate::{
     history::EditorHistory,
     hotkeys::{EditorAction, HotkeyManager, execute_action},
     mesh::{MeshLight, MeshSceneState},
+    project_settings::HighlightMaterial,
     viewport::MeshPreview,
 };
 
@@ -24,233 +25,237 @@ pub fn toolbar(
     meshes: &mut Assets<Mesh>,
     history: &mut EditorHistory,
 ) {
-    ui.horizontal(|ui| {
-        ui.add_space(8.0);
+    egui::MenuBar::new()
+        .config(
+            egui::containers::menu::MenuConfig::new()
+                .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside),
+        )
+        .ui(ui, |ui| {
+            ui.add_space(8.0);
 
-        ui.menu_button("File", |ui| {
-            if menu_action_button(ui, hotkeys, EditorAction::NewAtlas, "New Atlas") {
-                execute_action(
-                    EditorAction::NewAtlas,
-                    editor_ui,
-                    atlas,
-                    images,
-                    mesh_preview,
-                    mesh_light,
-                    mesh_scene_state,
-                    commands,
-                    meshes,
-                    history,
-                );
-                ui.close();
-            }
+            // File
+            ui.menu_button("File", |ui| {
+                if menu_action_button(ui, hotkeys, EditorAction::NewAtlas, "New Atlas") {
+                    execute_action(
+                        EditorAction::NewAtlas,
+                        editor_ui,
+                        atlas,
+                        images,
+                        mesh_preview,
+                        mesh_light,
+                        mesh_scene_state,
+                        commands,
+                        meshes,
+                        history,
+                    );
+                    ui.close();
+                }
 
-            if menu_action_button(ui, hotkeys, EditorAction::OpenProject, "Open Project…") {
-                execute_action(
-                    EditorAction::OpenProject,
-                    editor_ui,
-                    atlas,
-                    images,
-                    mesh_preview,
-                    mesh_light,
-                    mesh_scene_state,
-                    commands,
-                    meshes,
-                    history,
-                );
-                ui.close();
-            }
+                if menu_action_button(ui, hotkeys, EditorAction::OpenProject, "Open Project…") {
+                    execute_action(
+                        EditorAction::OpenProject,
+                        editor_ui,
+                        atlas,
+                        images,
+                        mesh_preview,
+                        mesh_light,
+                        mesh_scene_state,
+                        commands,
+                        meshes,
+                        history,
+                    );
+                    ui.close();
+                }
 
-            if menu_action_button(ui, hotkeys, EditorAction::SaveProject, "Save Project") {
-                execute_action(
-                    EditorAction::SaveProject,
-                    editor_ui,
-                    atlas,
-                    images,
-                    mesh_preview,
-                    mesh_light,
-                    mesh_scene_state,
-                    commands,
-                    meshes,
-                    history,
-                );
-                ui.close();
-            }
+                if menu_action_button(ui, hotkeys, EditorAction::SaveProject, "Save Project") {
+                    execute_action(
+                        EditorAction::SaveProject,
+                        editor_ui,
+                        atlas,
+                        images,
+                        mesh_preview,
+                        mesh_light,
+                        mesh_scene_state,
+                        commands,
+                        meshes,
+                        history,
+                    );
+                    ui.close();
+                }
 
-            if menu_action_button(ui, hotkeys, EditorAction::SaveProjectAs, "Save Project As…") {
-                execute_action(
-                    EditorAction::SaveProjectAs,
-                    editor_ui,
-                    atlas,
-                    images,
-                    mesh_preview,
-                    mesh_light,
-                    mesh_scene_state,
-                    commands,
-                    meshes,
-                    history,
-                );
-                ui.close();
-            }
+                if menu_action_button(ui, hotkeys, EditorAction::SaveProjectAs, "Save Project As…")
+                {
+                    execute_action(
+                        EditorAction::SaveProjectAs,
+                        editor_ui,
+                        atlas,
+                        images,
+                        mesh_preview,
+                        mesh_light,
+                        mesh_scene_state,
+                        commands,
+                        meshes,
+                        history,
+                    );
+                    ui.close();
+                }
 
-            ui.separator();
+                ui.separator();
 
-            if menu_action_button(
-                ui,
-                hotkeys,
-                EditorAction::ImportSingleMaterial,
-                "Import single Material…",
-            ) {
-                execute_action(
+                if menu_action_button(
+                    ui,
+                    hotkeys,
                     EditorAction::ImportSingleMaterial,
-                    editor_ui,
-                    atlas,
-                    images,
-                    mesh_preview,
-                    mesh_light,
-                    mesh_scene_state,
-                    commands,
-                    meshes,
-                    history,
-                );
-                ui.close();
-            }
+                    "Import single Material…",
+                ) {
+                    execute_action(
+                        EditorAction::ImportSingleMaterial,
+                        editor_ui,
+                        atlas,
+                        images,
+                        mesh_preview,
+                        mesh_light,
+                        mesh_scene_state,
+                        commands,
+                        meshes,
+                        history,
+                    );
+                    ui.close();
+                }
 
-            if menu_action_button(
-                ui,
-                hotkeys,
-                EditorAction::ImportMultipleMaterials,
-                "Import Multiple Materials…",
-            ) {
-                execute_action(
+                if menu_action_button(
+                    ui,
+                    hotkeys,
                     EditorAction::ImportMultipleMaterials,
-                    editor_ui,
-                    atlas,
-                    images,
-                    mesh_preview,
-                    mesh_light,
-                    mesh_scene_state,
-                    commands,
-                    meshes,
-                    history,
-                );
-                ui.close();
-            }
+                    "Import Multiple Materials…",
+                ) {
+                    execute_action(
+                        EditorAction::ImportMultipleMaterials,
+                        editor_ui,
+                        atlas,
+                        images,
+                        mesh_preview,
+                        mesh_light,
+                        mesh_scene_state,
+                        commands,
+                        meshes,
+                        history,
+                    );
+                    ui.close();
+                }
 
-            if menu_action_button(ui, hotkeys, EditorAction::ImportMesh, "Import meshes…") {
-                execute_action(
-                    EditorAction::ImportMesh,
-                    editor_ui,
-                    atlas,
-                    images,
-                    mesh_preview,
-                    mesh_light,
-                    mesh_scene_state,
-                    commands,
-                    meshes,
-                    history,
-                );
-                ui.close();
-            }
+                if menu_action_button(ui, hotkeys, EditorAction::ImportMesh, "Import meshes…") {
+                    execute_action(
+                        EditorAction::ImportMesh,
+                        editor_ui,
+                        atlas,
+                        images,
+                        mesh_preview,
+                        mesh_light,
+                        mesh_scene_state,
+                        commands,
+                        meshes,
+                        history,
+                    );
+                    ui.close();
+                }
+
+                ui.separator();
+
+                if menu_action_button(ui, hotkeys, EditorAction::ExportAtlas, "Export Atlas…") {
+                    execute_action(
+                        EditorAction::ExportAtlas,
+                        editor_ui,
+                        atlas,
+                        images,
+                        mesh_preview,
+                        mesh_light,
+                        mesh_scene_state,
+                        commands,
+                        meshes,
+                        history,
+                    );
+                    ui.close();
+                }
+            });
 
             ui.separator();
 
-            if menu_action_button(ui, hotkeys, EditorAction::ExportAtlas, "Export Atlas…") {
-                execute_action(
-                    EditorAction::ExportAtlas,
-                    editor_ui,
-                    atlas,
-                    images,
-                    mesh_preview,
-                    mesh_light,
-                    mesh_scene_state,
-                    commands,
-                    meshes,
-                    history,
-                );
-                ui.close();
-            }
-        });
-
-        ui.separator();
-
-        ui.menu_button("Edit", |ui| {
-            if menu_action_button(
-                ui,
-                hotkeys,
-                EditorAction::RemoveAtlasRegion,
-                "Remove Selected",
-            ) {
-                execute_action(
+            // Edit
+            ui.menu_button("Edit", |ui| {
+                if menu_action_button(
+                    ui,
+                    hotkeys,
                     EditorAction::RemoveAtlasRegion,
-                    editor_ui,
-                    atlas,
-                    images,
-                    mesh_preview,
-                    mesh_light,
-                    mesh_scene_state,
-                    commands,
-                    meshes,
-                    history,
-                );
-                ui.close();
-            }
+                    "Remove Selected",
+                ) {
+                    execute_action(
+                        EditorAction::RemoveAtlasRegion,
+                        editor_ui,
+                        atlas,
+                        images,
+                        mesh_preview,
+                        mesh_light,
+                        mesh_scene_state,
+                        commands,
+                        meshes,
+                        history,
+                    );
+                    ui.close();
+                }
 
-            if menu_action_button(ui, hotkeys, EditorAction::ResetViewport, "Reset Viewports") {
-                execute_action(
-                    EditorAction::ResetViewport,
-                    editor_ui,
-                    atlas,
-                    images,
-                    mesh_preview,
-                    mesh_light,
-                    mesh_scene_state,
-                    commands,
-                    meshes,
-                    history,
-                );
-                ui.close();
-            }
-        });
-
-        ui.separator();
-
-        ui.menu_button("View", |ui| {
-            ui.checkbox(&mut editor_ui.show_materials, "Materials");
-            ui.checkbox(&mut editor_ui.show_inspector, "Inspector");
-            ui.checkbox(&mut editor_ui.show_status, "Status Bar");
+                if menu_action_button(ui, hotkeys, EditorAction::ResetViewport, "Reset Viewports") {
+                    execute_action(
+                        EditorAction::ResetViewport,
+                        editor_ui,
+                        atlas,
+                        images,
+                        mesh_preview,
+                        mesh_light,
+                        mesh_scene_state,
+                        commands,
+                        meshes,
+                        history,
+                    );
+                    ui.close();
+                }
+            });
 
             ui.separator();
 
-            if menu_action_button(ui, hotkeys, EditorAction::ResetViewport, "Reset Viewports") {
-                execute_action(
-                    EditorAction::ResetViewport,
-                    editor_ui,
-                    atlas,
-                    images,
-                    mesh_preview,
-                    mesh_light,
-                    mesh_scene_state,
-                    commands,
-                    meshes,
-                    history,
-                );
-                ui.close();
-            }
-        });
+            // View
+            ui.menu_button("View", |ui| {
+                ui.checkbox(&mut editor_ui.show_materials, "Materials");
+                ui.checkbox(&mut editor_ui.show_inspector, "Inspector");
+                ui.checkbox(&mut editor_ui.show_status, "Status Bar");
 
-        ui.separator();
+                ui.separator();
 
-        egui::containers::menu::MenuButton::new("Project")
-            .config(
-                egui::containers::menu::MenuConfig::new()
-                    .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside),
-            )
-            .ui(ui, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.set_width(220.0);
+                if menu_action_button(ui, hotkeys, EditorAction::ResetViewport, "Reset Viewports") {
+                    execute_action(
+                        EditorAction::ResetViewport,
+                        editor_ui,
+                        atlas,
+                        images,
+                        mesh_preview,
+                        mesh_light,
+                        mesh_scene_state,
+                        commands,
+                        meshes,
+                        history,
+                    );
+                    ui.close();
+                }
+            });
+
+            ui.separator();
+
+            // Settings
+            ui.menu_button("Settings", |ui| {
+                ui.menu_button("Project", |ui| {
+                    ui.set_min_width(280.0);
 
                     ui.label("Atlas");
-
                     ui.separator();
 
                     egui::Grid::new("project_atlas_settings")
@@ -258,54 +263,99 @@ pub fn toolbar(
                         .spacing([12.0, 8.0])
                         .show(ui, |ui| {
                             ui.label("Width");
-
                             ui.add_sized(
-                                [100.0, 20.0],
+                                [110.0, 20.0],
                                 egui::DragValue::new(&mut editor_ui.project_settings.atlas_width)
                                     .range(1..=16384)
                                     .speed(1.0),
                             );
-
                             ui.end_row();
 
                             ui.label("Height");
-
                             ui.add_sized(
-                                [100.0, 20.0],
+                                [110.0, 20.0],
                                 egui::DragValue::new(&mut editor_ui.project_settings.atlas_height)
                                     .range(1..=16384)
                                     .speed(1.0),
                             );
-
                             ui.end_row();
 
                             ui.label("Padding");
-
                             ui.add_sized(
-                                [100.0, 20.0],
+                                [110.0, 20.0],
                                 egui::DragValue::new(&mut editor_ui.project_settings.padding)
                                     .range(0..=4096)
                                     .speed(1.0),
                             );
-
                             ui.end_row();
                         });
+
+                    ui.add_space(8.0);
+                    ui.label("Highlights");
+                    ui.separator();
+
+                    egui::Grid::new("project_highlight_settings")
+                        .num_columns(2)
+                        .spacing([12.0, 8.0])
+                        .show(ui, |ui| {
+                            highlight_controls(
+                                ui,
+                                "Mesh selection",
+                                &mut editor_ui.project_settings.highlights.mesh,
+                            );
+
+                            highlight_controls(
+                                ui,
+                                "Atlas region",
+                                &mut editor_ui.project_settings.highlights.atlas_region,
+                            );
+
+                            highlight_controls(
+                                ui,
+                                "UV selection",
+                                &mut editor_ui.project_settings.highlights.uv,
+                            );
+                        });
+
+                    ui.add_space(8.0);
+
+                    // Keep atlas dimensions and padding in sync with the atlas.
+                    editor_ui.project_settings.apply_to_atlas(atlas);
                 });
 
-                editor_ui.project_settings.apply_to_atlas(atlas);
+                if ui.button("Editor…").clicked() {
+                    editor_ui.show_editor_settings_window = true;
+                    ui.close();
+                }
             });
 
-        ui.separator();
+            ui.separator();
 
-        ui.menu_button("Settings", |ui| {
-            if ui.button("Editor").clicked() {
-                editor_ui.show_editor_settings_window = true;
-                ui.close();
-            }
+            ui.label(format!("Atlas: {} × {}", atlas.width, atlas.height));
         });
+}
 
-        ui.separator();
+fn highlight_controls(ui: &mut egui::Ui, label: &str, highlight: &mut HighlightMaterial) {
+    ui.label(label);
+    ui.checkbox(&mut highlight.enabled, "Enabled");
+    ui.end_row();
 
-        ui.label(format!("Atlas: {} × {}", atlas.width, atlas.height));
-    });
+    ui.label("Color");
+
+    let mut color = egui::Color32::from_rgba_unmultiplied(
+        (highlight.color[0].clamp(0.0, 1.0) * 255.0).round() as u8,
+        (highlight.color[1].clamp(0.0, 1.0) * 255.0).round() as u8,
+        (highlight.color[2].clamp(0.0, 1.0) * 255.0).round() as u8,
+        (highlight.color[3].clamp(0.0, 1.0) * 255.0).round() as u8,
+    );
+
+    egui::color_picker::color_picker_color32(ui, &mut color, egui::color_picker::Alpha::OnlyBlend);
+
+    highlight.color = color.to_array().map(|channel| channel as f32 / 255.0);
+
+    ui.end_row();
+
+    ui.label("Strength");
+    ui.add(egui::Slider::new(&mut highlight.strength, 0.0..=1.0).show_value(true));
+    ui.end_row();
 }
