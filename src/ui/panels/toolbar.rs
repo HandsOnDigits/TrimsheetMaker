@@ -205,14 +205,59 @@ pub fn toolbar(
                 }
 
                 ui.menu_button("Trim Atlas", |ui| {
-                    if ui.button("Exact Dimensions").clicked() {
-                        trim_atlas(false, atlas, editor_ui, mesh_scene_state, history);
+                    ui.checkbox(&mut editor_ui.trim_to_edge, "Trim to Edge")
+                        .on_hover_text(
+                            "Remove unused outer margins while preserving gaps between regions.",
+                        );
+
+                    ui.separator();
+
+                    let exact_shortcut = hotkeys
+                        .display_name(EditorAction::TrimAtlasExactDimensions)
+                        .unwrap_or_else(|| "Unassigned".to_string());
+
+                    let exact_clicked = ui
+                        .button(format!("Exact Dimensions    {exact_shortcut}"))
+                        .clicked();
+
+                    if exact_clicked {
+                        execute_action(
+                            EditorAction::TrimAtlasExactDimensions,
+                            editor_ui,
+                            atlas,
+                            images,
+                            mesh_preview,
+                            mesh_light,
+                            mesh_scene_state,
+                            commands,
+                            meshes,
+                            history,
+                        );
 
                         ui.close();
                     }
 
-                    if ui.button("Power of Two").clicked() {
-                        trim_atlas(true, atlas, editor_ui, mesh_scene_state, history);
+                    let power_of_two_shortcut = hotkeys
+                        .display_name(EditorAction::TrimAtlasPowerOfTwo)
+                        .unwrap_or_else(|| "Unassigned".to_string());
+
+                    let power_of_two_clicked = ui
+                        .button(format!("Power of Two    {power_of_two_shortcut}"))
+                        .clicked();
+
+                    if power_of_two_clicked {
+                        execute_action(
+                            EditorAction::TrimAtlasPowerOfTwo,
+                            editor_ui,
+                            atlas,
+                            images,
+                            mesh_preview,
+                            mesh_light,
+                            mesh_scene_state,
+                            commands,
+                            meshes,
+                            history,
+                        );
 
                         ui.close();
                     }
@@ -408,24 +453,6 @@ fn highlight_controls(ui: &mut egui::Ui, label: &str, highlight: &mut HighlightM
     ui.label("Strength");
     ui.add(egui::Slider::new(&mut highlight.strength, 0.0..=1.0).show_value(true));
     ui.end_row();
-}
-
-fn trim_atlas(
-    power_of_two: bool,
-    atlas: &mut Atlas,
-    editor_ui: &mut EditorUi,
-    mesh_scene_state: &MeshSceneState,
-    history: &mut EditorHistory,
-) {
-    // Capture the state before changing the atlas, so Undo can restore it.
-    let before = EditorSnapshot::capture(atlas, &editor_ui.project_settings, mesh_scene_state);
-
-    if atlas.trim_to_fit(power_of_two) {
-        editor_ui.project_settings.atlas_width = atlas.width;
-        editor_ui.project_settings.atlas_height = atlas.height;
-
-        history.push(before);
-    }
 }
 
 fn repack_atlas(

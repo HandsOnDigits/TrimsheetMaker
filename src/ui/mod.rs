@@ -145,6 +145,8 @@ pub struct EditorUi {
     pub show_materials: bool,
     pub show_inspector: bool,
     pub show_status: bool,
+
+    pub trim_to_edge: bool,
 }
 
 impl EditorUi {
@@ -221,6 +223,8 @@ impl Default for EditorUi {
             show_materials: true,
             show_inspector: true,
             show_status: true,
+
+            trim_to_edge: false,
         }
     }
 }

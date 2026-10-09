@@ -895,25 +895,110 @@ impl Atlas {
         Some((width.max(1), height.max(1)))
     }
 
-    /// Trims unused atlas space without moving or resizing materials.
+    /// Trims unused atlas space.
     ///
-    /// Returns true if the atlas dimensions changed.
-    pub fn trim_to_fit(&mut self, power_of_two: bool) -> bool {
-        let Some((width, height)) = self.minimized_dimensions(power_of_two) else {
+    /// When `trim_to_edge` is true, crops the outer margins while preserving
+    /// region positions relative to one another and keeping configured padding
+    /// at the left and top edges.
+    ///
+    /// When false, preserves the existing trim behavior.
+
+    pub fn trim_to_fit(&mut self, power_of_two: bool, trim_to_edge: bool) -> bool {
+        if !trim_to_edge {
+            let Some((width, height)) = self.minimized_dimensions(power_of_two) else {
+                return false;
+            };
+
+            if self.width == width && self.height == height {
+                return false;
+            }
+
+            self.width = width;
+            self.height = height;
+
+            self.mark_uv_dirty();
+            self.mark_image_dirty();
+
+            return true;
+        }
+
+        let mut min_x = u32::MAX;
+        let mut min_y = u32::MAX;
+        let mut max_x = 0u32;
+        let mut max_y = 0u32;
+
+        for material in &self.materials {
+            let (x, y, width, height) = material.transform.positive_atlas_rect();
+
+            if width == 0 || height == 0 {
+                continue;
+            }
+
+            min_x = min_x.min(x);
+            min_y = min_y.min(y);
+            max_x = max_x.max(x.saturating_add(width));
+            max_y = max_y.max(y.saturating_add(height));
+        }
+
+        if min_x == u32::MAX || max_x <= min_x || max_y <= min_y {
+            return false;
+        }
+
+        // Crop exactly to the occupied bounds.
+        let mut width = max_x - min_x;
+        let mut height = max_y - min_y;
+
+        if power_of_two {
+            let Some(w) = width.checked_next_power_of_two() else {
+                return false;
+            };
+            let Some(h) = height.checked_next_power_of_two() else {
+                return false;
+            };
+
+            width = w;
+            height = h;
+        }
+
+        // Prepare all shifted positions before changing anything.
+        // Transform coordinates may be negative for rotated regions because
+        // they represent the unrotated origin, not necessarily the visible corner.
+        let shifted_positions: Option<Vec<(i32, i32)>> = self
+            .materials
+            .iter()
+            .map(|material| {
+                let transform = material.transform;
+
+                if transform.width == 0 || transform.height == 0 {
+                    return Some((transform.x, transform.y));
+                }
+
+                let x = i64::from(transform.x) - i64::from(min_x);
+                let y = i64::from(transform.y) - i64::from(min_y);
+
+                Some((i32::try_from(x).ok()?, i32::try_from(y).ok()?))
+            })
+            .collect();
+
+        let Some(shifted_positions) = shifted_positions else {
             return false;
         };
 
-        if self.width == width && self.height == height {
+        let changed = self.width != width || self.height != height || min_x != 0 || min_y != 0;
+
+        if !changed {
             return false;
+        }
+
+        for (material, (x, y)) in self.materials.iter_mut().zip(shifted_positions) {
+            material.transform.x = x;
+            material.transform.y = y;
         }
 
         self.width = width;
         self.height = height;
 
-        // UV coordinates depend on the atlas dimensions.
         self.mark_uv_dirty();
-
-        // Rebuild every generated atlas map at the new dimensions.
         self.mark_image_dirty();
 
         true
@@ -1351,22 +1436,13 @@ fn source_coordinates(
 }
 
 fn atlas_destination_rect(transform: Transform) -> Option<(i64, i64, usize, usize)> {
-    let (width, height) = match transform.rotation {
-        Rotation::Deg0 | Rotation::Deg180 => (transform.width, transform.height),
-
-        Rotation::Deg90 | Rotation::Deg270 => (transform.height, transform.width),
-    };
+    let (x, y, width, height) = transform.positive_atlas_rect();
 
     if width == 0 || height == 0 {
         return None;
     }
 
-    Some((
-        transform.x as i64,
-        transform.y as i64,
-        width as usize,
-        height as usize,
-    ))
+    Some((i64::from(x), i64::from(y), width as usize, height as usize))
 }
 
 fn make_atlas_image(width: usize, height: usize, data: Vec<u8>, format: TextureFormat) -> Image {
