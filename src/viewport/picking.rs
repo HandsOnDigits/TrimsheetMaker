@@ -105,7 +105,7 @@ pub fn pick_mesh_primitive(
         return;
     };
 
-    let mut closest: Option<(f32, MeshPrimitiveSelection)> = None;
+    let mut closest: Option<(f32, MeshPrimitiveSelection, Vec3, Vec3)> = None;
 
     for (part, transform, mesh_handle) in &parts {
         let Some(mesh_entry) = mesh_scene_state.get(part.mesh_id) else {
@@ -134,16 +134,29 @@ pub fn pick_mesh_primitive(
             primitive_index: mesh_part.primitive_index,
         };
 
+        let Some(center) = mesh_world_bounds_center(mesh, transform) else {
+            continue;
+        };
+
+        let hit_point = ray.origin + *ray.direction * distance;
+
+        let Some(normal) = mesh_world_local_normal(mesh, transform, hit_point, *ray.direction)
+        else {
+            continue;
+        };
+
         if closest
             .as_ref()
-            .is_none_or(|(closest_distance, _)| distance < *closest_distance)
+            .is_none_or(|(closest_distance, _, _, _)| distance < *closest_distance)
         {
-            closest = Some((distance, selection));
+            closest = Some((distance, selection, center, normal));
         }
     }
 
-    let Some((_, selection)) = closest else {
+    let Some((_, selection, center, normal)) = closest else {
         mesh_preview.selected_primitive = None;
+        mesh_preview.selected_primitive_center = None;
+        mesh_preview.selected_primitive_normal = None;
 
         if mesh_preview.transform_mode == TransformMode::Uv {
             editor_ui.selected_uv_assignment = None;
@@ -153,6 +166,11 @@ pub fn pick_mesh_primitive(
     };
 
     mesh_preview.selected_primitive = Some(selection);
+    mesh_preview.selected_primitive_center = Some(center);
+    mesh_preview.selected_primitive_normal = Some(normal);
+
+    mesh_preview.selected_primitive = Some(selection);
+    mesh_preview.selected_primitive_center = Some(center);
 
     let material_index = atlas.materials.iter().find_map(|material| {
         material
@@ -335,5 +353,125 @@ pub fn sync_mesh_primitive_wireframe(
                 .entity(entity)
                 .remove::<(Wireframe, WireframeColor, WireframeLineWidth)>();
         }
+    }
+}
+
+fn mesh_world_bounds_center(mesh: &Mesh, transform: &GlobalTransform) -> Option<Vec3> {
+    let positions = match mesh.attribute(Mesh::ATTRIBUTE_POSITION)? {
+        bevy::mesh::VertexAttributeValues::Float32x3(values) => values,
+        _ => return None,
+    };
+
+    let mut min = Vec3::splat(f32::INFINITY);
+    let mut max = Vec3::splat(f32::NEG_INFINITY);
+
+    for position in positions {
+        let world_position = transform.transform_point(Vec3::from_array(*position));
+
+        min = min.min(world_position);
+        max = max.max(world_position);
+    }
+
+    (min.is_finite() && max.is_finite()).then_some((min + max) * 0.5)
+}
+
+fn mesh_world_local_normal(
+    mesh: &Mesh,
+    transform: &GlobalTransform,
+    hit_point: Vec3,
+    ray_direction: Vec3,
+) -> Option<Vec3> {
+    use bevy::mesh::{Indices, VertexAttributeValues};
+
+    if mesh.primitive_topology() != bevy::mesh::PrimitiveTopology::TriangleList {
+        return None;
+    }
+
+    let positions = match mesh.attribute(Mesh::ATTRIBUTE_POSITION)? {
+        VertexAttributeValues::Float32x3(values) => values,
+        _ => return None,
+    };
+
+    let indices: Vec<usize> = match mesh.indices() {
+        Some(Indices::U16(values)) => values.iter().map(|&i| i as usize).collect(),
+        Some(Indices::U32(values)) => values.iter().map(|&i| i as usize).collect(),
+        None => (0..positions.len()).collect(),
+    };
+
+    // (distance squared from hit, normal, triangle area)
+    let mut triangles = Vec::new();
+    let mut bounds_min = Vec3::splat(f32::INFINITY);
+    let mut bounds_max = Vec3::splat(f32::NEG_INFINITY);
+
+    for triangle in indices.chunks_exact(3) {
+        let Some(&pa) = positions.get(triangle[0]) else {
+            continue;
+        };
+        let Some(&pb) = positions.get(triangle[1]) else {
+            continue;
+        };
+        let Some(&pc) = positions.get(triangle[2]) else {
+            continue;
+        };
+
+        let a = transform.transform_point(Vec3::from_array(pa));
+        let b = transform.transform_point(Vec3::from_array(pb));
+        let c = transform.transform_point(Vec3::from_array(pc));
+
+        bounds_min = bounds_min.min(a).min(b).min(c);
+        bounds_max = bounds_max.max(a).max(b).max(c);
+
+        let cross = (b - a).cross(c - a);
+        let double_area = cross.length();
+
+        if double_area <= 1e-8 {
+            continue;
+        }
+
+        let centroid = (a + b + c) / 3.0;
+        let mut normal = cross / double_area;
+
+        // Orient the normal toward the side from which the ray arrived.
+        if normal.dot(ray_direction) > 0.0 {
+            normal = -normal;
+        }
+
+        triangles.push((
+            centroid.distance_squared(hit_point),
+            normal,
+            double_area * 0.5,
+        ));
+    }
+
+    if triangles.is_empty() {
+        return None;
+    }
+
+    // Use the closest triangle as the local reference direction.
+    triangles.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let reference = triangles[0].1;
+
+    let bounds_radius = (bounds_max - bounds_min).length().max(1e-4);
+    let neighborhood_radius = bounds_radius * 0.15;
+    let radius_squared = neighborhood_radius * neighborhood_radius;
+
+    let mut normal_sum = Vec3::ZERO;
+
+    // Only use a small local neighborhood, not the entire primitive.
+    for &(distance_squared, normal, area) in triangles.iter().take(16) {
+        // Ignore triangles facing a substantially different direction.
+        if normal.dot(reference) < 0.25 {
+            continue;
+        }
+
+        // Nearby triangles contribute more than distant ones.
+        let distance_weight = 1.0 / (1.0 + distance_squared / radius_squared);
+        normal_sum += normal * area * distance_weight;
+    }
+
+    if normal_sum.length_squared() > 1e-12 {
+        Some(normal_sum.normalize())
+    } else {
+        Some(reference)
     }
 }

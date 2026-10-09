@@ -43,6 +43,8 @@ pub struct MeshPreview {
 
     pub selected_mesh_id: Option<u64>,
     pub selected_primitive: Option<MeshPrimitiveSelection>,
+    pub selected_primitive_center: Option<Vec3>,
+    pub selected_primitive_normal: Option<Vec3>,
 
     pub material: Handle<MeshPreviewMaterial>,
     pub uv_revision: u64,
@@ -55,6 +57,8 @@ impl MeshPreview {
     pub fn clear_selection(&mut self) {
         self.selected_mesh_id = None;
         self.selected_primitive = None;
+        self.selected_primitive_center = None;
+        self.selected_primitive_normal = None;
     }
 
     pub fn get_view(&self) -> MeshPreviewView {

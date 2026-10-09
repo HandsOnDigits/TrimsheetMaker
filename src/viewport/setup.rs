@@ -74,6 +74,8 @@ pub fn setup_mesh_preview(
 
         selected_mesh_id: None,
         selected_primitive: None,
+        selected_primitive_center: None,
+        selected_primitive_normal: None,
 
         material,
         uv_revision: 0,

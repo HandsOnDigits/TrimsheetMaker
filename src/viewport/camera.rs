@@ -123,6 +123,14 @@ pub fn orbit_camera(
 
         camera_transform.translation = mesh_preview.target + offset;
 
-        camera_transform.look_at(mesh_preview.target, Vec3::Y);
+        let view_direction = (mesh_preview.target - camera_transform.translation).normalize();
+
+        let up = if view_direction.dot(Vec3::Y).abs() > 0.98 {
+            Vec3::Z
+        } else {
+            Vec3::Y
+        };
+
+        camera_transform.look_at(mesh_preview.target, up);
     }
 }

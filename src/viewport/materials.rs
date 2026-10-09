@@ -57,6 +57,24 @@ pub fn sync_atlas_to_mesh_preview_material(
     mut preview_materials: ResMut<MeshPreviewMaterials>,
 ) {
     for atlas_material in &atlas.materials {
+        if preview_materials.default.is_none() {
+            let handle = materials.add(MeshPreviewMaterial {
+                base: StandardMaterial {
+                    opaque_render_method: OpaqueRendererMethod::Forward,
+                    ..default()
+                },
+                extension: MeshPreviewExtension {
+                    base_color_texture: Some(default_textures.checkerboard.clone()),
+                    normal_texture: Some(default_textures.flat_normal.clone()),
+                    ambient_occlusion_texture: Some(default_textures.white.clone()),
+                    roughness_texture: Some(default_textures.white.clone()),
+                    metallic_texture: Some(default_textures.black.clone()),
+                },
+            });
+
+            preview_materials.default = Some(handle);
+        }
+
         let handle = if let Some(handle) = preview_materials
             .by_atlas_material
             .get(&atlas_material.index)
