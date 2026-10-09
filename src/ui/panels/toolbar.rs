@@ -252,8 +252,19 @@ pub fn toolbar(
                     }
                 });
 
-                if ui.button("Repack Atlas").clicked() {
-                    repack_atlas(atlas, editor_ui, mesh_scene_state, history);
+                if hotkeys.menu_button(ui, EditorAction::RepackAtlas, "Repack Atlas") {
+                    execute_action(
+                        EditorAction::RepackAtlas,
+                        editor_ui,
+                        atlas,
+                        images,
+                        mesh_preview,
+                        mesh_light,
+                        mesh_scene_state,
+                        commands,
+                        meshes,
+                        history,
+                    );
 
                     ui.close();
                 }
@@ -442,20 +453,4 @@ fn highlight_controls(ui: &mut egui::Ui, label: &str, highlight: &mut HighlightM
     ui.label("Strength");
     ui.add(egui::Slider::new(&mut highlight.strength, 0.0..=1.0).show_value(true));
     ui.end_row();
-}
-
-fn repack_atlas(
-    atlas: &mut Atlas,
-    editor_ui: &mut EditorUi,
-    mesh_scene_state: &MeshSceneState,
-    history: &mut EditorHistory,
-) {
-    let before = EditorSnapshot::capture(atlas, &editor_ui.project_settings, mesh_scene_state);
-
-    if atlas.repack() {
-        editor_ui.project_settings.atlas_width = atlas.width;
-        editor_ui.project_settings.atlas_height = atlas.height;
-
-        history.push(before);
-    }
 }

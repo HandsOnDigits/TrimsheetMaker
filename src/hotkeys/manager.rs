@@ -206,6 +206,11 @@ impl HotkeyManager {
             EditorAction::TrimAtlasPowerOfTwo,
             Hotkey::new(KeyCode::KeyT, true, true, true, false, false),
         );
+
+        self.bindings.insert(
+            EditorAction::RepackAtlas,
+            Hotkey::new(KeyCode::KeyP, true, false, true, false, false),
+        );
     }
 
     pub fn binding(&self, action: EditorAction) -> Option<Hotkey> {

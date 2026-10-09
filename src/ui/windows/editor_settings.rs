@@ -183,8 +183,6 @@ fn all_editable_actions() -> &'static [EditorAction] {
         EditorAction::ImportMultipleMaterials,
         EditorAction::ImportSingleMaterial,
         EditorAction::ImportMesh,
-        EditorAction::TrimAtlasExactDimensions,
-        EditorAction::TrimAtlasPowerOfTwo,
         EditorAction::RemoveAtlasRegion,
         EditorAction::RemoveSelectedMesh,
         EditorAction::ResetViewport,
@@ -195,6 +193,9 @@ fn all_editable_actions() -> &'static [EditorAction] {
         EditorAction::ToggleMeshWindow,
         EditorAction::ToggleMeshPartsVisibility,
         EditorAction::ToggleUvTransformMode,
+        EditorAction::TrimAtlasExactDimensions,
+        EditorAction::TrimAtlasPowerOfTwo,
+        EditorAction::RepackAtlas,
     ]
 }
 
@@ -228,5 +229,7 @@ fn action_display_name(action: EditorAction) -> &'static str {
 
         EditorAction::TrimAtlasExactDimensions => "Trim Atlas: Exact Dimensions",
         EditorAction::TrimAtlasPowerOfTwo => "Trim Atlas: Power of Two",
+
+        EditorAction::RepackAtlas => "Repack Atlas",
     }
 }

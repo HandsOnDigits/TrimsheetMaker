@@ -44,6 +44,8 @@ pub enum EditorAction {
 
     TrimAtlasExactDimensions,
     TrimAtlasPowerOfTwo,
+
+    RepackAtlas,
 }
 
 #[derive(Message, Debug, Clone, Copy)]
@@ -633,6 +635,18 @@ pub fn execute_action(
             if atlas.trim_to_fit(power_of_two, editor_ui.trim_to_edge) {
                 editor_ui.project_settings.atlas_width = atlas.width;
                 editor_ui.project_settings.atlas_height = atlas.height;
+                history.push(before);
+            }
+        }
+
+        EditorAction::RepackAtlas => {
+            let before =
+                EditorSnapshot::capture(atlas, &editor_ui.project_settings, mesh_scene_state);
+
+            if atlas.repack() {
+                editor_ui.project_settings.atlas_width = atlas.width;
+                editor_ui.project_settings.atlas_height = atlas.height;
+
                 history.push(before);
             }
         }
