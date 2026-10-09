@@ -919,6 +919,195 @@ impl Atlas {
         true
     }
 
+    /// Repack materials into a tighter shelf layout.
+    ///
+    /// Material dimensions and identities are preserved. Positions and
+    /// rotations may change. Returns true if the layout changed.
+    pub fn repack(&mut self) -> bool {
+        if self.materials.is_empty() {
+            return false;
+        }
+
+        let padding = self.padding;
+
+        // Keep the original layout intact until a complete new layout exists.
+        let mut items: Vec<(usize, u32, u32)> = Vec::new();
+
+        for (index, material) in self.materials.iter().enumerate() {
+            let width = material.transform.width;
+            let height = material.transform.height;
+
+            // Do not silently discard materials whose dimensions are unknown.
+            if width == 0 || height == 0 {
+                return false;
+            }
+
+            items.push((index, width, height));
+        }
+
+        // Large rectangles first generally produce better shelf packing.
+        items.sort_by(|a, b| {
+            let area_a = u64::from(a.1) * u64::from(a.2);
+            let area_b = u64::from(b.1) * u64::from(b.2);
+
+            area_b
+                .cmp(&area_a)
+                .then_with(|| b.1.max(b.2).cmp(&a.1.max(a.2)))
+        });
+
+        let total_area: u64 = items
+            .iter()
+            .map(|(_, width, height)| {
+                (u64::from(*width) + u64::from(padding)) * (u64::from(*height) + u64::from(padding))
+            })
+            .sum();
+
+        let target_width = (total_area as f64).sqrt().ceil() as u32 + padding.saturating_mul(2);
+
+        let minimum_width = items
+            .iter()
+            .map(|(_, width, height)| (*width).max(*height))
+            .max()
+            .unwrap_or(1);
+
+        // Try several widths to avoid relying on one arbitrary aspect ratio.
+        let mut candidate_widths = vec![minimum_width];
+
+        for factor in [0.75_f64, 0.9, 1.0, 1.1, 1.25, 1.5, 2.0] {
+            let width = ((target_width as f64 * factor).ceil() as u32).max(minimum_width);
+
+            candidate_widths.push(width);
+        }
+
+        candidate_widths.sort_unstable();
+        candidate_widths.dedup();
+
+        let mut best: Option<(u64, u32, u32, Vec<(usize, u32, u32, Rotation)>)> = None;
+
+        for bin_width in candidate_widths {
+            let Some(content_width) = bin_width.checked_sub(padding.saturating_mul(2)) else {
+                continue;
+            };
+
+            let mut x = padding;
+            let mut y = padding;
+            let mut row_height = 0_u32;
+            let mut max_right = padding;
+
+            let mut placements = Vec::with_capacity(items.len());
+            let mut failed = false;
+
+            for &(index, original_width, original_height) in &items {
+                let orientations = [
+                    (original_width, original_height, Rotation::Deg0),
+                    (original_height, original_width, Rotation::Deg90),
+                ];
+
+                let available_width = content_width.saturating_sub(x.saturating_sub(padding));
+
+                // Prefer an orientation that fits this row and adds the
+                // least height to it. If neither fits, begin another row.
+                let mut fitting: Vec<_> = orientations
+                    .iter()
+                    .copied()
+                    .filter(|(width, _, _)| *width <= available_width)
+                    .collect();
+
+                if fitting.is_empty() && x != padding {
+                    y = y.saturating_add(row_height).saturating_add(padding);
+                    x = padding;
+                    row_height = 0;
+
+                    fitting = orientations
+                        .iter()
+                        .copied()
+                        .filter(|(width, _, _)| *width <= content_width)
+                        .collect();
+                }
+
+                let Some((placed_width, placed_height, rotation)) =
+                    fitting.into_iter().min_by_key(|(_, height, _)| *height)
+                else {
+                    failed = true;
+                    break;
+                };
+
+                placements.push((index, x, y, rotation));
+
+                x = x.saturating_add(placed_width).saturating_add(padding);
+                row_height = row_height.max(placed_height);
+                max_right = max_right.max(x);
+            }
+
+            if failed {
+                continue;
+            }
+
+            let height = y.saturating_add(row_height).saturating_add(padding).max(1);
+
+            let width = max_right.max(padding.saturating_add(1));
+            let area = u64::from(width) * u64::from(height);
+
+            if best
+                .as_ref()
+                .is_none_or(|(best_area, _, _, _)| area < *best_area)
+            {
+                best = Some((area, width, height, placements));
+            }
+        }
+
+        let Some((_, width, height, placements)) = best else {
+            return false;
+        };
+
+        let mut changed = self.width != width || self.height != height;
+
+        for (index, x, y, rotation) in placements {
+            let material = &mut self.materials[index];
+            let transform = &mut material.transform;
+
+            // The packer stores the desired top-left of the ROTATED rectangle.
+            // Transform.x/y represent the unrotated rectangle's origin, so
+            // compensate for the dimension swap to keep the packed position exact.
+            let (rotated_width, rotated_height) = match rotation {
+                Rotation::Deg0 | Rotation::Deg180 => (transform.width, transform.height),
+                Rotation::Deg90 | Rotation::Deg270 => (transform.height, transform.width),
+            };
+
+            let new_transform_x =
+                x as i64 + i64::from(rotated_width) / 2 - i64::from(transform.width) / 2;
+
+            let new_transform_y =
+                y as i64 + i64::from(rotated_height) / 2 - i64::from(transform.height) / 2;
+
+            let new_transform_x = new_transform_x as i32;
+            let new_transform_y = new_transform_y as i32;
+
+            if transform.x != new_transform_x
+                || transform.y != new_transform_y
+                || transform.rotation != rotation
+            {
+                changed = true;
+            }
+
+            transform.x = new_transform_x;
+            transform.y = new_transform_y;
+            transform.rotation = rotation;
+        }
+
+        if !changed {
+            return false;
+        }
+
+        self.width = width;
+        self.height = height;
+
+        self.mark_uv_dirty();
+        self.mark_image_dirty();
+
+        true
+    }
+
     /// Total area occupied by material rectangles, excluding padding.
     pub fn used_material_area(&self) -> u64 {
         self.materials

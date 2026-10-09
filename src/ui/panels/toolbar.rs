@@ -217,6 +217,12 @@ pub fn toolbar(
                         ui.close();
                     }
                 });
+
+                if ui.button("Repack Atlas").clicked() {
+                    repack_atlas(atlas, editor_ui, mesh_scene_state, history);
+
+                    ui.close();
+                }
             });
 
             ui.separator();
@@ -415,6 +421,22 @@ fn trim_atlas(
     let before = EditorSnapshot::capture(atlas, &editor_ui.project_settings, mesh_scene_state);
 
     if atlas.trim_to_fit(power_of_two) {
+        editor_ui.project_settings.atlas_width = atlas.width;
+        editor_ui.project_settings.atlas_height = atlas.height;
+
+        history.push(before);
+    }
+}
+
+fn repack_atlas(
+    atlas: &mut Atlas,
+    editor_ui: &mut EditorUi,
+    mesh_scene_state: &MeshSceneState,
+    history: &mut EditorHistory,
+) {
+    let before = EditorSnapshot::capture(atlas, &editor_ui.project_settings, mesh_scene_state);
+
+    if atlas.repack() {
         editor_ui.project_settings.atlas_width = atlas.width;
         editor_ui.project_settings.atlas_height = atlas.height;
 
