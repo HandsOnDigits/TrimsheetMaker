@@ -166,6 +166,9 @@ impl HotkeyManager {
         self.bindings
             .insert(EditorAction::AssignMaterial, Hotkey::plain(KeyCode::KeyM));
 
+        self.bindings
+            .insert(EditorAction::UnassignMaterial, Hotkey::shift(KeyCode::KeyM));
+
         // Atlas
         self.bindings.insert(
             EditorAction::RemoveAtlasRegion,

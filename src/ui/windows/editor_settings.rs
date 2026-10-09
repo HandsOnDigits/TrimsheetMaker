@@ -186,6 +186,7 @@ fn all_editable_actions() -> &'static [EditorAction] {
         EditorAction::RemoveAtlasRegion,
         EditorAction::RemoveSelectedMesh,
         EditorAction::AssignMaterial,
+        EditorAction::UnassignMaterial,
         EditorAction::ResetViewport,
         EditorAction::ToggleMaterialsPanel,
         EditorAction::ToggleInspectorPanel,
@@ -216,6 +217,7 @@ fn action_display_name(action: EditorAction) -> &'static str {
         EditorAction::RemoveSelectedMesh => "Remove Selected Mesh",
 
         EditorAction::AssignMaterial => "Assign Material",
+        EditorAction::UnassignMaterial => "Unassign Material",
 
         EditorAction::ResetViewport => "Reset Atlas View",
 

@@ -30,6 +30,7 @@ pub enum EditorAction {
     Redo,
 
     AssignMaterial,
+    UnassignMaterial,
 
     RemoveAtlasRegion,
     RemoveSelectedMesh,
@@ -299,6 +300,16 @@ pub fn execute_action(
 
         EditorAction::AssignMaterial => {
             ui::assign_selected_primitives(
+                editor_ui,
+                atlas,
+                mesh_scene_state,
+                mesh_preview,
+                history,
+            );
+        }
+
+        EditorAction::UnassignMaterial => {
+            ui::unassign_selected_primitives(
                 editor_ui,
                 atlas,
                 mesh_scene_state,
