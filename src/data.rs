@@ -858,6 +858,66 @@ impl Atlas {
             self.image_revision = self.image_revision.wrapping_add(1);
         }
     }
+
+    /// Returns the smallest atlas dimensions that contain every material
+    /// and preserve the configured padding at the right and bottom edges.
+    ///
+    /// Material positions are never changed.
+    pub fn minimized_dimensions(&self, power_of_two: bool) -> Option<(u32, u32)> {
+        let mut max_x = 0u32;
+        let mut max_y = 0u32;
+
+        for material in &self.materials {
+            let (x, y, width, height) = material.transform.positive_atlas_rect();
+
+            if width == 0 || height == 0 {
+                continue;
+            }
+
+            max_x = max_x.max(x.saturating_add(width));
+            max_y = max_y.max(y.saturating_add(height));
+        }
+
+        // An empty atlas has nothing to trim around.
+        if max_x == 0 || max_y == 0 {
+            return None;
+        }
+
+        // Keep the configured padding around the occupied area.
+        let mut width = max_x.saturating_add(self.padding);
+        let mut height = max_y.saturating_add(self.padding);
+
+        if power_of_two {
+            width = width.checked_next_power_of_two()?;
+            height = height.checked_next_power_of_two()?;
+        }
+
+        Some((width.max(1), height.max(1)))
+    }
+
+    /// Trims unused atlas space without moving or resizing materials.
+    ///
+    /// Returns true if the atlas dimensions changed.
+    pub fn trim_to_fit(&mut self, power_of_two: bool) -> bool {
+        let Some((width, height)) = self.minimized_dimensions(power_of_two) else {
+            return false;
+        };
+
+        if self.width == width && self.height == height {
+            return false;
+        }
+
+        self.width = width;
+        self.height = height;
+
+        // UV coordinates depend on the atlas dimensions.
+        self.mark_uv_dirty();
+
+        // Rebuild every generated atlas map at the new dimensions.
+        self.mark_image_dirty();
+
+        true
+    }
 }
 
 impl Default for Atlas {

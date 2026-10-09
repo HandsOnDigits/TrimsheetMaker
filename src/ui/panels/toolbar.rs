@@ -204,19 +204,24 @@ pub fn toolbar(
                     ui.close();
                 }
 
-                if menu_action_button(ui, hotkeys, EditorAction::ResetViewport, "Reset Viewports") {
-                    execute_action(
-                        EditorAction::ResetViewport,
-                        editor_ui,
+                if ui.button("Trim Atlas").clicked() {
+                    // Capture the complete state before trimming for Undo.
+                    let before = EditorSnapshot::capture(
                         atlas,
-                        images,
-                        mesh_preview,
-                        mesh_light,
+                        &editor_ui.project_settings,
                         mesh_scene_state,
-                        commands,
-                        meshes,
-                        history,
                     );
+
+                    // false = use exact dimensions instead of power-of-two.
+                    if atlas.trim_to_fit(false) {
+                        // Keep project settings synchronized so they don't
+                        // restore the old dimensions on the next update.
+                        editor_ui.project_settings.atlas_width = atlas.width;
+                        editor_ui.project_settings.atlas_height = atlas.height;
+
+                        history.push(before);
+                    }
+
                     ui.close();
                 }
             });
