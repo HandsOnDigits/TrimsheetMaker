@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
 
-use super::{EditorUi, menu_action_button};
+use super::EditorUi;
 
 use crate::{
     data::Atlas,
@@ -35,7 +35,7 @@ pub fn toolbar(
 
             // File
             ui.menu_button("File", |ui| {
-                if menu_action_button(ui, hotkeys, EditorAction::NewAtlas, "New Atlas") {
+                if hotkeys.menu_button(ui, EditorAction::NewAtlas, "New Atlas") {
                     execute_action(
                         EditorAction::NewAtlas,
                         editor_ui,
@@ -51,7 +51,7 @@ pub fn toolbar(
                     ui.close();
                 }
 
-                if menu_action_button(ui, hotkeys, EditorAction::OpenProject, "Open Project…") {
+                if hotkeys.menu_button(ui, EditorAction::OpenProject, "Open Project…") {
                     execute_action(
                         EditorAction::OpenProject,
                         editor_ui,
@@ -67,7 +67,7 @@ pub fn toolbar(
                     ui.close();
                 }
 
-                if menu_action_button(ui, hotkeys, EditorAction::SaveProject, "Save Project") {
+                if hotkeys.menu_button(ui, EditorAction::SaveProject, "Save Project") {
                     execute_action(
                         EditorAction::SaveProject,
                         editor_ui,
@@ -83,8 +83,7 @@ pub fn toolbar(
                     ui.close();
                 }
 
-                if menu_action_button(ui, hotkeys, EditorAction::SaveProjectAs, "Save Project As…")
-                {
+                if hotkeys.menu_button(ui, EditorAction::SaveProjectAs, "Save Project As…") {
                     execute_action(
                         EditorAction::SaveProjectAs,
                         editor_ui,
@@ -102,9 +101,8 @@ pub fn toolbar(
 
                 ui.separator();
 
-                if menu_action_button(
+                if hotkeys.menu_button(
                     ui,
-                    hotkeys,
                     EditorAction::ImportSingleMaterial,
                     "Import single Material…",
                 ) {
@@ -123,9 +121,8 @@ pub fn toolbar(
                     ui.close();
                 }
 
-                if menu_action_button(
+                if hotkeys.menu_button(
                     ui,
-                    hotkeys,
                     EditorAction::ImportMultipleMaterials,
                     "Import Multiple Materials…",
                 ) {
@@ -144,7 +141,7 @@ pub fn toolbar(
                     ui.close();
                 }
 
-                if menu_action_button(ui, hotkeys, EditorAction::ImportMesh, "Import meshes…") {
+                if hotkeys.menu_button(ui, EditorAction::ImportMesh, "Import meshes…") {
                     execute_action(
                         EditorAction::ImportMesh,
                         editor_ui,
@@ -162,7 +159,7 @@ pub fn toolbar(
 
                 ui.separator();
 
-                if menu_action_button(ui, hotkeys, EditorAction::ExportAtlas, "Export Atlas…") {
+                if hotkeys.menu_button(ui, EditorAction::ExportAtlas, "Export Atlas…") {
                     execute_action(
                         EditorAction::ExportAtlas,
                         editor_ui,
@@ -183,12 +180,7 @@ pub fn toolbar(
 
             // Edit
             ui.menu_button("Edit", |ui| {
-                if menu_action_button(
-                    ui,
-                    hotkeys,
-                    EditorAction::RemoveAtlasRegion,
-                    "Remove Selected",
-                ) {
+                if hotkeys.menu_button(ui, EditorAction::RemoveAtlasRegion, "Remove Selected") {
                     execute_action(
                         EditorAction::RemoveAtlasRegion,
                         editor_ui,
@@ -212,15 +204,15 @@ pub fn toolbar(
 
                     ui.separator();
 
-                    let exact_shortcut = hotkeys
-                        .display_name(EditorAction::TrimAtlasExactDimensions)
-                        .unwrap_or_else(|| "Unassigned".to_string());
+                    // 1. Exact Dimensions
+                    let mut exact_btn = egui::Button::new("Exact Dimensions");
+                    if let Some(shortcut) =
+                        hotkeys.display_name(EditorAction::TrimAtlasExactDimensions)
+                    {
+                        exact_btn = exact_btn.shortcut_text(shortcut);
+                    }
 
-                    let exact_clicked = ui
-                        .button(format!("Exact Dimensions    {exact_shortcut}"))
-                        .clicked();
-
-                    if exact_clicked {
+                    if ui.add(exact_btn).clicked() {
                         execute_action(
                             EditorAction::TrimAtlasExactDimensions,
                             editor_ui,
@@ -233,19 +225,17 @@ pub fn toolbar(
                             meshes,
                             history,
                         );
-
                         ui.close();
                     }
 
-                    let power_of_two_shortcut = hotkeys
-                        .display_name(EditorAction::TrimAtlasPowerOfTwo)
-                        .unwrap_or_else(|| "Unassigned".to_string());
+                    // 2. Power of Two
+                    let mut power_of_two_btn = egui::Button::new("Power of Two");
+                    if let Some(shortcut) = hotkeys.display_name(EditorAction::TrimAtlasPowerOfTwo)
+                    {
+                        power_of_two_btn = power_of_two_btn.shortcut_text(shortcut);
+                    }
 
-                    let power_of_two_clicked = ui
-                        .button(format!("Power of Two    {power_of_two_shortcut}"))
-                        .clicked();
-
-                    if power_of_two_clicked {
+                    if ui.add(power_of_two_btn).clicked() {
                         execute_action(
                             EditorAction::TrimAtlasPowerOfTwo,
                             editor_ui,
@@ -258,7 +248,6 @@ pub fn toolbar(
                             meshes,
                             history,
                         );
-
                         ui.close();
                     }
                 });
@@ -280,7 +269,7 @@ pub fn toolbar(
 
                 ui.separator();
 
-                if menu_action_button(ui, hotkeys, EditorAction::ResetViewport, "Reset Viewports") {
+                if hotkeys.menu_button(ui, EditorAction::ResetViewport, "Reset Viewports") {
                     execute_action(
                         EditorAction::ResetViewport,
                         editor_ui,

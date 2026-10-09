@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use bevy::prelude::*;
-use bevy_egui::EguiContexts;
+use bevy_egui::{EguiContexts, egui};
 
 use super::actions::{EditorAction, EditorActionMessage};
 
@@ -109,6 +109,10 @@ impl Hotkey {
             saved.super_key,
             saved.delete,
         ))
+    }
+
+    pub fn display_rich_text(&self, ui: &egui::Ui) -> egui::RichText {
+        egui::RichText::new(self.display_name()).color(ui.visuals().weak_text_color())
     }
 }
 
@@ -304,6 +308,17 @@ impl HotkeyManager {
             .iter()
             .map(|(&action, &hotkey)| (action, hotkey.to_saved()))
             .collect();
+    }
+
+    // Renders an egui menu button with automatic right-aligned gray shortcut text.
+    pub fn menu_button(&self, ui: &mut egui::Ui, action: EditorAction, label: &str) -> bool {
+        let mut button = egui::Button::new(label);
+
+        if let Some(shortcut) = self.display_name(action) {
+            button = button.shortcut_text(shortcut);
+        }
+
+        ui.add(button).clicked()
     }
 }
 

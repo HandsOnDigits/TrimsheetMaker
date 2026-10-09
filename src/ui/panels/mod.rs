@@ -27,7 +27,7 @@ use super::EditorUi;
 use crate::{
     data::Atlas,
     history::EditorHistory,
-    hotkeys::{EditorAction, EditorActionMessage, HotkeyManager},
+    hotkeys::{EditorActionMessage, HotkeyManager},
     mesh::{MeshLight, MeshSceneState},
     ui::windows,
     viewport::{MeshPreview, MeshViewportInput, MeshViewportLayout},
@@ -264,19 +264,4 @@ pub fn editor_ui(
     mesh_input.pointer_over_ui |= egui::Popup::is_any_open(ctx);
 
     Ok(())
-}
-
-fn menu_action_button(
-    ui: &mut egui::Ui,
-    hotkeys: &HotkeyManager,
-    action: EditorAction,
-    label: &str,
-) -> bool {
-    let mut button = egui::Button::new(label);
-
-    if let Some(shortcut) = hotkeys.display_name(action) {
-        button = button.shortcut_text(shortcut);
-    }
-
-    ui.add(button).clicked()
 }
