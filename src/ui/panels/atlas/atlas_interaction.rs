@@ -16,7 +16,7 @@ pub fn handle_material_selection(
     editor_ui: &mut EditorUi,
     atlas: &Atlas,
     mesh_scene_state: &MeshSceneState,
-    mesh_preview: &MeshPreview,
+    mesh_preview: &mut MeshPreview,
 ) {
     if !response.clicked_by(egui::PointerButton::Primary) {
         return;
@@ -34,8 +34,15 @@ pub fn handle_material_selection(
         {
             editor_ui.inspected_atlas_region = Some(material_index);
             editor_ui.selected_uv_assignment = Some(assignment);
+
+            mesh_preview.selected_primitive = Some(crate::viewport::MeshPrimitiveSelection {
+                mesh_id: assignment.0,
+                object_index: assignment.1,
+                primitive_index: assignment.2,
+            });
         } else {
             editor_ui.selected_uv_assignment = None;
+            mesh_preview.selected_primitive = None;
         }
 
         return;
