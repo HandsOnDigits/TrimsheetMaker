@@ -163,6 +163,9 @@ impl HotkeyManager {
         self.bindings
             .insert(EditorAction::Redo, Hotkey::ctrl_shift(KeyCode::KeyZ));
 
+        self.bindings
+            .insert(EditorAction::AssignMaterial, Hotkey::plain(KeyCode::KeyM));
+
         // Atlas
         self.bindings.insert(
             EditorAction::RemoveAtlasRegion,

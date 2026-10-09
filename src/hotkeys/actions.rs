@@ -9,7 +9,7 @@ use crate::{
     mesh::{MeshLight, MeshSceneState, spawn_mesh_scene},
     project,
     project_settings::ProjectSettings,
-    ui::EditorUi,
+    ui::{self, EditorUi},
     viewport::{MeshPreview, TransformMode},
 };
 
@@ -28,6 +28,8 @@ pub enum EditorAction {
 
     Undo,
     Redo,
+
+    AssignMaterial,
 
     RemoveAtlasRegion,
     RemoveSelectedMesh,
@@ -293,6 +295,16 @@ pub fn execute_action(
                 editor_ui.dragging_atlas_region = None;
                 editor_ui.drag_offset = egui::Vec2::ZERO;
             }
+        }
+
+        EditorAction::AssignMaterial => {
+            ui::assign_selected_primitives(
+                editor_ui,
+                atlas,
+                mesh_scene_state,
+                mesh_preview,
+                history,
+            );
         }
 
         EditorAction::ImportMultipleMaterials => {

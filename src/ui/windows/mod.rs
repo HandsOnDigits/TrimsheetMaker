@@ -3,7 +3,9 @@ pub mod import_mesh;
 pub mod import_multiple_materials;
 pub mod import_single_material;
 pub mod importer;
+
 pub mod meshes;
+pub use meshes::assign_selected_primitives;
 
 use bevy_egui::egui;
 
