@@ -204,26 +204,19 @@ pub fn toolbar(
                     ui.close();
                 }
 
-                if ui.button("Trim Atlas").clicked() {
-                    // Capture the complete state before trimming for Undo.
-                    let before = EditorSnapshot::capture(
-                        atlas,
-                        &editor_ui.project_settings,
-                        mesh_scene_state,
-                    );
+                ui.menu_button("Trim Atlas", |ui| {
+                    if ui.button("Exact Dimensions").clicked() {
+                        trim_atlas(false, atlas, editor_ui, mesh_scene_state, history);
 
-                    // false = use exact dimensions instead of power-of-two.
-                    if atlas.trim_to_fit(false) {
-                        // Keep project settings synchronized so they don't
-                        // restore the old dimensions on the next update.
-                        editor_ui.project_settings.atlas_width = atlas.width;
-                        editor_ui.project_settings.atlas_height = atlas.height;
-
-                        history.push(before);
+                        ui.close();
                     }
 
-                    ui.close();
-                }
+                    if ui.button("Power of Two").clicked() {
+                        trim_atlas(true, atlas, editor_ui, mesh_scene_state, history);
+
+                        ui.close();
+                    }
+                });
             });
 
             ui.separator();
@@ -409,4 +402,22 @@ fn highlight_controls(ui: &mut egui::Ui, label: &str, highlight: &mut HighlightM
     ui.label("Strength");
     ui.add(egui::Slider::new(&mut highlight.strength, 0.0..=1.0).show_value(true));
     ui.end_row();
+}
+
+fn trim_atlas(
+    power_of_two: bool,
+    atlas: &mut Atlas,
+    editor_ui: &mut EditorUi,
+    mesh_scene_state: &MeshSceneState,
+    history: &mut EditorHistory,
+) {
+    // Capture the state before changing the atlas, so Undo can restore it.
+    let before = EditorSnapshot::capture(atlas, &editor_ui.project_settings, mesh_scene_state);
+
+    if atlas.trim_to_fit(power_of_two) {
+        editor_ui.project_settings.atlas_width = atlas.width;
+        editor_ui.project_settings.atlas_height = atlas.height;
+
+        history.push(before);
+    }
 }

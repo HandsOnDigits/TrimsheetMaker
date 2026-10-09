@@ -918,6 +918,37 @@ impl Atlas {
 
         true
     }
+
+    /// Total area occupied by material rectangles, excluding padding.
+    pub fn used_material_area(&self) -> u64 {
+        self.materials
+            .iter()
+            .map(|material| {
+                let (_, _, width, height) = material.transform.positive_atlas_rect();
+                u64::from(width) * u64::from(height)
+            })
+            .sum()
+    }
+
+    /// Total area of the atlas.
+    pub fn total_atlas_area(&self) -> u64 {
+        u64::from(self.width) * u64::from(self.height)
+    }
+
+    /// Returns (used area, unused area, utilization percentage).
+    pub fn utilization_stats(&self) -> (u64, u64, f64) {
+        let total_area = self.total_atlas_area();
+        let used_area = self.used_material_area();
+        let unused_area = total_area.saturating_sub(used_area);
+
+        let utilization = if total_area == 0 {
+            0.0
+        } else {
+            used_area as f64 / total_area as f64 * 100.0
+        };
+
+        (used_area, unused_area, utilization)
+    }
 }
 
 impl Default for Atlas {
