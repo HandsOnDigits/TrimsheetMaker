@@ -79,6 +79,10 @@ pub struct EditorUi {
 
     pub atlas_drag_snapshot: Option<EditorSnapshot>,
     pub atlas_uv_drag_start: Option<Vec<(u64, usize, usize, UvTransform)>>,
+    pub atlas_settings_history: Option<EditorSnapshot>,
+    pub atlas_uv_rotation_drag: bool,
+    pub atlas_uv_rotation_start_angle: Option<f32>,
+
     pub properties_snapshot: Option<EditorSnapshot>,
 
     pub selected_mesh: Option<u64>,
@@ -159,6 +163,10 @@ impl Default for EditorUi {
 
             atlas_drag_snapshot: None,
             atlas_uv_drag_start: None,
+            atlas_settings_history: None,
+            atlas_uv_rotation_drag: false,
+            atlas_uv_rotation_start_angle: None,
+
             properties_snapshot: None,
             selected_uv_assignment: None,
 

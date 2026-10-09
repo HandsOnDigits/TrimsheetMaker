@@ -1,4 +1,8 @@
-use bevy::math::Vec2;
+use bevy::{
+    input::{ButtonInput, keyboard::KeyCode},
+    math::Vec2,
+};
+
 use bevy_egui::egui;
 
 use crate::{
@@ -63,6 +67,7 @@ pub fn handle_material_drag(
     history: &mut EditorHistory,
     mesh_scene_state: &mut MeshSceneState,
     mesh_preview: &mut MeshPreview,
+    keyboard: &ButtonInput<KeyCode>,
 ) {
     let atlas_rect = atlas_screen_rect(viewport, editor_ui, atlas);
 
@@ -73,6 +78,9 @@ pub fn handle_material_drag(
             mesh_scene_state,
         ));
 
+        editor_ui.atlas_uv_rotation_drag =
+            mesh_preview.transform_mode == TransformMode::Uv && keyboard.pressed(KeyCode::KeyR);
+
         if mesh_preview.transform_mode == TransformMode::Uv {
             start_uv_drag(response, atlas_rect, editor_ui, atlas, mesh_scene_state);
         } else {
@@ -82,7 +90,11 @@ pub fn handle_material_drag(
 
     if response.dragged_by(egui::PointerButton::Primary) {
         if mesh_preview.transform_mode == TransformMode::Uv {
-            drag_uv(response, editor_ui, atlas);
+            if editor_ui.atlas_uv_rotation_drag {
+                drag_uv_rotation(response, editor_ui, atlas, atlas_rect, mesh_scene_state);
+            } else {
+                drag_uv(response, editor_ui, atlas);
+            }
         } else {
             drag_atlas_region(response, atlas_rect, editor_ui, atlas);
         }
@@ -92,6 +104,7 @@ pub fn handle_material_drag(
         editor_ui.dragging_atlas_region = None;
         editor_ui.drag_offset = egui::Vec2::ZERO;
         editor_ui.atlas_uv_drag_start = None;
+        editor_ui.atlas_uv_rotation_drag = false;
 
         if mesh_preview.transform_mode != TransformMode::Uv {
             atlas.mark_bake_dirty();
@@ -101,6 +114,124 @@ pub fn handle_material_drag(
             history.push(before);
         }
     }
+}
+
+fn drag_uv_rotation(
+    response: &egui::Response,
+    editor_ui: &mut EditorUi,
+    atlas: &mut Atlas,
+    atlas_rect: egui::Rect,
+    mesh_scene_state: &MeshSceneState,
+) {
+    let Some(index) = editor_ui.inspected_atlas_region else {
+        return;
+    };
+
+    let Some((mesh_id, object_index, primitive_index)) = editor_ui.selected_uv_assignment else {
+        return;
+    };
+
+    let Some(pointer) = response.interact_pointer_pos() else {
+        return;
+    };
+
+    let Some(material) = atlas
+        .materials
+        .iter()
+        .find(|material| material.index == index)
+    else {
+        return;
+    };
+
+    let Some(assignment) = material.mesh_assignments.iter().find(|assignment| {
+        assignment.mesh_id == mesh_id
+            && assignment.object_index == object_index
+            && assignment.primitive_index == primitive_index
+    }) else {
+        return;
+    };
+
+    let Some(mesh) = mesh_scene_state.get(mesh_id) else {
+        return;
+    };
+
+    let Some(object) = mesh.scene.objects.get(object_index) else {
+        return;
+    };
+
+    let Some(primitive) = object.primitives.get(primitive_index) else {
+        return;
+    };
+
+    let pivot = UvTransform::uv_center(&primitive.uvs);
+    let transformed_pivot = assignment.uv_transform.apply(pivot, pivot);
+
+    let (x, y, width, height) = material.transform.atlas_rect();
+
+    let center = egui::pos2(
+        atlas_rect.left() + (x as f32 + transformed_pivot.x * width as f32) * editor_ui.atlas_zoom,
+        atlas_rect.top()
+            + (y as f32 + (1.0 - transformed_pivot.y) * height as f32) * editor_ui.atlas_zoom,
+    );
+
+    let current = pointer - center;
+
+    if current.length_sq() < 4.0 {
+        return;
+    }
+
+    let current_angle = current.y.atan2(current.x);
+
+    let Some(starts) = &editor_ui.atlas_uv_drag_start else {
+        return;
+    };
+
+    let Some(&(start_mesh_id, start_object_index, start_primitive_index, start_transform)) =
+        starts.iter().find(|(id, obj, prim, _)| {
+            *id == mesh_id && *obj == object_index && *prim == primitive_index
+        })
+    else {
+        return;
+    };
+
+    let _ = (start_mesh_id, start_object_index, start_primitive_index);
+
+    // Initialize the angle on the first frame, then apply continuous
+    // pointer-angle changes without snapping at +/- PI.
+    let previous_angle = editor_ui
+        .atlas_uv_rotation_start_angle
+        .get_or_insert(current_angle);
+
+    let mut delta = current_angle - *previous_angle;
+
+    if delta > std::f32::consts::PI {
+        delta -= std::f32::consts::TAU;
+    } else if delta < -std::f32::consts::PI {
+        delta += std::f32::consts::TAU;
+    }
+
+    *previous_angle = current_angle;
+
+    let Some(material) = atlas
+        .materials
+        .iter_mut()
+        .find(|material| material.index == index)
+    else {
+        return;
+    };
+
+    let Some(assignment) = material.mesh_assignments.iter_mut().find(|assignment| {
+        assignment.mesh_id == mesh_id
+            && assignment.object_index == object_index
+            && assignment.primitive_index == primitive_index
+    }) else {
+        return;
+    };
+
+    assignment.uv_transform.rotation -= delta;
+    atlas.mark_uv_dirty();
+
+    let _ = start_transform;
 }
 
 fn start_uv_drag(
@@ -145,6 +276,8 @@ fn start_uv_drag(
         primitive_index,
         assignment.uv_transform,
     )]);
+
+    editor_ui.atlas_uv_rotation_start_angle = None;
 }
 
 fn drag_uv(response: &egui::Response, editor_ui: &EditorUi, atlas: &mut Atlas) {

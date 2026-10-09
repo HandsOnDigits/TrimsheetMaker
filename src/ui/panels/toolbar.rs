@@ -5,7 +5,7 @@ use super::{EditorUi, menu_action_button};
 
 use crate::{
     data::Atlas,
-    history::EditorHistory,
+    history::{EditorHistory, EditorSnapshot},
     hotkeys::{EditorAction, HotkeyManager, execute_action},
     mesh::{MeshLight, MeshSceneState},
     project_settings::HighlightMaterial,
@@ -258,37 +258,83 @@ pub fn toolbar(
                     ui.label("Atlas");
                     ui.separator();
 
-                    egui::Grid::new("project_atlas_settings")
-                        .num_columns(2)
-                        .spacing([12.0, 8.0])
-                        .show(ui, |ui| {
-                            ui.label("Width");
-                            ui.add_sized(
-                                [110.0, 20.0],
-                                egui::DragValue::new(&mut editor_ui.project_settings.atlas_width)
+                    let settings_before_controls = editor_ui.project_settings.clone();
+
+                    let (is_interacting, settings_changed) =
+                        egui::Grid::new("project_atlas_settings")
+                            .num_columns(2)
+                            .spacing([12.0, 8.0])
+                            .show(ui, |ui| {
+                                ui.label("Width");
+                                let width_response = ui.add_sized(
+                                    [110.0, 20.0],
+                                    egui::DragValue::new(
+                                        &mut editor_ui.project_settings.atlas_width,
+                                    )
                                     .range(1..=16384)
                                     .speed(1.0),
-                            );
-                            ui.end_row();
+                                );
+                                ui.end_row();
 
-                            ui.label("Height");
-                            ui.add_sized(
-                                [110.0, 20.0],
-                                egui::DragValue::new(&mut editor_ui.project_settings.atlas_height)
+                                ui.label("Height");
+                                let height_response = ui.add_sized(
+                                    [110.0, 20.0],
+                                    egui::DragValue::new(
+                                        &mut editor_ui.project_settings.atlas_height,
+                                    )
                                     .range(1..=16384)
                                     .speed(1.0),
-                            );
-                            ui.end_row();
+                                );
+                                ui.end_row();
 
-                            ui.label("Padding");
-                            ui.add_sized(
-                                [110.0, 20.0],
-                                egui::DragValue::new(&mut editor_ui.project_settings.padding)
-                                    .range(0..=4096)
-                                    .speed(1.0),
-                            );
-                            ui.end_row();
-                        });
+                                ui.label("Padding");
+                                let padding_response = ui.add_sized(
+                                    [110.0, 20.0],
+                                    egui::DragValue::new(&mut editor_ui.project_settings.padding)
+                                        .range(0..=4096)
+                                        .speed(1.0),
+                                );
+                                ui.end_row();
+
+                                let responses =
+                                    [&width_response, &height_response, &padding_response];
+
+                                let is_interacting = responses
+                                    .iter()
+                                    .any(|response| response.dragged() || response.has_focus());
+
+                                let settings_changed = editor_ui.project_settings.atlas_width
+                                    != settings_before_controls.atlas_width
+                                    || editor_ui.project_settings.atlas_height
+                                        != settings_before_controls.atlas_height
+                                    || editor_ui.project_settings.padding
+                                        != settings_before_controls.padding;
+
+                                (is_interacting, settings_changed)
+                            })
+                            .inner;
+
+                    // Capture the state from BEFORE these controls changed the settings.
+                    if settings_changed && editor_ui.atlas_settings_history.is_none() {
+                        editor_ui.atlas_settings_history = Some(EditorSnapshot::capture(
+                            atlas,
+                            &settings_before_controls,
+                            mesh_scene_state,
+                        ));
+                    }
+
+                    // Apply the current settings after capturing the previous state.
+                    editor_ui.project_settings.apply_to_atlas(atlas);
+
+                    // Commit one history entry when the interaction ends.
+                    if !is_interacting
+                        && let Some(before) = editor_ui.atlas_settings_history.take()
+                        && (atlas.width != before.atlas.width
+                            || atlas.height != before.atlas.height
+                            || atlas.padding != before.atlas.padding)
+                    {
+                        history.push(before);
+                    }
 
                     ui.add_space(8.0);
                     ui.label("Highlights");

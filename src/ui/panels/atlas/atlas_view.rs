@@ -120,6 +120,7 @@ pub fn atlas_view(
         history,
         mesh_scene_state,
         mesh_preview,
+        keyboard,
     );
 
     let painter = ui.painter_at(viewport_rect);
