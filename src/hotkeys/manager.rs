@@ -192,6 +192,16 @@ impl HotkeyManager {
             EditorAction::ToggleUvTransformMode,
             Hotkey::plain(KeyCode::KeyT),
         );
+
+        self.bindings.insert(
+            EditorAction::TrimAtlasExactDimensions,
+            Hotkey::new(KeyCode::KeyT, true, false, true, false, false),
+        );
+
+        self.bindings.insert(
+            EditorAction::TrimAtlasPowerOfTwo,
+            Hotkey::new(KeyCode::KeyT, true, true, true, false, false),
+        );
     }
 
     pub fn binding(&self, action: EditorAction) -> Option<Hotkey> {
