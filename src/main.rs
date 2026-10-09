@@ -11,6 +11,7 @@ mod history;
 use history::EditorHistory;
 
 mod image;
+mod linking;
 mod mesh;
 mod project;
 mod project_settings;

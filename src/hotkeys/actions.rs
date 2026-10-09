@@ -6,10 +6,11 @@ use bevy_egui::egui;
 use crate::{
     data::Atlas,
     history::{EditorHistory, EditorSnapshot},
+    linking,
     mesh::{MeshLight, MeshSceneState, spawn_mesh_scene},
     project,
     project_settings::ProjectSettings,
-    ui::{self, EditorUi},
+    ui::EditorUi,
     viewport::{MeshPreview, TransformMode},
 };
 
@@ -299,7 +300,7 @@ pub fn execute_action(
         }
 
         EditorAction::AssignMaterial => {
-            ui::assign_selected_primitives(
+            linking::assign_selected_primitives(
                 editor_ui,
                 atlas,
                 mesh_scene_state,
@@ -309,7 +310,7 @@ pub fn execute_action(
         }
 
         EditorAction::UnassignMaterial => {
-            ui::unassign_selected_primitives(
+            linking::unassign_selected_primitives(
                 editor_ui,
                 atlas,
                 mesh_scene_state,

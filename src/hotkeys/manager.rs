@@ -58,6 +58,17 @@ impl Hotkey {
         Self::new(key, false, false, false, false, true)
     }
 
+    pub fn alt(key: KeyCode) -> Self {
+        Self {
+            key,
+            ctrl: false,
+            shift: false,
+            alt: true,
+            super_key: false,
+            delete: false,
+        }
+    }
+
     /// Returns a readable representation of the shortcut.
     pub fn display_name(&self) -> String {
         let mut parts = Vec::new();
@@ -167,7 +178,7 @@ impl HotkeyManager {
             .insert(EditorAction::AssignMaterial, Hotkey::plain(KeyCode::KeyM));
 
         self.bindings
-            .insert(EditorAction::UnassignMaterial, Hotkey::shift(KeyCode::KeyM));
+            .insert(EditorAction::UnassignMaterial, Hotkey::alt(KeyCode::KeyM));
 
         // Atlas
         self.bindings.insert(

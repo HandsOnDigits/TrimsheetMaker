@@ -14,9 +14,7 @@ use crate::{
 };
 
 pub mod panels;
-
-mod windows;
-pub use windows::{assign_selected_primitives, unassign_selected_primitives};
+pub mod windows;
 
 pub struct EditorUiPlugin;
 
