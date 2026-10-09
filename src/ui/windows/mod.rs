@@ -1,7 +1,9 @@
 pub mod editor_settings;
 
 pub mod floating_context_menus;
-pub use floating_context_menus::viewport_primitive_context_menu;
+pub use floating_context_menus::{
+    AtlasContextMenu, atlas_context_menu, viewport_primitive_context_menu,
+};
 
 pub mod import_mesh;
 pub mod import_multiple_materials;

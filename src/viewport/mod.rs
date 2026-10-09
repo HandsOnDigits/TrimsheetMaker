@@ -7,7 +7,10 @@ mod camera;
 mod deletion;
 mod lighting;
 mod materials;
+
 mod picking;
+pub use picking::MeshViewportContextMenu;
+
 mod setup;
 mod state;
 
@@ -66,6 +69,7 @@ impl Plugin for MeshPreviewPlugin {
         .init_resource::<MeshLight>()
         .init_resource::<MeshViewportInput>()
         .init_resource::<MeshViewportPicking>()
+        .init_resource::<MeshViewportContextMenu>()
         .init_resource::<MeshSceneState>()
         .init_resource::<AtlasRefresh>()
         .init_resource::<MeshPreviewMaterials>()

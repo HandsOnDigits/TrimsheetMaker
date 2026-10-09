@@ -26,6 +26,13 @@ pub struct MeshViewportPicking {
     dragged: bool,
 }
 
+#[derive(Resource, Default)]
+pub struct MeshViewportContextMenu {
+    pub selection: Option<MeshPrimitiveSelection>,
+    pub position: Vec2,
+    pub open: bool,
+}
+
 const PICK_DRAG_THRESHOLD: f32 = 4.0;
 
 pub fn pick_mesh_primitive(
@@ -41,6 +48,7 @@ pub fn pick_mesh_primitive(
     atlas: Res<Atlas>,
     parts: Query<(&ImportedMeshPart, &GlobalTransform, &Mesh3d)>,
     meshes: Res<Assets<Mesh>>,
+    mut context_menu: ResMut<MeshViewportContextMenu>,
 ) {
     if viewport_input.pointer_over_ui || viewport_input.floating_window_dragging {
         return;
@@ -78,21 +86,25 @@ pub fn pick_mesh_primitive(
         }
     }
 
-    if !buttons.just_released(MouseButton::Left) {
+    let right_clicked = buttons.just_pressed(MouseButton::Right);
+    let left_released = buttons.just_released(MouseButton::Left);
+
+    if !left_released && !right_clicked {
         return;
     }
 
-    let Some(start) = picking.pressed_position.take() else {
-        return;
-    };
+    // Left-click selection is only valid when it wasn't a camera drag.
+    if left_released {
+        let Some(start) = picking.pressed_position.take() else {
+            return;
+        };
 
-    let was_dragged = picking.dragged || start.distance(cursor) > PICK_DRAG_THRESHOLD;
+        let was_dragged = picking.dragged || start.distance(cursor) > PICK_DRAG_THRESHOLD;
+        picking.dragged = false;
 
-    picking.dragged = false;
-
-    // A drag belongs to the camera, never to selection.
-    if was_dragged {
-        return;
+        if was_dragged {
+            return;
+        }
     }
 
     let Ok((camera, camera_transform)) = camera_query.single() else {
@@ -151,6 +163,13 @@ pub fn pick_mesh_primitive(
         {
             closest = Some((distance, selection, center, normal));
         }
+    }
+
+    if right_clicked {
+        context_menu.position = cursor;
+        context_menu.selection = closest.map(|(_, selection, _, _)| selection);
+        context_menu.open = context_menu.selection.is_some();
+        return;
     }
 
     let Some((_, selection, center, normal)) = closest else {

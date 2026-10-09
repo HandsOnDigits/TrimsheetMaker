@@ -6,6 +6,13 @@ use crate::{
     viewport::MeshViewportContextMenu,
 };
 
+#[derive(Resource, Default)]
+pub struct AtlasContextMenu {
+    pub region_index: Option<usize>,
+    pub position: Vec2,
+    pub open: bool,
+}
+
 pub fn viewport_primitive_context_menu(
     ctx: &egui::Context,
     menu: &mut MeshViewportContextMenu,
@@ -73,49 +80,25 @@ pub fn viewport_primitive_context_menu(
     }
 }
 
-pub fn floating_context_menus(
-    ctx: &egui::Context,
-    menu: &mut MeshViewportContextMenu,
-    action_messages: &mut MessageWriter<EditorActionMessage>,
-) {
+pub fn atlas_context_menu(ctx: &egui::Context, menu: &mut AtlasContextMenu) {
     if !menu.open {
         return;
     }
 
-    let Some(selection) = menu.selection else {
+    let Some(_region_index) = menu.region_index else {
         menu.open = false;
         return;
     };
 
-    let response = egui::Area::new(egui::Id::new("viewport_context_menu"))
+    let response = egui::Area::new(egui::Id::new("atlas_context_menu"))
         .order(egui::Order::Foreground)
         .fixed_pos(egui::pos2(menu.position.x, menu.position.y))
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style())
                 .show(ui, |ui| {
-                    ui.set_min_width(180.0);
+                    ui.set_min_width(190.0);
 
-                    if ui.button("Delete Primitive").clicked() {
-                        action_messages.write(EditorActionMessage::new(
-                            EditorAction::RemoveMeshPrimitive {
-                                mesh_id: selection.mesh_id,
-                                object_index: selection.object_index,
-                                primitive_index: selection.primitive_index,
-                            },
-                        ));
-
-                        menu.open = false;
-                    }
-
-                    if ui.button("Remove Material Assignment").clicked() {
-                        action_messages.write(EditorActionMessage::new(
-                            EditorAction::UnassignMeshPrimitive {
-                                mesh_id: selection.mesh_id,
-                                object_index: selection.object_index,
-                                primitive_index: selection.primitive_index,
-                            },
-                        ));
-
+                    if ui.button("Close").clicked() {
                         menu.open = false;
                     }
                 })
@@ -138,6 +121,6 @@ pub fn floating_context_menus(
     });
 
     if !menu.open {
-        menu.selection = None;
+        menu.region_index = None;
     }
 }

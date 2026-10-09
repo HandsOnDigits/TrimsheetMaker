@@ -401,7 +401,7 @@ fn drag_atlas_region(
     atlas.mark_uv_dirty();
 }
 
-fn atlas_screen_rect(viewport: egui::Rect, editor_ui: &EditorUi, atlas: &Atlas) -> egui::Rect {
+pub fn atlas_screen_rect(viewport: egui::Rect, editor_ui: &EditorUi, atlas: &Atlas) -> egui::Rect {
     let size = egui::vec2(
         atlas.width as f32 * editor_ui.atlas_zoom,
         atlas.height as f32 * editor_ui.atlas_zoom,
@@ -417,7 +417,7 @@ fn screen_to_atlas(position: egui::Pos2, atlas_rect: egui::Rect, zoom: f32) -> e
     )
 }
 
-fn atlas_material_at_position(
+pub fn atlas_material_at_position(
     position: egui::Pos2,
     atlas_rect: egui::Rect,
     editor_ui: &EditorUi,

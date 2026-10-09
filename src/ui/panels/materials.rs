@@ -205,20 +205,42 @@ pub fn materials_panel(
         .show(ui, |ui| {
             let mut inspected = None;
 
+            let mut delete_region = None;
+
             for atlas_material in &atlas.materials {
                 let active = editor_ui.inspected_atlas_region == Some(atlas_material.index);
 
-                if material_row(
+                let response = material_row(
                     ui,
                     atlas_material,
                     active,
                     editor_ui.project_settings.preview_texture_group.as_deref(),
                     &editor_ui.project_settings.texture_naming,
-                )
-                .clicked()
-                {
+                );
+
+                if response.clicked() {
                     inspected = Some(atlas_material.index);
                 }
+
+                response.context_menu(|ui| {
+                    if ui.button("Delete Atlas Region").clicked() {
+                        delete_region = Some(atlas_material.index);
+                        ui.close();
+                    }
+                });
+            }
+
+            if let Some(index) = delete_region {
+                let before =
+                    EditorSnapshot::capture(atlas, &editor_ui.project_settings, mesh_scene_state);
+
+                atlas.remove(index);
+
+                editor_ui.inspected_atlas_region = None;
+                editor_ui.dragging_atlas_region = None;
+                editor_ui.drag_offset = egui::Vec2::ZERO;
+
+                history.push(before);
             }
 
             if let Some(index) = inspected {

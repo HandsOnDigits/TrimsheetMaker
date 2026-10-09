@@ -16,7 +16,7 @@ mod rendering;
 mod status_bar;
 use status_bar::status_bar;
 
-use bevy::prelude::*;
+use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_egui::{EguiContexts, EguiTextureHandle, egui};
 
 mod mesh;
@@ -29,9 +29,15 @@ use crate::{
     history::EditorHistory,
     hotkeys::{EditorActionMessage, HotkeyManager},
     mesh::{MeshLight, MeshSceneState},
-    ui::windows,
+    ui::windows::{self, floating_context_menus::AtlasContextMenu},
     viewport::{MeshPreview, MeshViewportContextMenu, MeshViewportInput, MeshViewportLayout},
 };
+
+#[derive(SystemParam)]
+pub struct EditorUiContextMenus<'w> {
+    viewport: ResMut<'w, MeshViewportContextMenu>,
+    atlas: ResMut<'w, AtlasContextMenu>,
+}
 
 pub fn editor_ui(
     mut contexts: EguiContexts,
@@ -49,7 +55,7 @@ pub fn editor_ui(
     mut mesh_scene_state: ResMut<MeshSceneState>,
     mut action_messages: MessageWriter<EditorActionMessage>,
     mut history: ResMut<EditorHistory>,
-    mut context_menu: ResMut<MeshViewportContextMenu>,
+    mut context_menus: EditorUiContextMenus,
 ) -> Result {
     mesh_input.pointer_over_ui = false;
     mesh_input.floating_window_dragging = false;
@@ -219,6 +225,7 @@ pub fn editor_ui(
             &mut mesh_scene_state,
             &mut *history,
             &mut mesh_preview,
+            &mut context_menus.atlas,
         );
     });
 
@@ -261,8 +268,14 @@ pub fn editor_ui(
         &mut *history,
     );
 
+    windows::atlas_context_menu(ctx, &mut context_menus.atlas);
+
     // 3D viewport primitive context menu.
-    windows::viewport_primitive_context_menu(ctx, &mut context_menu, &mut action_messages);
+    windows::viewport_primitive_context_menu(
+        ctx,
+        &mut context_menus.viewport,
+        &mut action_messages,
+    );
 
     // Prevent viewport interactions while an egui popup or dropdown is open.
     mesh_input.pointer_over_ui |= egui::Popup::is_any_open(ctx);

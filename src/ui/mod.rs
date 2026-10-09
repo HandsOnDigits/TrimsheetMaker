@@ -11,6 +11,7 @@ use crate::{
     mesh::{MeshLight, MeshSceneState},
     project_settings::ProjectSettings,
     transform::UvTransform,
+    ui::windows::floating_context_menus::AtlasContextMenu,
 };
 
 pub mod panels;
@@ -22,6 +23,7 @@ impl Plugin for EditorUiPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<EditorUi>()
             .init_resource::<data::Atlas>()
+            .init_resource::<AtlasContextMenu>()
             .add_systems(Startup, (setup, load_editor_settings))
             .add_systems(
                 EguiPrimaryContextPass,

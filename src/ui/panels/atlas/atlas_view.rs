@@ -12,7 +12,7 @@ use crate::{
     mesh::MeshSceneState,
     project_settings::HighlightMaterial,
     transform::{Rotation, UvTransform},
-    ui::EditorUi,
+    ui::{EditorUi, windows::AtlasContextMenu},
     viewport::{MeshPreview, TransformMode},
 };
 
@@ -24,6 +24,7 @@ pub fn atlas_view(
     mesh_scene_state: &mut MeshSceneState,
     history: &mut EditorHistory,
     mesh_preview: &mut MeshPreview,
+    context_menu: &mut AtlasContextMenu,
 ) {
     ui.horizontal(|ui| {
         ui.heading("Atlas");
@@ -71,13 +72,6 @@ pub fn atlas_view(
     let (viewport_rect, response) =
         ui.allocate_exact_size(available, egui::Sense::click_and_drag());
 
-    // Middle/right mouse button panning.
-    if response.dragged_by(egui::PointerButton::Middle)
-        || response.dragged_by(egui::PointerButton::Secondary)
-    {
-        editor_ui.atlas_pan += response.drag_delta();
-    }
-
     // Mouse wheel scrolling / Ctrl + vertical wheel zoom.
     if response.hovered() {
         let ctrl =
@@ -100,6 +94,21 @@ pub fn atlas_view(
             editor_ui.atlas_zoom = (editor_ui.atlas_zoom * zoom_factor).clamp(0.1, 10.0);
         } else {
             editor_ui.atlas_pan += scroll * editor_ui.editor_settings.mouse_scroll_speed;
+        }
+    }
+
+    // Right-click a region to open its context menu.
+    if response.clicked_by(egui::PointerButton::Secondary)
+        && let Some(pointer) = response.interact_pointer_pos()
+    {
+        let atlas_rect = atlas_interaction::atlas_screen_rect(viewport_rect, editor_ui, atlas);
+
+        context_menu.region_index =
+            atlas_interaction::atlas_material_at_position(pointer, atlas_rect, editor_ui, atlas);
+
+        if context_menu.region_index.is_some() {
+            context_menu.position = Vec2::new(pointer.x, pointer.y);
+            context_menu.open = true;
         }
     }
 
