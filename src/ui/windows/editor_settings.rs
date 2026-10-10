@@ -214,6 +214,7 @@ fn action_display_name(action: EditorAction) -> &'static str {
         EditorAction::ImportMesh => "Import Mesh",
 
         EditorAction::RemoveAtlasRegion => "Remove Atlas Region",
+        EditorAction::RemoveAtlasRegionAt { .. } => "Delete Atlas Region",
         EditorAction::RemoveSelectedMesh => "Remove Selected Mesh",
         EditorAction::RemoveMeshPrimitive { .. } => "Delete Mesh Primitive",
         EditorAction::RemoveMeshObject { .. } => "Delete Mesh Object",

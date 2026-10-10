@@ -80,12 +80,16 @@ pub fn viewport_primitive_context_menu(
     }
 }
 
-pub fn atlas_context_menu(ctx: &egui::Context, menu: &mut AtlasContextMenu) {
+pub fn atlas_context_menu(
+    ctx: &egui::Context,
+    menu: &mut AtlasContextMenu,
+    action_messages: &mut MessageWriter<EditorActionMessage>,
+) {
     if !menu.open {
         return;
     }
 
-    let Some(_region_index) = menu.region_index else {
+    let Some(region_index) = menu.region_index else {
         menu.open = false;
         return;
     };
@@ -98,8 +102,15 @@ pub fn atlas_context_menu(ctx: &egui::Context, menu: &mut AtlasContextMenu) {
                 .show(ui, |ui| {
                     ui.set_min_width(190.0);
 
-                    if ui.button("Close").clicked() {
+                    if ui.button("Delete Atlas Region").clicked() {
+                        action_messages.write(EditorActionMessage::new(
+                            EditorAction::RemoveAtlasRegionAt {
+                                index: region_index,
+                            },
+                        ));
+
                         menu.open = false;
+                        menu.region_index = None;
                     }
                 })
                 .response

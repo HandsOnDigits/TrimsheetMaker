@@ -39,6 +39,9 @@ pub enum EditorAction {
     },
 
     RemoveAtlasRegion,
+    RemoveAtlasRegionAt {
+        index: usize,
+    },
     RemoveSelectedMesh,
 
     RemoveMeshPrimitive {
@@ -365,21 +368,12 @@ pub fn execute_action(
 
         EditorAction::RemoveAtlasRegion => {
             if let Some(index) = editor_ui.inspected_atlas_region {
-                history.push(EditorSnapshot::capture(
-                    atlas,
-                    &editor_ui.project_settings,
-                    mesh_scene_state,
-                ));
-
-                atlas.remove(index);
-
-                editor_ui.inspected_atlas_region = None;
-
-                if editor_ui.dragging_atlas_region == Some(index) {
-                    editor_ui.dragging_atlas_region = None;
-                    editor_ui.drag_offset = egui::Vec2::ZERO;
-                }
+                remove_atlas_region(index, editor_ui, atlas, mesh_scene_state, history);
             }
+        }
+
+        EditorAction::RemoveAtlasRegionAt { index } => {
+            remove_atlas_region(index, editor_ui, atlas, mesh_scene_state, history);
         }
 
         EditorAction::RemoveSelectedMesh => {
@@ -779,5 +773,42 @@ pub fn execute_action(
                 history.push(before);
             }
         }
+    }
+}
+
+fn remove_atlas_region(
+    index: usize,
+    editor_ui: &mut EditorUi,
+    atlas: &mut Atlas,
+    mesh_scene_state: &mut MeshSceneState,
+    history: &mut EditorHistory,
+) {
+    if index >= atlas.materials.len() {
+        return;
+    }
+
+    history.push(EditorSnapshot::capture(
+        atlas,
+        &editor_ui.project_settings,
+        mesh_scene_state,
+    ));
+
+    atlas.remove(index);
+
+    if editor_ui.inspected_atlas_region == Some(index) {
+        editor_ui.inspected_atlas_region = None;
+    } else if let Some(inspected_index) = editor_ui.inspected_atlas_region
+        && inspected_index > index
+    {
+        editor_ui.inspected_atlas_region = Some(inspected_index - 1);
+    }
+
+    if editor_ui.dragging_atlas_region == Some(index) {
+        editor_ui.dragging_atlas_region = None;
+        editor_ui.drag_offset = egui::Vec2::ZERO;
+    } else if let Some(dragging_index) = editor_ui.dragging_atlas_region
+        && dragging_index > index
+    {
+        editor_ui.dragging_atlas_region = Some(dragging_index - 1);
     }
 }
