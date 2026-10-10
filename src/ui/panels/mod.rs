@@ -148,8 +148,13 @@ pub fn editor_ui(
                         ui,
                         &mut editor_ui,
                         &mut atlas,
-                        &mut mesh_scene_state,
+                        &mut images,
+                        &hotkeys,
                         &mut mesh_preview,
+                        &mut mesh_light,
+                        &mut mesh_scene_state,
+                        &mut commands,
+                        &mut meshes,
                         &mut history,
                     );
                 }

@@ -45,14 +45,20 @@ pub enum EditorAction {
         index: usize,
     },
     RemoveSelectedMesh,
+    DeleteMeshPrimitive,
+    DeleteMeshObject,
+    DeleteMesh,
+    RemoveMeshAt {
+        mesh_id: u64,
+    },
 
-    RemoveMeshPrimitive {
+    RemoveMeshPrimitiveAt {
         mesh_id: u64,
         object_index: usize,
         primitive_index: usize,
     },
 
-    RemoveMeshObject {
+    RemoveMeshObjectAt {
         mesh_id: u64,
         object_index: usize,
     },
@@ -668,7 +674,129 @@ pub fn execute_action(
             history.push(before);
         }
 
-        EditorAction::RemoveMeshPrimitive {
+        EditorAction::DeleteMeshPrimitive => {
+            if let Some(selection) = mesh_preview.selected_primitive {
+                execute_action(
+                    EditorAction::RemoveMeshPrimitiveAt {
+                        mesh_id: selection.mesh_id,
+                        object_index: selection.object_index,
+                        primitive_index: selection.primitive_index,
+                    },
+                    editor_ui,
+                    atlas,
+                    images,
+                    mesh_preview,
+                    mesh_light,
+                    mesh_scene_state,
+                    commands,
+                    meshes,
+                    history,
+                );
+            }
+        }
+
+        EditorAction::DeleteMeshObject => {
+            if let Some((mesh_id, object_index)) = editor_ui.selected_mesh_object {
+                execute_action(
+                    EditorAction::RemoveMeshObjectAt {
+                        mesh_id,
+                        object_index,
+                    },
+                    editor_ui,
+                    atlas,
+                    images,
+                    mesh_preview,
+                    mesh_light,
+                    mesh_scene_state,
+                    commands,
+                    meshes,
+                    history,
+                );
+            }
+        }
+
+        EditorAction::DeleteMesh => {
+            if let Some(mesh_id) = editor_ui.selected_mesh {
+                execute_action(
+                    EditorAction::RemoveMeshAt { mesh_id },
+                    editor_ui,
+                    atlas,
+                    images,
+                    mesh_preview,
+                    mesh_light,
+                    mesh_scene_state,
+                    commands,
+                    meshes,
+                    history,
+                );
+            }
+        }
+
+        EditorAction::RemoveMeshAt { mesh_id } => {
+            let Some(mesh_index) = mesh_scene_state
+                .meshes
+                .iter()
+                .position(|mesh| mesh.id == mesh_id)
+            else {
+                return;
+            };
+
+            let before =
+                EditorSnapshot::capture(atlas, &editor_ui.project_settings, mesh_scene_state);
+
+            // Remove the mesh and its runtime hierarchy.
+            let mesh = mesh_scene_state.meshes.remove(mesh_index);
+
+            if let Some(root) = mesh.root {
+                commands.entity(root).despawn();
+            }
+
+            // Remove every atlas assignment belonging to this mesh.
+            for material in &mut atlas.materials {
+                material
+                    .mesh_assignments
+                    .retain(|assignment| assignment.mesh_id != mesh_id);
+            }
+
+            // Clear selection if it refers to the deleted mesh.
+            if editor_ui.selected_mesh == Some(mesh_id) {
+                editor_ui.selected_mesh = None;
+            }
+
+            if editor_ui
+                .selected_mesh_object
+                .is_some_and(|(id, _)| id == mesh_id)
+            {
+                editor_ui.selected_mesh_object = None;
+            }
+
+            if editor_ui
+                .selected_uv_assignment
+                .is_some_and(|(id, _, _)| id == mesh_id)
+            {
+                editor_ui.selected_uv_assignment = None;
+            }
+
+            if mesh_preview.selected_mesh_id == Some(mesh_id)
+                || mesh_preview
+                    .selected_primitive
+                    .is_some_and(|selection| selection.mesh_id == mesh_id)
+            {
+                mesh_preview.clear_selection();
+            }
+
+            editor_ui.expanded_meshes.remove(&mesh_id);
+            editor_ui
+                .expanded_mesh_objects
+                .retain(|(id, _)| *id != mesh_id);
+
+            atlas.mark_uv_dirty();
+            mesh_preview.uv_revision = mesh_preview.uv_revision.wrapping_add(1);
+
+            history.push(before);
+        }
+
+        EditorAction::RemoveMeshPrimitiveAt {
             mesh_id,
             object_index,
             primitive_index,
@@ -707,7 +835,7 @@ pub fn execute_action(
             mesh_preview.selected_mesh_id = previous_preview_mesh;
         }
 
-        EditorAction::RemoveMeshObject {
+        EditorAction::RemoveMeshObjectAt {
             mesh_id,
             object_index,
         } => {

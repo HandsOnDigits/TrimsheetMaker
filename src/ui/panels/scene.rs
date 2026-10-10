@@ -1,9 +1,12 @@
+use bevy::prelude::*;
+
 use bevy_egui::egui;
 
 use crate::{
+    data::Atlas,
     history::{EditorHistory, EditorSnapshot},
-    linking::{assign_selected_primitives, unassign_selected_primitives},
-    mesh::MeshSceneState,
+    hotkeys::{EditorAction, HotkeyManager, execute_action},
+    mesh::{MeshLight, MeshSceneState},
     ui::EditorUi,
     viewport::{MeshPreview, MeshPrimitiveSelection},
 };
@@ -11,9 +14,14 @@ use crate::{
 pub fn scene_panel(
     ui: &mut egui::Ui,
     editor_ui: &mut EditorUi,
-    atlas: &mut crate::data::Atlas,
-    mesh_scene_state: &mut MeshSceneState,
+    atlas: &mut Atlas,
+    images: &mut Assets<Image>,
+    hotkeys: &HotkeyManager,
     mesh_preview: &mut MeshPreview,
+    mesh_light: &mut MeshLight,
+    mesh_scene_state: &mut MeshSceneState,
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
     history: &mut EditorHistory,
 ) {
     let before = EditorSnapshot::capture(atlas, &editor_ui.project_settings, mesh_scene_state);
@@ -225,23 +233,37 @@ pub fn scene_panel(
 
             ui.add_enabled_ui(has_primitive || has_object, |ui| {
                 ui.add_enabled_ui(has_assignment_target, |ui| {
-                    if ui.button("Assign to Inspected Region").clicked() {
-                        assign_selected_primitives(
+                    if hotkeys.menu_button(
+                        ui,
+                        EditorAction::AssignMaterial,
+                        "Assign to Inspected Region",
+                    ) {
+                        execute_action(
+                            EditorAction::AssignMaterial,
                             editor_ui,
                             atlas,
-                            mesh_scene_state,
+                            images,
                             mesh_preview,
+                            mesh_light,
+                            mesh_scene_state,
+                            commands,
+                            meshes,
                             history,
                         );
                     }
                 });
 
-                if ui.button("Unassign Material").clicked() {
-                    unassign_selected_primitives(
+                if hotkeys.menu_button(ui, EditorAction::UnassignMaterial, "Unassign Material") {
+                    execute_action(
+                        EditorAction::UnassignMaterial,
                         editor_ui,
                         atlas,
-                        mesh_scene_state,
+                        images,
                         mesh_preview,
+                        mesh_light,
+                        mesh_scene_state,
+                        commands,
+                        meshes,
                         history,
                     );
                 }
@@ -250,16 +272,96 @@ pub fn scene_panel(
             ui.separator();
 
             if has_primitive {
-                if ui.button("Delete Primitive").clicked() {
-                    // Connect to the existing primitive-deletion action.
-                }
-            } else if has_object {
-                if ui.button("Delete Object").clicked() {
-                    // Connect to the existing object-deletion action.
-                }
-            } else if has_mesh {
-                if ui.button("Delete Mesh").clicked() {
-                    // Connect to the existing mesh-deletion action.
+                ui.add_enabled_ui(has_primitive || has_object, |ui| {
+                    ui.add_enabled_ui(has_assignment_target, |ui| {
+                        if hotkeys.menu_button(
+                            ui,
+                            EditorAction::AssignMaterial,
+                            "Assign to Inspected Region",
+                        ) {
+                            execute_action(
+                                EditorAction::AssignMaterial,
+                                editor_ui,
+                                atlas,
+                                images,
+                                mesh_preview,
+                                mesh_light,
+                                mesh_scene_state,
+                                commands,
+                                meshes,
+                                history,
+                            );
+                        }
+                    });
+
+                    if hotkeys.menu_button(ui, EditorAction::UnassignMaterial, "Unassign Material")
+                    {
+                        execute_action(
+                            EditorAction::UnassignMaterial,
+                            editor_ui,
+                            atlas,
+                            images,
+                            mesh_preview,
+                            mesh_light,
+                            mesh_scene_state,
+                            commands,
+                            meshes,
+                            history,
+                        );
+                    }
+                });
+
+                ui.separator();
+
+                if has_primitive {
+                    if hotkeys.menu_button(
+                        ui,
+                        EditorAction::DeleteMeshPrimitive,
+                        "Delete Primitive",
+                    ) {
+                        execute_action(
+                            EditorAction::DeleteMeshPrimitive,
+                            editor_ui,
+                            atlas,
+                            images,
+                            mesh_preview,
+                            mesh_light,
+                            mesh_scene_state,
+                            commands,
+                            meshes,
+                            history,
+                        );
+                    }
+                } else if has_object {
+                    if hotkeys.menu_button(ui, EditorAction::DeleteMeshObject, "Delete Object") {
+                        execute_action(
+                            EditorAction::DeleteMeshObject,
+                            editor_ui,
+                            atlas,
+                            images,
+                            mesh_preview,
+                            mesh_light,
+                            mesh_scene_state,
+                            commands,
+                            meshes,
+                            history,
+                        );
+                    }
+                } else if has_mesh {
+                    if hotkeys.menu_button(ui, EditorAction::DeleteMesh, "Delete Mesh") {
+                        execute_action(
+                            EditorAction::DeleteMesh,
+                            editor_ui,
+                            atlas,
+                            images,
+                            mesh_preview,
+                            mesh_light,
+                            mesh_scene_state,
+                            commands,
+                            meshes,
+                            history,
+                        );
+                    }
                 }
             }
         });

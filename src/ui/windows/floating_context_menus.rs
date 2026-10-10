@@ -42,7 +42,7 @@ pub fn viewport_primitive_context_menu(
 
                     if ui.button("Delete Primitive").clicked() {
                         action_messages.write(EditorActionMessage::new(
-                            EditorAction::RemoveMeshPrimitive {
+                            EditorAction::RemoveMeshPrimitiveAt {
                                 mesh_id: selection.mesh_id,
                                 object_index: selection.object_index,
                                 primitive_index: selection.primitive_index,

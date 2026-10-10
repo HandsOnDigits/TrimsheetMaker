@@ -124,6 +124,11 @@ pub fn pick_mesh_primitive(
             continue;
         };
 
+        // Hidden meshes must not intercept picking rays.
+        if !mesh_entry.visible {
+            continue;
+        }
+
         let Some(mesh_part) = mesh_entry
             .parts
             .iter()
@@ -131,6 +136,11 @@ pub fn pick_mesh_primitive(
         else {
             continue;
         };
+
+        // Hidden primitives must not intercept picking rays.
+        if !mesh_part.visible {
+            continue;
+        }
 
         let Some(mesh) = meshes.get(mesh_handle) else {
             continue;

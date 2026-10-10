@@ -195,6 +195,19 @@ impl HotkeyManager {
             Hotkey::delete(KeyCode::KeyM),
         );
 
+        self.bindings.insert(
+            EditorAction::DeleteMeshPrimitive,
+            Hotkey::delete(KeyCode::KeyP),
+        );
+
+        self.bindings.insert(
+            EditorAction::DeleteMeshObject,
+            Hotkey::delete(KeyCode::KeyO),
+        );
+
+        self.bindings
+            .insert(EditorAction::DeleteMesh, Hotkey::delete(KeyCode::KeyG));
+
         // View
         self.bindings
             .insert(EditorAction::ResetViewport, Hotkey::plain(KeyCode::KeyF));
