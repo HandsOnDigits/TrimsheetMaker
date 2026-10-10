@@ -34,7 +34,6 @@ pub struct MeshEntry {
 #[derive(Debug, Clone)]
 pub struct MeshPartEntry {
     pub index: usize,
-    pub name: String,
     pub visible: bool,
     pub object_index: usize,
     pub primitive_index: usize,
@@ -332,7 +331,6 @@ pub fn spawn_mesh_scene(
 
             parts.push(MeshPartEntry {
                 index: part_index,
-                name: object.name.clone(),
                 visible: true,
                 object_index,
                 primitive_index,

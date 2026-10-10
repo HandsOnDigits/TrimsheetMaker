@@ -63,7 +63,6 @@ pub enum EditorAction {
     ToggleInspectorPanel,
     ToggleStatusBar,
     ToggleMeshLightFollowCamera,
-    ToggleMeshWindow,
     ToggleMeshPartsVisibility,
     ToggleUvTransformMode,
 
@@ -565,7 +564,6 @@ pub fn execute_action(
 
                     parts.push(crate::mesh::MeshPartEntry {
                         index: flat_index,
-                        name: format!("Primitive {}", primitive_index + 1),
                         visible,
                         object_index: new_object_index,
                         primitive_index,
@@ -752,10 +750,6 @@ pub fn execute_action(
 
         EditorAction::ToggleMeshLightFollowCamera => {
             mesh_light.follow_camera = !mesh_light.follow_camera;
-        }
-
-        EditorAction::ToggleMeshWindow => {
-            editor_ui.show_meshes_window = !editor_ui.show_meshes_window;
         }
 
         EditorAction::ToggleMeshPartsVisibility => {

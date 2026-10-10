@@ -9,6 +9,9 @@ mod properties;
 mod inspector;
 use inspector::inspector_panel;
 
+mod scene;
+use scene::scene_panel;
+
 mod atlas;
 
 mod rendering;
@@ -22,7 +25,7 @@ use bevy_egui::{EguiContexts, EguiTextureHandle, egui};
 mod mesh;
 use mesh::mesh_panel;
 
-use super::EditorUi;
+use super::{EditorUi, LeftPanelTab};
 
 use crate::{
     data::Atlas,
@@ -113,21 +116,45 @@ pub fn editor_ui(
             });
     }
 
-    if editor_ui.show_materials {
-        egui::Panel::left("materials_panel")
-            .resizable(true)
-            .default_size(230.0)
-            .size_range(180.0..=400.0)
-            .show(&mut root_ui, |ui| {
-                materials_panel(
-                    ui,
-                    &mut editor_ui,
-                    &mut atlas,
-                    &mut *history,
-                    &mesh_scene_state,
+    egui::Panel::left("left_content_panel")
+        .resizable(true)
+        .default_size(260.0)
+        .size_range(180.0..=400.0)
+        .show(&mut root_ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.selectable_value(
+                    &mut editor_ui.left_panel_tab,
+                    LeftPanelTab::Materials,
+                    "Materials",
                 );
+
+                ui.selectable_value(&mut editor_ui.left_panel_tab, LeftPanelTab::Scene, "Scene");
             });
-    }
+
+            ui.separator();
+
+            match editor_ui.left_panel_tab {
+                LeftPanelTab::Materials => {
+                    materials_panel(
+                        ui,
+                        &mut editor_ui,
+                        &mut atlas,
+                        &mut history,
+                        &mesh_scene_state,
+                    );
+                }
+                LeftPanelTab::Scene => {
+                    scene_panel(
+                        ui,
+                        &mut editor_ui,
+                        &mut atlas,
+                        &mut mesh_scene_state,
+                        &mut mesh_preview,
+                        &mut history,
+                    );
+                }
+            }
+        });
 
     if editor_ui.show_inspector {
         if editor_ui.show_inspector {
@@ -257,17 +284,7 @@ pub fn editor_ui(
         &mut mesh_preview,
     );
 
-    // Mesh list.
-    mesh_input.floating_window_dragging |= windows::meshes::meshes_window(
-        ctx,
-        &mut editor_ui,
-        &mut atlas,
-        &mut mesh_scene_state,
-        &mut mesh_preview,
-        &mut action_messages,
-        &mut *history,
-    );
-
+    // Atlas map
     windows::atlas_context_menu(
         ctx,
         &mut context_menus.atlas,

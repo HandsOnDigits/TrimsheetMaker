@@ -95,6 +95,7 @@ pub struct EditorUi {
     pub expanded_meshes: std::collections::BTreeSet<u64>,
 
     pub inspector_tab: InspectorTab,
+    pub left_panel_tab: LeftPanelTab,
 
     pub rendering_revision: u64,
 
@@ -102,7 +103,6 @@ pub struct EditorUi {
     pub show_import_single_material_window: bool,
     pub show_editor_settings_window: bool,
     pub show_import_mesh_window: bool,
-    pub show_meshes_window: bool,
 
     pub mesh_import_path: Option<std::path::PathBuf>,
     pub mesh_import_backend: crate::mesh::import::MeshBackend,
@@ -180,7 +180,8 @@ impl Default for EditorUi {
 
             expanded_meshes: std::collections::BTreeSet::new(),
 
-            inspector_tab: InspectorTab::Properties,
+            inspector_tab: default(),
+            left_panel_tab: default(),
 
             rendering_revision: 0,
 
@@ -204,7 +205,6 @@ impl Default for EditorUi {
             show_import_single_material_window: false,
             show_editor_settings_window: false,
             show_import_mesh_window: false,
-            show_meshes_window: true,
 
             mesh_import_path: None,
             mesh_import_backend: crate::mesh::import::MeshBackend::Auto,
@@ -231,8 +231,16 @@ impl Default for EditorUi {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum InspectorTab {
+    #[default]
     Properties,
     Rendering,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LeftPanelTab {
+    #[default]
+    Scene,
+    Materials,
 }

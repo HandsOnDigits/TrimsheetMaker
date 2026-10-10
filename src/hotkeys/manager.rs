@@ -204,9 +204,6 @@ impl HotkeyManager {
             Hotkey::shift(KeyCode::KeyL),
         );
 
-        self.bindings
-            .insert(EditorAction::ToggleMeshWindow, Hotkey::shift(KeyCode::KeyM));
-
         self.bindings.insert(
             EditorAction::ToggleMeshPartsVisibility,
             Hotkey::shift(KeyCode::KeyH),
