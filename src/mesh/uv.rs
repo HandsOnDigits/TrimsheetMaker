@@ -58,6 +58,19 @@ pub fn sync_mesh_uvs(
                 .map(|assignment| (material, assignment))
         });
 
+        if let Some((material, assignment)) = assignment {
+            info!(
+                "UV assignment '{}', primitive {}: region={}x{}, rotation={:?}, uv_scale={:?}, uv_rotation={}",
+                object.name,
+                mesh_part.primitive_index,
+                material.transform.width,
+                material.transform.height,
+                material.transform.rotation,
+                assignment.uv_transform.scale,
+                assignment.uv_transform.rotation,
+            );
+        }
+
         let uvs = match assignment {
             Some((material, assignment)) => transform_uvs(
                 &primitive.uvs,
@@ -92,32 +105,45 @@ pub(crate) fn transform_uvs(
         return source_uvs.to_vec();
     }
 
-    let x = transform.x as f32;
-    let y = transform.y as f32;
-    let width = transform.width as f32;
-    let height = transform.height as f32;
+    let (x, y, width, height) = transform.atlas_rect();
+
+    let x = x as f32;
+    let y = y as f32;
+    let width = width as f32;
+    let height = height as f32;
 
     let pivot = UvTransform::uv_center(source_uvs);
 
+    info!(
+        "Atlas UV mapping: rect=({}, {}, {}x{}), atlas={}x{}, rotation={:?}",
+        x, y, width, height, atlas_width, atlas_height, transform.rotation
+    );
+
     source_uvs
         .iter()
-        .map(|&uv| {
-            // First apply the independent transform belonging to this
-            // mesh/material assignment.
-            let uv = uv_transform.apply(Vec2::new(uv[0], uv[1]), pivot);
+        .map(|&source_uv| {
+            let uv = uv_transform.apply(Vec2::from_array(source_uv), pivot);
 
-            // Then apply the rotation of the shared atlas region.
-            let uv = match transform.rotation {
-                Rotation::Deg0 => [uv.x, uv.y],
-                Rotation::Deg90 => [uv.y, 1.0 - uv.x],
-                Rotation::Deg180 => [1.0 - uv.x, 1.0 - uv.y],
-                Rotation::Deg270 => [1.0 - uv.y, uv.x],
+            if source_uvs.len() > 0 {
+                info!(
+                    "UV intermediate: source={:?}, transformed={:?}, pivot={:?}",
+                    source_uv, uv, pivot
+                );
+            }
+
+            let local_uv = match transform.rotation {
+                Rotation::Deg0 => uv,
+                Rotation::Deg90 => Vec2::new(uv.y, 1.0 - uv.x),
+                Rotation::Deg180 => Vec2::new(1.0 - uv.x, 1.0 - uv.y),
+                Rotation::Deg270 => Vec2::new(1.0 - uv.y, uv.x),
             };
 
-            [
-                (x + uv[0] * width) / atlas_width,
-                (y + (1.0 - uv[1]) * height) / atlas_height,
-            ]
+            let atlas_uv = Vec2::new(
+                (x + local_uv.x * width) / atlas_width,
+                (y + (1.0 - local_uv.y) * height) / atlas_height,
+            );
+
+            atlas_uv.to_array()
         })
         .collect()
 }

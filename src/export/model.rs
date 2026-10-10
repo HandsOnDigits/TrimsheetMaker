@@ -1,3 +1,5 @@
+use bevy::prelude::*;
+
 use anyhow::{Context, ensure};
 use serde_json::{Map, Value, json};
 use std::{collections::HashMap, fs::File, io::Write, path::Path};
@@ -276,15 +278,50 @@ fn combine_object(
         // Apply UV transforms before merging vertices. Different primitives
         // may use different atlas regions or independent UV transformations.
         let transformed_uvs = match assignment {
-            Some((material, assignment)) => transform_uvs(
-                &primitive.uvs,
-                &assignment.uv_transform,
-                &material.transform,
-                atlas.width,
-                atlas.height,
-            ),
+            Some((material, assignment)) => {
+                let mut uvs = transform_uvs(
+                    &primitive.uvs,
+                    &assignment.uv_transform,
+                    &material.transform,
+                    atlas.width,
+                    atlas.height,
+                );
+
+                // Correct the exported V scale to use the atlas width.
+                if atlas.height > 0 {
+                    let scale = atlas.height as f32 / atlas.width as f32;
+
+                    for uv in &mut uvs {
+                        uv[1] *= scale;
+                    }
+                }
+
+                uvs
+            }
+
             None => primitive.uvs.clone(),
         };
+
+        if primitive_index == 5 {
+            let bounds = |uvs: &[[f32; 2]]| {
+                let mut min = Vec2::splat(f32::INFINITY);
+                let mut max = Vec2::splat(f32::NEG_INFINITY);
+
+                for uv in uvs {
+                    let uv = Vec2::from_array(*uv);
+                    min = min.min(uv);
+                    max = max.max(uv);
+                }
+
+                (min, max, max - min)
+            };
+
+            info!(
+                "GLB UV bounds, primitive 5: source={:?}, output={:?}",
+                bounds(&primitive.uvs),
+                bounds(&transformed_uvs),
+            );
+        }
 
         ensure!(
             transformed_uvs.len() == primitive.positions.len(),
@@ -401,18 +438,6 @@ fn combine_object(
             combined.indices.push(output_index);
         }
     }
-
-    ensure!(
-        !combined.positions.is_empty(),
-        "Object '{}' has no exported vertices",
-        object.name
-    );
-
-    ensure!(
-        !combined.indices.is_empty(),
-        "Object '{}' has no exported indices",
-        object.name
-    );
 
     ensure!(
         !combined.positions.is_empty() && !combined.indices.is_empty(),
