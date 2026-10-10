@@ -258,9 +258,17 @@ pub fn execute_action(
             }
         }
 
-        EditorAction::ExportAtlas => {
-            // TODO: Atlas export implementation.
-        }
+        EditorAction::ExportAtlas => match crate::data::export_atlas_maps(atlas, images) {
+            Ok(0) => {
+                info!("Export Atlas cancelled");
+            }
+            Ok(exported) => {
+                info!("Exported {exported} atlas texture maps");
+            }
+            Err(error) => {
+                error!("Failed to export atlas maps: {error:#}");
+            }
+        },
 
         EditorAction::ExportModel => {
             let Some(path) = rfd::FileDialog::new()
