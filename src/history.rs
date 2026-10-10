@@ -31,12 +31,50 @@ impl EditorSnapshot {
 
         self.atlas.restore(atlas, images);
 
+        // Preserve visibility before consuming the snapshots.
+        let part_visibility: Vec<(u64, Vec<(usize, usize, bool)>)> = self
+            .meshes
+            .iter()
+            .map(|mesh| (mesh.id, mesh.part_visibility.clone()))
+            .collect();
+
+        // Restore every mesh in one operation.
         mesh_scene_state.restore_document(
             self.meshes
                 .into_iter()
                 .map(|mesh| (mesh.id, mesh.name, mesh.path, mesh.visible, mesh.scene))
                 .collect(),
         );
+
+        // Restore the saved visibility as runtime part entries.
+        for (mesh_id, saved_parts) in part_visibility {
+            let Some(mesh) = mesh_scene_state.get_mut(mesh_id) else {
+                continue;
+            };
+
+            let mut part_index = 0;
+
+            for (object_index, object) in mesh.scene.objects.iter().enumerate() {
+                for (primitive_index, _) in object.primitives.iter().enumerate() {
+                    let visible = saved_parts
+                        .iter()
+                        .find(|&&(saved_object, saved_primitive, _)| {
+                            saved_object == object_index && saved_primitive == primitive_index
+                        })
+                        .map(|&(_, _, visible)| visible)
+                        .unwrap_or(true);
+
+                    mesh.parts.push(crate::mesh::MeshPartEntry {
+                        index: part_index,
+                        visible,
+                        object_index,
+                        primitive_index,
+                    });
+
+                    part_index += 1;
+                }
+            }
+        }
     }
 
     pub fn capture(
@@ -66,6 +104,11 @@ impl EditorSnapshot {
                     name: mesh.name.clone(),
                     path: mesh.path.clone(),
                     visible: mesh.visible,
+                    part_visibility: mesh
+                        .parts
+                        .iter()
+                        .map(|part| (part.object_index, part.primitive_index, part.visible))
+                        .collect(),
                     scene: mesh.scene.clone(),
                 })
                 .collect(),
@@ -205,6 +248,7 @@ pub struct MeshSnapshot {
     pub name: String,
     pub path: PathBuf,
     pub visible: bool,
+    pub part_visibility: Vec<(usize, usize, bool)>,
     pub scene: MeshScene,
 }
 

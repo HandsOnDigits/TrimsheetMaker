@@ -162,6 +162,12 @@ pub fn sync_mesh_preview_material_assignments(
             .by_atlas_material
             .get(&atlas_material.index)
         else {
+            if let Some(handle) = &preview_materials.default {
+                commands
+                    .entity(entity)
+                    .insert(MeshMaterial3d(handle.clone()));
+            }
+
             continue;
         };
 

@@ -250,12 +250,13 @@ fn create_bevy_mesh(
     meshes.add(mesh)
 }
 
-pub fn spawn_mesh_scene(
+pub fn spawn_mesh_scene_with_visibility(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     scene: &MeshScene,
     mesh_id: u64,
     material: Handle<MeshPreviewMaterial>,
+    saved_visibility: Option<&[(usize, usize, bool)]>,
 ) -> (Entity, Vec<MeshPartEntry>, Vec3, f32) {
     let mut bounds_min = Vec3::splat(f32::INFINITY);
     let mut bounds_max = Vec3::splat(f32::NEG_INFINITY);
@@ -313,12 +314,27 @@ pub fn spawn_mesh_scene(
 
             let part_index = parts.len();
 
+            let part_visible = saved_visibility
+                .and_then(|saved| {
+                    saved
+                        .iter()
+                        .find(|&&(saved_object, saved_primitive, _)| {
+                            saved_object == object_index && saved_primitive == primitive_index
+                        })
+                        .map(|&(_, _, visible)| visible)
+                })
+                .unwrap_or(true);
+
             commands.entity(root).with_children(|parent| {
                 parent.spawn((
                     Name::new(format!("{} Primitive {}", object.name, primitive_index)),
                     Mesh3d(mesh_handle.clone()),
                     MeshMaterial3d::<MeshPreviewMaterial>(material.clone()),
-                    Visibility::Visible,
+                    if part_visible {
+                        Visibility::Visible
+                    } else {
+                        Visibility::Hidden
+                    },
                     InheritedVisibility::default(),
                     ImportedMesh,
                     ImportedMeshPart {
@@ -331,7 +347,7 @@ pub fn spawn_mesh_scene(
 
             parts.push(MeshPartEntry {
                 index: part_index,
-                visible: true,
+                visible: part_visible,
                 object_index,
                 primitive_index,
             });

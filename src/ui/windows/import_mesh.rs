@@ -5,7 +5,7 @@ use crate::{
     mesh::{
         MeshSceneState,
         import::{self, MeshBackend, MeshImportSettings},
-        spawn_mesh_scene,
+        spawn_mesh_scene_with_visibility,
     },
     ui::EditorUi,
     viewport::MeshPreview,
@@ -139,13 +139,15 @@ pub fn import_mesh_window(
                                 // ImportedMeshRoot receives the same ID as MeshEntry.
                                 let mesh_id = mesh_scene_state.next_id;
 
-                                let (root, parts, bounds_center, bounds_radius) = spawn_mesh_scene(
-                                    commands,
-                                    meshes,
-                                    &scene,
-                                    mesh_id,
-                                    mesh_preview.material.clone(),
-                                );
+                                let (root, parts, bounds_center, bounds_radius) =
+                                    spawn_mesh_scene_with_visibility(
+                                        commands,
+                                        meshes,
+                                        &scene,
+                                        mesh_id,
+                                        mesh_preview.material.clone(),
+                                        None,
+                                    );
 
                                 let name = path
                                     .file_stem()

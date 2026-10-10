@@ -8,7 +8,7 @@ use crate::{
     export::model::export_glb,
     history::{EditorHistory, EditorSnapshot},
     linking,
-    mesh::{MeshLight, MeshSceneState, spawn_mesh_scene},
+    mesh::{MeshLight, MeshSceneState, spawn_mesh_scene_with_visibility},
     project,
     project_settings::ProjectSettings,
     ui::EditorUi,
@@ -458,6 +458,31 @@ pub fn execute_action(
                 // Remove the source primitive.
                 object.primitives.remove(selection.primitive_index);
 
+                // Preserve visibility and update primitive indices after deletion.
+                let saved_visibility: Vec<(usize, usize, bool)> = mesh
+                    .parts
+                    .iter()
+                    .filter_map(|part| {
+                        if part.object_index != selection.object_index {
+                            return Some((part.object_index, part.primitive_index, part.visible));
+                        }
+
+                        // Do not retain visibility for the deleted primitive.
+                        if part.primitive_index == selection.primitive_index {
+                            return None;
+                        }
+
+                        // Shift later primitives in this object down by one.
+                        let primitive_index = if part.primitive_index > selection.primitive_index {
+                            part.primitive_index - 1
+                        } else {
+                            part.primitive_index
+                        };
+
+                        Some((part.object_index, primitive_index, part.visible))
+                    })
+                    .collect();
+
                 let id = mesh.id;
                 let visible = mesh.visible;
                 let scene = mesh.scene.clone();
@@ -467,9 +492,15 @@ pub fn execute_action(
                     commands.entity(root).despawn();
                 }
 
-                // Rebuild the runtime hierarchy from the updated source scene.
-                let (root, parts, bounds_center, bounds_radius) =
-                    spawn_mesh_scene(commands, meshes, &scene, id, mesh_preview.material.clone());
+                // Rebuild the runtime hierarchy, preserving visibility.
+                let (root, parts, bounds_center, bounds_radius) = spawn_mesh_scene_with_visibility(
+                    commands,
+                    meshes,
+                    &scene,
+                    id,
+                    mesh_preview.material.clone(),
+                    Some(&saved_visibility),
+                );
 
                 mesh.root = Some(root);
                 mesh.parts = parts;
@@ -584,12 +615,19 @@ pub fn execute_action(
             mesh.bounds_radius = 0.0;
 
             // Recreate the ECS hierarchy from the updated source scene.
-            let (root, parts, bounds_center, bounds_radius) = spawn_mesh_scene(
+            let saved_visibility: Vec<(usize, usize, bool)> = mesh
+                .parts
+                .iter()
+                .map(|part| (part.object_index, part.primitive_index, part.visible))
+                .collect();
+
+            let (root, parts, bounds_center, bounds_radius) = spawn_mesh_scene_with_visibility(
                 commands,
                 meshes,
                 &mesh.scene,
                 mesh.id,
                 mesh_preview.material.clone(),
+                Some(&saved_visibility),
             );
 
             mesh.root = Some(root);

@@ -12,7 +12,7 @@ use crate::{
     mesh::{
         MeshSceneState,
         import::{self},
-        spawn_mesh_scene,
+        spawn_mesh_scene_with_visibility,
     },
     project_settings::ProjectSettings,
     transform::{Transform, UvTransform},
@@ -34,7 +34,7 @@ pub struct ProjectMeshPrimitive {
     #[serde(default)]
     pub material: Option<import::MeshMaterialRef>,
 
-    #[serde(default)]
+    #[serde(default = "default_mesh_visibility")]
     pub visible: bool,
 }
 
@@ -280,12 +280,28 @@ pub fn load_project_meshes(
         // Do not re-import the source file and do not split again.
         let scene = runtime_mesh_scene_from_project(project_mesh);
 
-        let (root, parts, bounds_center, bounds_radius) = spawn_mesh_scene(
+        let saved_visibility: Vec<(usize, usize, bool)> = project_mesh
+            .objects
+            .iter()
+            .enumerate()
+            .flat_map(|(object_index, object)| {
+                object
+                    .primitives
+                    .iter()
+                    .enumerate()
+                    .map(move |(primitive_index, primitive)| {
+                        (object_index, primitive_index, primitive.visible)
+                    })
+            })
+            .collect();
+
+        let (root, parts, bounds_center, bounds_radius) = spawn_mesh_scene_with_visibility(
             commands,
             meshes,
             &scene,
             project_mesh.id,
             mesh_preview.material.clone(),
+            Some(&saved_visibility),
         );
 
         mesh_scene_state.add_with_id(
@@ -341,12 +357,28 @@ pub fn restore_history_meshes(
     let mesh_data = mesh_scene_state
         .meshes
         .iter()
-        .map(|mesh| (mesh.id, mesh.visible, mesh.scene.clone()))
+        .map(|mesh| {
+            (
+                mesh.id,
+                mesh.visible,
+                mesh.scene.clone(),
+                mesh.parts
+                    .iter()
+                    .map(|part| (part.object_index, part.primitive_index, part.visible))
+                    .collect::<Vec<_>>(),
+            )
+        })
         .collect::<Vec<_>>();
 
-    for (id, visible, scene) in mesh_data {
-        let (root, parts, bounds_center, bounds_radius) =
-            spawn_mesh_scene(commands, meshes, &scene, id, mesh_preview.material.clone());
+    for (id, visible, scene, part_visibility) in mesh_data {
+        let (root, parts, bounds_center, bounds_radius) = spawn_mesh_scene_with_visibility(
+            commands,
+            meshes,
+            &scene,
+            id,
+            mesh_preview.material.clone(),
+            Some(&part_visibility),
+        );
 
         if let Some(mesh) = mesh_scene_state.get_mut(id) {
             mesh.root = Some(root);
