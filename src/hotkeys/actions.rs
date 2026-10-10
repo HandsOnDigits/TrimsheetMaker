@@ -5,6 +5,7 @@ use bevy_egui::egui;
 
 use crate::{
     data::Atlas,
+    export::model::export_glb,
     history::{EditorHistory, EditorSnapshot},
     linking,
     mesh::{MeshLight, MeshSceneState, spawn_mesh_scene},
@@ -22,6 +23,7 @@ pub enum EditorAction {
     SaveProjectAs,
 
     ExportAtlas,
+    ExportModel,
 
     ImportMultipleMaterials,
     ImportSingleMaterial,
@@ -258,6 +260,26 @@ pub fn execute_action(
 
         EditorAction::ExportAtlas => {
             // TODO: Atlas export implementation.
+        }
+
+        EditorAction::ExportModel => {
+            let Some(path) = rfd::FileDialog::new()
+                .add_filter("glTF Binary", &["glb"])
+                .set_file_name("atlas_model.glb")
+                .save_file()
+            else {
+                info!("Export Model cancelled");
+                return;
+            };
+
+            match export_glb(&path, mesh_scene_state, atlas) {
+                Ok(()) => {
+                    info!("Model exported: {}", path.display());
+                }
+                Err(error) => {
+                    error!("Failed to export model '{}': {error:#}", path.display());
+                }
+            }
         }
 
         EditorAction::Undo => {

@@ -174,6 +174,22 @@ pub fn toolbar(
                     );
                     ui.close();
                 }
+
+                if hotkeys.menu_button(ui, EditorAction::ExportModel, "Export Model…") {
+                    execute_action(
+                        EditorAction::ExportModel,
+                        editor_ui,
+                        atlas,
+                        images,
+                        mesh_preview,
+                        mesh_light,
+                        mesh_scene_state,
+                        commands,
+                        meshes,
+                        history,
+                    );
+                    ui.close();
+                }
             });
 
             ui.separator();

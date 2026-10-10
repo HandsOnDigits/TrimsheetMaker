@@ -1,4 +1,5 @@
 mod topology;
+pub(crate) mod uv;
 
 pub mod import;
 use import::MeshScene;

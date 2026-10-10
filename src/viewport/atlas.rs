@@ -89,6 +89,24 @@ pub fn finish_atlas_build(
         return;
     }
 
+    let generated_maps: std::collections::HashSet<_> =
+        result.maps.iter().map(|(map, _)| *map).collect();
+
+    // Clear references to maps that were not generated this time.
+    for map in [
+        crate::data::AtlasMap::BaseColor,
+        crate::data::AtlasMap::Normal,
+        crate::data::AtlasMap::Height,
+        crate::data::AtlasMap::AmbientOcclusion,
+        crate::data::AtlasMap::Roughness,
+        crate::data::AtlasMap::Metallic,
+    ] {
+        if !generated_maps.contains(&map) {
+            *atlas.images.get_mut(map) = None;
+        }
+    }
+
+    // Update or create handles for the newly generated maps.
     for (map, image) in result.maps {
         match atlas.images.get(map).cloned() {
             Some(handle) => {
@@ -99,7 +117,6 @@ pub fn finish_atlas_build(
                     *atlas.images.get_mut(map) = Some(new_handle);
                 }
             }
-
             None => {
                 let handle = images.add(image);
                 *atlas.images.get_mut(map) = Some(handle);

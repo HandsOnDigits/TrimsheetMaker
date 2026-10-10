@@ -78,7 +78,7 @@ pub fn sync_mesh_uvs(
     sync_state.initialized = true;
 }
 
-fn transform_uvs(
+pub(crate) fn transform_uvs(
     source_uvs: &[[f32; 2]],
     uv_transform: &UvTransform,
     transform: &crate::transform::Transform,

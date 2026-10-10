@@ -10,6 +10,7 @@ mod editor_settings;
 mod history;
 use history::EditorHistory;
 
+mod export;
 mod image;
 mod linking;
 mod mesh;

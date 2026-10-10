@@ -14,9 +14,6 @@ pub use picking::MeshViewportContextMenu;
 mod setup;
 mod state;
 
-mod uv;
-pub use uv::{MeshUvSyncState, sync_mesh_uvs};
-
 mod visibility;
 
 pub use camera::orbit_camera;
@@ -54,7 +51,10 @@ use bevy_egui::EguiPrimaryContextPass;
 
 use crate::{
     data::Atlas,
-    mesh::{ImportedMeshPart, MeshLight, MeshSceneState},
+    mesh::{
+        ImportedMeshPart, MeshLight, MeshSceneState,
+        uv::{MeshUvSyncState, sync_mesh_uvs},
+    },
 };
 
 pub struct MeshPreviewPlugin;

@@ -165,7 +165,10 @@ impl HotkeyManager {
         );
 
         self.bindings
-            .insert(EditorAction::ExportAtlas, Hotkey::ctrl_shift(KeyCode::KeyE));
+            .insert(EditorAction::ExportAtlas, Hotkey::ctrl_shift(KeyCode::KeyA));
+
+        self.bindings
+            .insert(EditorAction::ExportModel, Hotkey::ctrl_shift(KeyCode::KeyM));
 
         // Edit
         self.bindings
