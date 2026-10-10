@@ -268,7 +268,16 @@ pub fn editor_ui(
         &mut *history,
     );
 
-    windows::atlas_context_menu(ctx, &mut context_menus.atlas, &mut action_messages);
+    windows::atlas_context_menu(
+        ctx,
+        &mut context_menus.atlas,
+        &mut action_messages,
+        &mut editor_ui,
+        &mut atlas,
+        &mesh_scene_state,
+        &mesh_preview,
+        &mut history,
+    );
 
     // 3D viewport primitive context menu.
     windows::viewport_primitive_context_menu(

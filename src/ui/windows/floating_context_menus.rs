@@ -2,8 +2,13 @@ use bevy::prelude::*;
 use bevy_egui::egui;
 
 use crate::{
+    data::Atlas,
+    history::EditorHistory,
     hotkeys::{EditorAction, EditorActionMessage},
-    viewport::MeshViewportContextMenu,
+    linking::assign_selected_primitives,
+    mesh::MeshSceneState,
+    ui::EditorUi,
+    viewport::{MeshPreview, MeshViewportContextMenu},
 };
 
 #[derive(Resource, Default)]
@@ -84,6 +89,11 @@ pub fn atlas_context_menu(
     ctx: &egui::Context,
     menu: &mut AtlasContextMenu,
     action_messages: &mut MessageWriter<EditorActionMessage>,
+    editor_ui: &mut EditorUi,
+    atlas: &mut Atlas,
+    mesh_scene_state: &MeshSceneState,
+    mesh_preview: &MeshPreview,
+    history: &mut EditorHistory,
 ) {
     if !menu.open {
         return;
@@ -102,6 +112,22 @@ pub fn atlas_context_menu(
                 .show(ui, |ui| {
                     ui.set_min_width(190.0);
 
+                    if ui.button("Assign to Selected Primitive").clicked() {
+                        // Make the right-clicked region the inspected region,
+                        // since the assignment helper uses that selection.
+                        editor_ui.inspected_atlas_region = Some(region_index);
+
+                        assign_selected_primitives(
+                            editor_ui,
+                            atlas,
+                            mesh_scene_state,
+                            mesh_preview,
+                            history,
+                        );
+
+                        menu.open = false;
+                    }
+
                     if ui.button("Delete Atlas Region").clicked() {
                         action_messages.write(EditorActionMessage::new(
                             EditorAction::RemoveAtlasRegionAt {
@@ -110,7 +136,6 @@ pub fn atlas_context_menu(
                         ));
 
                         menu.open = false;
-                        menu.region_index = None;
                     }
                 })
                 .response
