@@ -58,19 +58,6 @@ pub fn sync_mesh_uvs(
                 .map(|assignment| (material, assignment))
         });
 
-        if let Some((material, assignment)) = assignment {
-            info!(
-                "UV assignment '{}', primitive {}: region={}x{}, rotation={:?}, uv_scale={:?}, uv_rotation={}",
-                object.name,
-                mesh_part.primitive_index,
-                material.transform.width,
-                material.transform.height,
-                material.transform.rotation,
-                assignment.uv_transform.scale,
-                assignment.uv_transform.rotation,
-            );
-        }
-
         let uvs = match assignment {
             Some((material, assignment)) => transform_uvs(
                 &primitive.uvs,
@@ -114,22 +101,10 @@ pub(crate) fn transform_uvs(
 
     let pivot = UvTransform::uv_center(source_uvs);
 
-    info!(
-        "Atlas UV mapping: rect=({}, {}, {}x{}), atlas={}x{}, rotation={:?}",
-        x, y, width, height, atlas_width, atlas_height, transform.rotation
-    );
-
     source_uvs
         .iter()
         .map(|&source_uv| {
             let uv = uv_transform.apply(Vec2::from_array(source_uv), pivot);
-
-            if source_uvs.len() > 0 {
-                info!(
-                    "UV intermediate: source={:?}, transformed={:?}, pivot={:?}",
-                    source_uv, uv, pivot
-                );
-            }
 
             let local_uv = match transform.rotation {
                 Rotation::Deg0 => uv,
