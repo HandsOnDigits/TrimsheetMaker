@@ -263,7 +263,7 @@ pub fn execute_action(
             }
         }
 
-        EditorAction::ExportAtlas => match crate::data::export_atlas_maps(atlas, images) {
+        EditorAction::ExportAtlas => match crate::export::atlas::export_atlas_maps(atlas, images) {
             Ok(0) => {
                 info!("Export Atlas cancelled");
             }

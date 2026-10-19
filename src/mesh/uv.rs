@@ -92,6 +92,9 @@ pub(crate) fn transform_uvs(
         return source_uvs.to_vec();
     }
 
+    // Use a uniform scale or the max dimension to keep pixel aspect ratios square
+    let max_atlas_dim = atlas_width.max(atlas_height);
+
     let (x, y, width, height) = transform.atlas_rect();
 
     let x = x as f32;
@@ -113,9 +116,10 @@ pub(crate) fn transform_uvs(
                 Rotation::Deg270 => Vec2::new(1.0 - uv.y, uv.x),
             };
 
+            // Normalize using the uniform max dimension so pixels maintain a 1:1 ratio
             let atlas_uv = Vec2::new(
-                (x + local_uv.x * width) / atlas_width,
-                (y + (1.0 - local_uv.y) * height) / atlas_height,
+                (x + local_uv.x * width) / max_atlas_dim,
+                (y + (1.0 - local_uv.y) * height) / max_atlas_dim,
             );
 
             atlas_uv.to_array()
