@@ -125,8 +125,8 @@ pub fn import_multiple_materials_window(
                     }
 
                     atlas.load_textures(images);
-
                     editor_ui.project_settings.sync_from_atlas(atlas);
+                    editor_ui.project_dirty = true;
 
                     editor_ui.multiple_materials_root = None;
                     close_window = true;

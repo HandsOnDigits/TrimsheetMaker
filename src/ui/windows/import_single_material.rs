@@ -222,6 +222,6 @@ fn import_material(editor_ui: &mut EditorUi, atlas: &mut Atlas, images: &mut Ass
     atlas.load_textures(images);
 
     editor_ui.project_settings.sync_from_atlas(atlas);
-
     editor_ui.inspected_atlas_region = Some(index);
+    editor_ui.project_dirty = true;
 }

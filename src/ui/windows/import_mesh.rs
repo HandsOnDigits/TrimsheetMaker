@@ -169,6 +169,8 @@ pub fn import_mesh_window(
                     }
 
                     if imported > 0 {
+                        editor_ui.project_dirty = true;
+
                         if let Some((bounds_center, bounds_radius)) =
                             mesh_scene_state.visible_bounds()
                         {

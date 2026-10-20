@@ -40,7 +40,7 @@ fn selected_primitives(
 }
 
 pub fn assign_selected_primitives(
-    editor_ui: &EditorUi,
+    editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
     mesh_scene_state: &MeshSceneState,
     mesh_preview: &MeshPreview,
@@ -109,10 +109,11 @@ pub fn assign_selected_primitives(
 
     atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
     history.push(before);
+    editor_ui.project_dirty = true;
 }
 
 pub fn unassign_selected_primitives(
-    editor_ui: &EditorUi,
+    editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
     mesh_scene_state: &MeshSceneState,
     mesh_preview: &MeshPreview,
@@ -152,4 +153,5 @@ pub fn unassign_selected_primitives(
 
     atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
     history.push(before);
+    editor_ui.project_dirty = true;
 }

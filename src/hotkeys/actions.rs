@@ -712,6 +712,8 @@ pub fn execute_action(
 
             atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
             history.push(before);
+
+            editor_ui.project_dirty = true;
         }
 
         EditorAction::ImportMultipleMaterials => {
@@ -1126,6 +1128,18 @@ pub fn execute_action(
             object_index,
             primitive_index,
         } => {
+            let Some(mesh) = mesh_scene_state.get(mesh_id) else {
+                return;
+            };
+
+            let Some(object) = mesh.scene.objects.get(object_index) else {
+                return;
+            };
+
+            if primitive_index >= object.primitives.len() {
+                return;
+            }
+
             let previous_mesh = editor_ui.selected_mesh;
             let previous_object = editor_ui.selected_mesh_object;
             let previous_primitive = mesh_preview.selected_primitive;
@@ -1140,6 +1154,8 @@ pub fn execute_action(
                 primitive_index,
             });
 
+            let previous_count = object.primitives.len();
+
             execute_action(
                 EditorAction::RemoveSelectedMesh,
                 editor_ui,
@@ -1152,6 +1168,15 @@ pub fn execute_action(
                 meshes,
                 history,
             );
+
+            let deleted = mesh_scene_state
+                .get(mesh_id)
+                .and_then(|mesh| mesh.scene.objects.get(object_index))
+                .is_none_or(|object| object.primitives.len() < previous_count);
+
+            if deleted {
+                editor_ui.project_dirty = true;
+            }
 
             // Restore the previous selection after deleting the target.
             editor_ui.selected_mesh = previous_mesh;
