@@ -1233,33 +1233,7 @@ pub fn execute_action(
             editor_ui.atlas_zoom = 1.0;
             editor_ui.atlas_pan = egui::Vec2::ZERO;
 
-            mesh_preview.distance = 4.0;
-            mesh_preview.target_distance = 4.0;
-
-            if let (Some(center), Some(normal)) = (
-                mesh_preview.selected_primitive_center,
-                mesh_preview.selected_primitive_normal,
-            ) {
-                // Orbit around the selected primitive's center.
-                mesh_preview.target = center;
-
-                // The normal points toward the visible side.
-                // The camera must be positioned on that side.
-                let direction = normal.normalize_or_zero();
-                let horizontal_length = direction.x.hypot(direction.z);
-
-                if horizontal_length > 1e-5 {
-                    mesh_preview.yaw = direction.x.atan2(direction.z);
-                }
-
-                // The orbit offset's Y component is -sin(pitch).
-                // Clamp to the same limits used by mouse orbit.
-                mesh_preview.pitch = (-direction.y).atan2(horizontal_length).clamp(-1.5, 1.5);
-            } else {
-                mesh_preview.target = Vec3::ZERO;
-                mesh_preview.yaw = 0.0;
-                mesh_preview.pitch = 0.3;
-            }
+            mesh_preview.reset_view();
         }
 
         EditorAction::ToggleMaterialsPanel => {

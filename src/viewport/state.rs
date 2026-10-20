@@ -78,6 +78,31 @@ impl MeshPreview {
         self.yaw = view.yaw;
         self.pitch = view.pitch;
     }
+
+    pub fn reset_view(&mut self) {
+        self.distance = 4.0;
+        self.target_distance = 4.0;
+
+        if let (Some(center), Some(normal)) = (
+            self.selected_primitive_center,
+            self.selected_primitive_normal,
+        ) {
+            self.target = center;
+
+            let direction = normal.normalize_or_zero();
+            let horizontal_length = direction.x.hypot(direction.z);
+
+            if horizontal_length > 1e-5 {
+                self.yaw = direction.x.atan2(direction.z);
+            }
+
+            self.pitch = (-direction.y).atan2(horizontal_length).clamp(-1.5, 1.5);
+        } else {
+            self.target = Vec3::ZERO;
+            self.yaw = 0.0;
+            self.pitch = 0.3;
+        }
+    }
 }
 
 #[derive(Resource, Default)]

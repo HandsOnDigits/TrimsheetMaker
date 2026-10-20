@@ -85,11 +85,6 @@ pub fn editor_ui(
             crate::native_dialog::NativeDialogResult::SaveProjectAs(_)
         );
 
-        info!(
-            "Dialog result received: save_as={}, pending_exit={}, save_before_pending={}",
-            was_save_as, editor_ui.pending_app_exit, editor_ui.save_before_pending_action,
-        );
-
         let save_succeeded = handle_native_dialog_result(
             result,
             &mut editor_ui,
@@ -101,8 +96,6 @@ pub fn editor_ui(
             &mut commands,
             &mut asset_resources.meshes,
         );
-
-        info!("Dialog handler returned: save_succeeded={save_succeeded}");
 
         if was_save_as && save_succeeded && editor_ui.pending_app_exit {
             info!("Save succeeded while exiting; sending AppExit");

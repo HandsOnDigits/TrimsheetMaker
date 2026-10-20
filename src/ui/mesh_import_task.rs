@@ -148,14 +148,7 @@ pub fn poll_mesh_import_task(
 
     if task.imported > 0 {
         editor_ui.project_dirty = true;
-
-        if let Some((bounds_center, bounds_radius)) = mesh_scene_state.visible_bounds() {
-            mesh_preview.target = bounds_center;
-
-            let fit_distance = (bounds_radius * 2.5).max(0.25);
-            mesh_preview.distance = fit_distance;
-            mesh_preview.target_distance = fit_distance;
-        }
+        mesh_preview.reset_view();
     }
 
     if task.errors.is_empty() {
