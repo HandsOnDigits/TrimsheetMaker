@@ -2,7 +2,8 @@ mod actions;
 mod manager;
 
 pub use actions::{
-    EditorAction, EditorActionMessage, dispatch_action, execute_action, handle_native_dialog_result,
+    EditorAction, EditorActionMessage, dispatch_action, execute_action,
+    handle_native_dialog_result, has_unsaved_project_content,
 };
 
 #[allow(unused)]

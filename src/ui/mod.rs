@@ -1,13 +1,13 @@
 use std::collections::{BTreeMap, HashSet};
 
-use bevy::prelude::*;
+use bevy::{prelude::*, window::WindowCloseRequested};
 use bevy_egui::{EguiGlobalSettings, EguiPrimaryContextPass, PrimaryEguiContext, egui};
 
 use crate::{
-    data,
+    data::{self, Atlas},
     editor_settings::EditorSettings,
     history::{EditorHistory, EditorSnapshot},
-    hotkeys::{self, EditorAction, EditorActionMessage},
+    hotkeys::{self, EditorAction, EditorActionMessage, has_unsaved_project_content},
     mesh::{MeshLight, MeshSceneState},
     native_dialog::NativeDialogState,
     project_settings::ProjectSettings,
@@ -29,9 +29,12 @@ impl Plugin for EditorUiPlugin {
             .add_systems(Startup, (setup, load_editor_settings))
             .add_systems(
                 EguiPrimaryContextPass,
-                apply_editor_actions.after(hotkeys::hotkey_system),
+                (
+                    apply_editor_actions.after(hotkeys::hotkey_system),
+                    panels::editor_ui,
+                ),
             )
-            .add_systems(EguiPrimaryContextPass, panels::editor_ui);
+            .add_systems(Update, handle_window_close_requests);
     }
 }
 
@@ -61,6 +64,7 @@ fn apply_editor_actions(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut history: ResMut<EditorHistory>,
+    mut app_exit: MessageWriter<AppExit>,
 ) {
     for message in messages.read() {
         hotkeys::dispatch_action(
@@ -75,12 +79,21 @@ fn apply_editor_actions(
             &mut commands,
             &mut meshes,
             &mut history,
+            &mut app_exit,
         );
     }
 }
 
 #[derive(Resource)]
 pub struct EditorUi {
+    pub show_unsaved_project_warning: bool,
+    pub pending_project_action: Option<EditorAction>,
+    pub pending_window_close: Option<Entity>,
+    pub pending_app_exit: bool,
+    pub approved_project_action: Option<EditorAction>,
+    pub save_before_pending_action: bool,
+
+    pub project_dirty: bool,
     pub project_path: Option<std::path::PathBuf>,
 
     pub atlas_drag_snapshot: Option<EditorSnapshot>,
@@ -167,6 +180,14 @@ impl EditorUi {
 impl Default for EditorUi {
     fn default() -> Self {
         Self {
+            show_unsaved_project_warning: false,
+            pending_project_action: None,
+            pending_window_close: None,
+            pending_app_exit: false,
+            approved_project_action: None,
+            save_before_pending_action: false,
+
+            project_dirty: false,
             project_path: None,
 
             atlas_drag_snapshot: None,
@@ -247,4 +268,21 @@ pub enum LeftPanelTab {
     #[default]
     Scene,
     Materials,
+}
+
+fn handle_window_close_requests(
+    mut close_requests: MessageReader<WindowCloseRequested>,
+    mut editor_ui: ResMut<EditorUi>,
+    atlas: Res<Atlas>,
+    mesh_scene_state: Res<MeshSceneState>,
+    mut app_exit: MessageWriter<AppExit>,
+) {
+    for _request in close_requests.read() {
+        if has_unsaved_project_content(&editor_ui, &atlas, &mesh_scene_state) {
+            editor_ui.pending_app_exit = true;
+            editor_ui.show_unsaved_project_warning = true;
+        } else {
+            app_exit.write(AppExit::Success);
+        }
+    }
 }

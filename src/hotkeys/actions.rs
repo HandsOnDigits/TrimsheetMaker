@@ -102,7 +102,18 @@ pub fn dispatch_action(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     history: &mut EditorHistory,
+    app_exit: &mut MessageWriter<AppExit>,
 ) {
+    if editor_ui.approved_project_action == Some(action) {
+        editor_ui.approved_project_action = None;
+    } else if matches!(action, EditorAction::NewAtlas | EditorAction::OpenProject)
+        && has_unsaved_project_content(editor_ui, atlas, mesh_scene_state)
+    {
+        editor_ui.pending_project_action = Some(action);
+        editor_ui.show_unsaved_project_warning = true;
+        return;
+    }
+
     if dialog.active {
         return;
     }
@@ -111,15 +122,65 @@ pub fn dispatch_action(
         EditorAction::OpenProject => {
             dialog.start(NativeDialogRequest::OpenProject);
         }
+
+        EditorAction::SaveProject
+            if editor_ui.save_before_pending_action && editor_ui.project_path.is_some() =>
+        {
+            let path = editor_ui.project_path.clone().unwrap();
+
+            match project::save_project(&path, atlas, &editor_ui.project_settings, mesh_scene_state)
+            {
+                Ok(()) => {
+                    info!("Project saved: {}", path.display());
+
+                    editor_ui.project_dirty = false;
+                    editor_ui.save_before_pending_action = false;
+                    editor_ui.show_unsaved_project_warning = false;
+
+                    if let Some(pending_action) = editor_ui.pending_project_action.take() {
+                        editor_ui.approved_project_action = Some(pending_action);
+
+                        dispatch_action(
+                            pending_action,
+                            dialog,
+                            editor_ui,
+                            atlas,
+                            images,
+                            mesh_preview,
+                            mesh_light,
+                            mesh_scene_state,
+                            commands,
+                            meshes,
+                            history,
+                            app_exit,
+                        );
+                    }
+                }
+                Err(error) => {
+                    error!("Failed to save project '{}': {error}", path.display());
+
+                    // Keep the warning open so the user can retry or cancel.
+                    editor_ui.project_dirty = true;
+                    editor_ui.save_before_pending_action = false;
+                    editor_ui.show_unsaved_project_warning = true;
+                }
+            }
+        }
+
+        EditorAction::SaveProject if editor_ui.save_before_pending_action => {
+            // The warning's Save button must use the managed dialog,
+            // rather than opening rfd::FileDialog directly.
+            dialog.start(NativeDialogRequest::SaveProjectAs);
+        }
+
         EditorAction::SaveProjectAs => {
             dialog.start(NativeDialogRequest::SaveProjectAs);
         }
+
         EditorAction::ExportModel => {
             dialog.start(NativeDialogRequest::ExportModel);
         }
-        EditorAction::SaveProject if editor_ui.project_path.is_none() => {
-            dialog.start(NativeDialogRequest::SaveProjectAs);
-        }
+
         _ => execute_action(
             action,
             editor_ui,
@@ -159,6 +220,7 @@ pub fn open_project_from_path(
 
             editor_ui.project_settings = project_settings;
             editor_ui.project_path = Some(path.clone());
+            editor_ui.project_dirty = false;
             editor_ui.inspected_atlas_region = None;
             editor_ui.dragging_atlas_region = None;
             editor_ui.drag_offset = egui::Vec2::ZERO;
@@ -178,7 +240,10 @@ pub fn open_project_from_path(
                 mesh_scene_state,
                 mesh_preview,
             ) {
-                Ok(()) => info!("Project opened: {}", path.display()),
+                Ok(()) => {
+                    info!("Project opened: {}", path.display());
+                    editor_ui.project_path = Some(path.clone());
+                }
                 Err(error) => {
                     error!("Project opened, but some saved meshes could not be loaded: {error}")
                 }
@@ -200,7 +265,7 @@ pub fn handle_native_dialog_result(
     mesh_scene_state: &mut MeshSceneState,
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-) {
+) -> bool {
     match result {
         NativeDialogResult::SingleMaterialFolder(Some(path)) => {
             match crate::ui::windows::importer::single_material::scan(&path) {
@@ -306,14 +371,19 @@ pub fn handle_native_dialog_result(
                 Ok(()) => {
                     info!("Project saved: {}", path.display());
                     editor_ui.project_path = Some(path);
+                    editor_ui.project_dirty = false;
+                    return true;
                 }
                 Err(error) => {
                     error!("Failed to save project '{}': {error}", path.display());
+                    return false;
                 }
             }
         }
+
         NativeDialogResult::SaveProjectAs(None) => {
             info!("Save Project As cancelled");
+            return false;
         }
 
         NativeDialogResult::ExportModel(Some(path)) => {
@@ -329,8 +399,10 @@ pub fn handle_native_dialog_result(
         }
     }
 
-    // Keep the signature consistent with the action handler resources.
+    // These parameters aren't needed by every dialog result.
     let _ = (images, mesh_light);
+
+    false
 }
 
 /// Executes an editor action against the current editor state.
@@ -352,12 +424,14 @@ pub fn execute_action(
         EditorAction::NewAtlas => {
             *atlas = Atlas::default();
 
+            editor_ui.project_path = None;
+            editor_ui.project_dirty = false;
+
             editor_ui.inspected_atlas_region = None;
             editor_ui.dragging_atlas_region = None;
             editor_ui.drag_offset = egui::Vec2::ZERO;
 
             editor_ui.project_settings = ProjectSettings::default();
-            editor_ui.project_path = None;
 
             editor_ui.atlas_zoom = 1.0;
             editor_ui.atlas_pan = egui::Vec2::ZERO;
@@ -458,6 +532,7 @@ pub fn execute_action(
                 ) {
                     Ok(()) => {
                         info!("Project saved: {}", path.display());
+                        editor_ui.project_dirty = false;
                     }
 
                     Err(error) => {
@@ -473,6 +548,7 @@ pub fn execute_action(
                     Ok(Some(path)) => {
                         info!("Project saved: {}", path.display());
                         editor_ui.project_path = Some(path);
+                        editor_ui.project_dirty = false;
                     }
 
                     Ok(None) => {
@@ -495,6 +571,7 @@ pub fn execute_action(
                 Ok(Some(path)) => {
                     info!("Project saved: {}", path.display());
                     editor_ui.project_path = Some(path);
+                    editor_ui.project_dirty = false;
                 }
 
                 Ok(None) => {
@@ -605,6 +682,8 @@ pub fn execute_action(
                 mesh_preview,
                 history,
             );
+
+            editor_ui.project_dirty = true;
         }
 
         EditorAction::UnassignMaterial => {
@@ -615,6 +694,8 @@ pub fn execute_action(
                 mesh_preview,
                 history,
             );
+
+            editor_ui.project_dirty = true;
         }
 
         EditorAction::UnassignMeshPrimitive {
@@ -1245,4 +1326,14 @@ fn remove_atlas_region(
     {
         editor_ui.dragging_atlas_region = Some(dragging_index - 1);
     }
+}
+
+pub fn has_unsaved_project_content(
+    editor_ui: &EditorUi,
+    atlas: &Atlas,
+    meshes: &MeshSceneState,
+) -> bool {
+    editor_ui.project_dirty
+        || (editor_ui.project_path.is_none()
+            && (!atlas.materials.is_empty() || !meshes.meshes.is_empty()))
 }

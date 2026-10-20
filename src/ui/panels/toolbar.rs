@@ -26,6 +26,7 @@ pub fn toolbar(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     history: &mut EditorHistory,
+    app_exit: &mut MessageWriter<AppExit>,
 ) {
     egui::MenuBar::new()
         .config(
@@ -66,6 +67,7 @@ pub fn toolbar(
                         commands,
                         meshes,
                         history,
+                        app_exit,
                     );
                     ui.close();
                 }
@@ -83,6 +85,7 @@ pub fn toolbar(
                         commands,
                         meshes,
                         history,
+                        app_exit,
                     );
                     ui.close();
                 }
@@ -100,6 +103,7 @@ pub fn toolbar(
                         commands,
                         meshes,
                         history,
+                        app_exit,
                     );
                     ui.close();
                 }
@@ -193,6 +197,7 @@ pub fn toolbar(
                         commands,
                         meshes,
                         history,
+                        app_exit,
                     );
                     ui.close();
                 }

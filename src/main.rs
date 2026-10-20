@@ -31,6 +31,7 @@ fn main() {
         .insert_resource(EditorHistory::default())
         .init_resource::<native_dialog::NativeDialogState>()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
+            close_when_requested: false,
             primary_window: Some(Window {
                 title: "Trimsheet Maker".into(),
                 resolution: (1400, 900).into(),

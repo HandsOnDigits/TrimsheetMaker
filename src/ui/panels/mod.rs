@@ -30,7 +30,7 @@ use super::{EditorUi, LeftPanelTab};
 use crate::{
     data::Atlas,
     history::EditorHistory,
-    hotkeys::{EditorActionMessage, HotkeyManager, handle_native_dialog_result},
+    hotkeys::{EditorAction, EditorActionMessage, HotkeyManager, handle_native_dialog_result},
     mesh::{MeshLight, MeshSceneState},
     native_dialog::NativeDialogState,
     ui::windows::{self, floating_context_menus::AtlasContextMenu},
@@ -49,11 +49,17 @@ pub struct EditorUiHistoryAndDialog<'w> {
     dialog: ResMut<'w, NativeDialogState>,
 }
 
+#[derive(SystemParam)]
+pub struct EditorUiAssetResources<'w> {
+    images: ResMut<'w, Assets<Image>>,
+    meshes: ResMut<'w, Assets<Mesh>>,
+}
+
 pub fn editor_ui(
     mut contexts: EguiContexts,
     mut editor_ui: ResMut<EditorUi>,
     mut atlas: ResMut<Atlas>,
-    mut images: ResMut<Assets<Image>>,
+    mut asset_resources: EditorUiAssetResources,
     mut hotkeys: ResMut<HotkeyManager>,
     keyboard: Res<ButtonInput<KeyCode>>,
     mut mesh_viewport: ResMut<MeshViewportLayout>,
@@ -61,24 +67,51 @@ pub fn editor_ui(
     mut mesh_light: ResMut<MeshLight>,
     mut mesh_input: ResMut<MeshViewportInput>,
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
     mut mesh_scene_state: ResMut<MeshSceneState>,
     mut action_messages: MessageWriter<EditorActionMessage>,
     mut history_and_dialog: EditorUiHistoryAndDialog,
     mut context_menus: EditorUiContextMenus,
+    mut app_exit: MessageWriter<AppExit>,
 ) -> Result {
     if let Some(result) = history_and_dialog.dialog.take_result() {
+        let was_save_as = matches!(
+            &result,
+            crate::native_dialog::NativeDialogResult::SaveProjectAs(_)
+        );
+
         handle_native_dialog_result(
             result,
             &mut editor_ui,
             &mut atlas,
-            &mut images,
+            &mut asset_resources.images,
             &mut mesh_preview,
             &mut mesh_light,
             &mut mesh_scene_state,
             &mut commands,
-            &mut meshes,
+            &mut asset_resources.meshes,
         );
+
+        if was_save_as && editor_ui.save_before_pending_action {
+            editor_ui.save_before_pending_action = false;
+
+            if editor_ui.project_path.is_some() && !editor_ui.project_dirty {
+                editor_ui.show_unsaved_project_warning = false;
+
+                if editor_ui.pending_app_exit {
+                    editor_ui.pending_app_exit = false;
+                    editor_ui.pending_window_close = None;
+                    editor_ui.pending_project_action = None;
+
+                    app_exit.write(AppExit::Success);
+                } else if let Some(action) = editor_ui.pending_project_action.take() {
+                    editor_ui.approved_project_action = Some(action);
+                    action_messages.write(EditorActionMessage::new(action));
+                }
+            } else {
+                // Saving failed or was cancelled. Keep the warning open.
+                editor_ui.show_unsaved_project_warning = true;
+            }
+        }
     }
 
     mesh_input.pointer_over_ui = false;
@@ -118,6 +151,53 @@ pub fn editor_ui(
         style.debug.show_unaligned = false;
     });
 
+    if editor_ui.show_unsaved_project_warning {
+        egui::Window::new("Unsaved Project")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .show(ctx, |ui| {
+                ui.label("This project contains content that has not been saved.");
+                ui.label("Do you want to save it before continuing?");
+
+                ui.separator();
+
+                ui.horizontal(|ui| {
+                    if ui.button("Save").clicked() {
+                        editor_ui.save_before_pending_action = true;
+                        editor_ui.show_unsaved_project_warning = false;
+
+                        action_messages.write(EditorActionMessage::new(EditorAction::SaveProject));
+                    }
+
+                    if ui.button("Don't Save").clicked() {
+                        editor_ui.show_unsaved_project_warning = false;
+                        editor_ui.save_before_pending_action = false;
+
+                        if editor_ui.pending_app_exit {
+                            editor_ui.pending_app_exit = false;
+                            editor_ui.pending_project_action = None;
+                            editor_ui.pending_window_close = None;
+
+                            app_exit.write(AppExit::Success);
+                        } else if let Some(action) = editor_ui.pending_project_action.take() {
+                            editor_ui.approved_project_action = Some(action);
+                            action_messages.write(EditorActionMessage::new(action));
+                        }
+                    }
+
+                    if ui.button("Cancel").clicked() {
+                        editor_ui.pending_app_exit = false;
+                        editor_ui.pending_window_close = None;
+                        editor_ui.pending_project_action = None;
+                        editor_ui.show_unsaved_project_warning = false;
+                        editor_ui.save_before_pending_action = false;
+                        editor_ui.approved_project_action = None;
+                    }
+                });
+            });
+    }
+
     let mut root_ui = egui::Ui::new(
         ctx.clone(),
         "trimsheet_maker_root".into(),
@@ -134,14 +214,15 @@ pub fn editor_ui(
                 ui,
                 &mut editor_ui,
                 &mut atlas,
-                &mut images,
+                &mut asset_resources.images,
                 &hotkeys,
                 &mut mesh_preview,
                 &mut mesh_light,
                 &mut mesh_scene_state,
                 &mut commands,
-                &mut meshes,
+                &mut asset_resources.meshes,
                 &mut history_and_dialog.history,
+                &mut app_exit,
             );
         });
 
@@ -185,13 +266,13 @@ pub fn editor_ui(
                         ui,
                         &mut editor_ui,
                         &mut atlas,
-                        &mut images,
+                        &mut asset_resources.images,
                         &hotkeys,
                         &mut mesh_preview,
                         &mut mesh_light,
                         &mut mesh_scene_state,
                         &mut commands,
-                        &mut meshes,
+                        &mut asset_resources.meshes,
                         &mut history_and_dialog.history,
                     );
                 }
@@ -305,7 +386,7 @@ pub fn editor_ui(
             &mut history_and_dialog.dialog,
             &mut editor_ui,
             &mut atlas,
-            &mut images,
+            &mut asset_resources.images,
         );
 
     // Single-material import.
@@ -315,7 +396,7 @@ pub fn editor_ui(
             &mut history_and_dialog.dialog,
             &mut editor_ui,
             &mut atlas,
-            &mut images,
+            &mut asset_resources.images,
         );
 
     // Mesh import.
@@ -324,7 +405,7 @@ pub fn editor_ui(
         &mut history_and_dialog.dialog,
         &mut editor_ui,
         &mut commands,
-        &mut meshes,
+        &mut asset_resources.meshes,
         &mut mesh_scene_state,
         &mut mesh_preview,
     );
