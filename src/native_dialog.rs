@@ -6,11 +6,15 @@ use std::{
 
 use crate::project::PROJECT_EXTENSION;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum NativeDialogRequest {
     OpenProject,
     SaveProjectAs,
     ExportModel,
+    SingleMaterialFolder,
+    SingleMaterialTexture { group_id: String },
+    MultipleMaterialsFolder,
+    MeshFiles,
 }
 
 #[derive(Debug)]
@@ -18,6 +22,13 @@ pub enum NativeDialogResult {
     OpenProject(Option<PathBuf>),
     SaveProjectAs(Option<PathBuf>),
     ExportModel(Option<PathBuf>),
+    SingleMaterialFolder(Option<PathBuf>),
+    SingleMaterialTexture {
+        group_id: String,
+        path: Option<PathBuf>,
+    },
+    MultipleMaterialsFolder(Option<PathBuf>),
+    MeshFiles(Option<Vec<PathBuf>>),
 }
 
 #[derive(Resource)]
@@ -37,13 +48,11 @@ impl Default for NativeDialogState {
 
 impl NativeDialogState {
     pub fn start(&mut self, request: NativeDialogRequest) {
-        // Do not allow multiple native dialogs to overlap.
         if self.active {
             return;
         }
 
         self.active = true;
-
         let result_slot = Arc::clone(&self.result);
 
         std::thread::spawn(move || {
@@ -52,10 +61,8 @@ impl NativeDialogState {
                     let path = rfd::FileDialog::new()
                         .add_filter("Trimsheet Project", &[PROJECT_EXTENSION])
                         .pick_file();
-
                     NativeDialogResult::OpenProject(path)
                 }
-
                 NativeDialogRequest::SaveProjectAs => {
                     let path = rfd::FileDialog::new()
                         .add_filter("Trimsheet Project", &[PROJECT_EXTENSION])
@@ -65,20 +72,39 @@ impl NativeDialogState {
                             if path.extension().is_none() {
                                 path.set_extension(PROJECT_EXTENSION);
                             }
-
                             path
                         });
-
                     NativeDialogResult::SaveProjectAs(path)
                 }
-
                 NativeDialogRequest::ExportModel => {
                     let path = rfd::FileDialog::new()
                         .add_filter("glTF Binary", &["glb"])
                         .set_file_name("atlas_model.glb")
                         .save_file();
-
                     NativeDialogResult::ExportModel(path)
+                }
+                NativeDialogRequest::SingleMaterialFolder => {
+                    let path = rfd::FileDialog::new().pick_folder();
+                    NativeDialogResult::SingleMaterialFolder(path)
+                }
+                NativeDialogRequest::SingleMaterialTexture { group_id } => {
+                    let path = rfd::FileDialog::new()
+                        .add_filter("EXR", &["exr"])
+                        .pick_file();
+                    NativeDialogResult::SingleMaterialTexture { group_id, path }
+                }
+                NativeDialogRequest::MultipleMaterialsFolder => {
+                    let path = rfd::FileDialog::new().pick_folder();
+                    NativeDialogResult::MultipleMaterialsFolder(path)
+                }
+                NativeDialogRequest::MeshFiles => {
+                    let paths = rfd::FileDialog::new()
+                        .add_filter(
+                            "Mesh Files",
+                            &["gltf", "glb", "fbx", "obj", "dae", "3ds", "ply", "stl"],
+                        )
+                        .pick_files();
+                    NativeDialogResult::MeshFiles(paths)
                 }
             };
 
@@ -88,7 +114,6 @@ impl NativeDialogState {
         });
     }
 
-    /// Called on the main thread to retrieve a completed dialog result.
     pub fn take_result(&mut self) -> Option<NativeDialogResult> {
         let result = self.result.lock().ok()?.take();
 

@@ -302,6 +302,7 @@ pub fn editor_ui(
     mesh_input.floating_window_dragging |=
         windows::import_multiple_materials::import_multiple_materials_window(
             ctx,
+            &mut history_and_dialog.dialog,
             &mut editor_ui,
             &mut atlas,
             &mut images,
@@ -311,6 +312,7 @@ pub fn editor_ui(
     mesh_input.floating_window_dragging |=
         windows::import_single_material::import_single_material_window(
             ctx,
+            &mut history_and_dialog.dialog,
             &mut editor_ui,
             &mut atlas,
             &mut images,
@@ -319,6 +321,7 @@ pub fn editor_ui(
     // Mesh import.
     mesh_input.floating_window_dragging |= windows::import_mesh::import_mesh_window(
         ctx,
+        &mut history_and_dialog.dialog,
         &mut editor_ui,
         &mut commands,
         &mut meshes,

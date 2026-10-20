@@ -202,6 +202,88 @@ pub fn handle_native_dialog_result(
     meshes: &mut Assets<Mesh>,
 ) {
     match result {
+        NativeDialogResult::SingleMaterialFolder(Some(path)) => {
+            match crate::ui::windows::importer::single_material::scan(&path) {
+                Ok(scan) => {
+                    editor_ui.single_material_root = Some(path);
+                    editor_ui.single_material_name = scan.name;
+
+                    editor_ui
+                        .project_settings
+                        .texture_naming
+                        .merge_detected(scan.naming);
+
+                    editor_ui.single_material_textures.clear();
+
+                    let textures = crate::ui::windows::importer::classify_textures(
+                        scan.textures,
+                        &editor_ui.project_settings.texture_naming,
+                    );
+
+                    for texture in textures {
+                        if let Some(group_id) = texture.group_id {
+                            editor_ui
+                                .single_material_textures
+                                .insert(group_id, Some(texture.path));
+                        }
+                    }
+                }
+                Err(error) => {
+                    error!("Failed to scan material folder: {error}");
+
+                    editor_ui.single_material_root = None;
+                    editor_ui.single_material_name.clear();
+                    editor_ui.single_material_textures.clear();
+                }
+            }
+        }
+
+        NativeDialogResult::SingleMaterialFolder(None) => {}
+
+        NativeDialogResult::SingleMaterialTexture { group_id, path } => {
+            if let Some(path) = path {
+                editor_ui
+                    .single_material_textures
+                    .insert(group_id, Some(path));
+            }
+        }
+
+        NativeDialogResult::MultipleMaterialsFolder(Some(path)) => {
+            match crate::ui::windows::importer::multiple_materials::scan(&path) {
+                Ok(scan) => {
+                    editor_ui.multiple_materials_root = Some(path);
+                    editor_ui.import_materials = scan.materials;
+
+                    editor_ui
+                        .project_settings
+                        .texture_naming
+                        .merge_detected(scan.naming);
+
+                    editor_ui
+                        .project_settings
+                        .texture_naming
+                        .reclassify_materials(&mut editor_ui.import_materials);
+                }
+                Err(error) => {
+                    error!("Failed to scan material folder: {error}");
+
+                    editor_ui.multiple_materials_root = None;
+                    editor_ui.import_materials.clear();
+                    editor_ui.project_settings.texture_naming =
+                        crate::data::TextureNaming::default();
+                }
+            }
+        }
+
+        NativeDialogResult::MultipleMaterialsFolder(None) => {}
+
+        NativeDialogResult::MeshFiles(Some(paths)) => {
+            editor_ui.mesh_import_paths = paths;
+            editor_ui.mesh_import_error = None;
+        }
+
+        NativeDialogResult::MeshFiles(None) => {}
+
         NativeDialogResult::OpenProject(Some(path)) => {
             open_project_from_path(
                 path,

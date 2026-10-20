@@ -7,6 +7,7 @@ use crate::{
         import::{self, MeshBackend, MeshImportSettings},
         spawn_mesh_scene_with_visibility,
     },
+    native_dialog::{NativeDialogRequest, NativeDialogState},
     ui::EditorUi,
     viewport::MeshPreview,
 };
@@ -15,6 +16,7 @@ use super::FloatingWindowInteraction;
 
 pub fn import_mesh_window(
     ctx: &egui::Context,
+    dialog: &mut NativeDialogState,
     editor_ui: &mut EditorUi,
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
@@ -45,17 +47,7 @@ pub fn import_mesh_window(
                 );
 
                 if ui.button("Browse...").clicked() {
-                    let paths = rfd::FileDialog::new()
-                        .add_filter(
-                            "Mesh Files",
-                            &["gltf", "glb", "fbx", "obj", "dae", "3ds", "ply", "stl"],
-                        )
-                        .pick_files();
-
-                    if let Some(paths) = paths {
-                        editor_ui.mesh_import_paths = paths;
-                        editor_ui.mesh_import_error = None;
-                    }
+                    dialog.start(NativeDialogRequest::MeshFiles);
                 }
             });
 

@@ -1,14 +1,19 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
 
-use crate::{data::Atlas, ui::EditorUi};
+use crate::{
+    data::Atlas,
+    native_dialog::{NativeDialogRequest, NativeDialogState},
+    ui::EditorUi,
+};
 
-use super::importer::{classify_textures, material_source_from_paths};
+use super::importer::material_source_from_paths;
 
 use super::FloatingWindowInteraction;
 
 pub fn import_single_material_window(
     ctx: &egui::Context,
+    dialog: &mut NativeDialogState,
     editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
     images: &mut Assets<Image>,
@@ -46,42 +51,7 @@ pub fn import_single_material_window(
                 );
 
                 if ui.button("Browse").clicked() {
-                    if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                        match super::importer::single_material::scan(&path) {
-                            Ok(scan) => {
-                                editor_ui.single_material_root = Some(path);
-                                editor_ui.single_material_name = scan.name;
-
-                                editor_ui
-                                    .project_settings
-                                    .texture_naming
-                                    .merge_detected(scan.naming);
-
-                                editor_ui.single_material_textures.clear();
-
-                                let textures = classify_textures(
-                                    scan.textures,
-                                    &editor_ui.project_settings.texture_naming,
-                                );
-
-                                for texture in textures {
-                                    if let Some(group_id) = texture.group_id {
-                                        editor_ui
-                                            .single_material_textures
-                                            .insert(group_id, Some(texture.path));
-                                    }
-                                }
-                            }
-
-                            Err(error) => {
-                                eprintln!("Failed to scan material folder: {error}");
-
-                                editor_ui.single_material_root = None;
-                                editor_ui.single_material_name.clear();
-                                editor_ui.single_material_textures.clear();
-                            }
-                        }
-                    }
+                    dialog.start(NativeDialogRequest::SingleMaterialFolder);
                 }
             });
 
@@ -131,7 +101,7 @@ pub fn import_single_material_window(
                     ui.label(egui::RichText::new("No texture groups have been configured.").weak());
                 } else {
                     for (id, name) in texture_groups {
-                        texture_file_row(ui, &name, &id, editor_ui);
+                        texture_file_row(ui, &name, &id, editor_ui, dialog);
                     }
                 }
             }
@@ -178,7 +148,13 @@ pub fn import_single_material_window(
     owns_pointer
 }
 
-fn texture_file_row(ui: &mut egui::Ui, label: &str, id: &str, editor_ui: &mut EditorUi) {
+fn texture_file_row(
+    ui: &mut egui::Ui,
+    label: &str,
+    id: &str,
+    editor_ui: &mut EditorUi,
+    dialog: &mut NativeDialogState,
+) {
     let current_path = editor_ui
         .single_material_textures
         .get(id)
@@ -201,14 +177,9 @@ fn texture_file_row(ui: &mut egui::Ui, label: &str, id: &str, editor_ui: &mut Ed
         );
 
         if ui.button("Browse").clicked() {
-            if let Some(path) = rfd::FileDialog::new()
-                .add_filter("EXR", &["exr"])
-                .pick_file()
-            {
-                editor_ui
-                    .single_material_textures
-                    .insert(id.to_string(), Some(path));
-            }
+            dialog.start(NativeDialogRequest::SingleMaterialTexture {
+                group_id: id.to_string(),
+            });
         }
 
         if current_path.is_some() && ui.button("Clear").clicked() {

@@ -3,12 +3,17 @@ use std::collections::BTreeMap;
 use bevy::prelude::*;
 use bevy_egui::egui;
 
-use crate::{data::Atlas, ui::EditorUi};
+use crate::{
+    data::Atlas,
+    native_dialog::{NativeDialogRequest, NativeDialogState},
+    ui::EditorUi,
+};
 
 use super::FloatingWindowInteraction;
 
 pub fn import_multiple_materials_window(
     ctx: &egui::Context,
+    dialog: &mut NativeDialogState,
     editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
     images: &mut Assets<Image>,
@@ -40,31 +45,7 @@ pub fn import_multiple_materials_window(
                 );
 
                 if ui.button("Browse").clicked() {
-                    if let Some(path) = rfd::FileDialog::new().pick_folder() {
-                        match super::importer::multiple_materials::scan(&path) {
-                            Ok(scan) => {
-                                editor_ui.multiple_materials_root = Some(path);
-                                editor_ui.import_materials = scan.materials;
-
-                                editor_ui
-                                    .project_settings
-                                    .texture_naming
-                                    .merge_detected(scan.naming);
-
-                                let naming = &editor_ui.project_settings.texture_naming;
-
-                                naming.reclassify_materials(&mut editor_ui.import_materials);
-                            }
-                            Err(error) => {
-                                eprintln!("Failed to scan material folder: {error}");
-
-                                editor_ui.multiple_materials_root = None;
-                                editor_ui.import_materials.clear();
-                                editor_ui.project_settings.texture_naming =
-                                    crate::data::TextureNaming::default();
-                            }
-                        }
-                    }
+                    dialog.start(NativeDialogRequest::MultipleMaterialsFolder);
                 }
             });
 
