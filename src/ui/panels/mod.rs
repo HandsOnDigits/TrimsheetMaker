@@ -33,7 +33,11 @@ use crate::{
     hotkeys::{EditorAction, EditorActionMessage, HotkeyManager, handle_native_dialog_result},
     mesh::{MeshLight, MeshSceneState},
     native_dialog::NativeDialogState,
-    ui::windows::{self, floating_context_menus::AtlasContextMenu},
+    ui::{
+        loading::{LoadingState, loading_overlay},
+        mesh_import_task::MeshImportTask,
+        windows::{self, floating_context_menus::AtlasContextMenu},
+    },
     viewport::{MeshPreview, MeshViewportContextMenu, MeshViewportInput, MeshViewportLayout},
 };
 
@@ -47,6 +51,8 @@ pub struct EditorUiContextMenus<'w> {
 pub struct EditorUiHistoryAndDialog<'w> {
     history: ResMut<'w, EditorHistory>,
     dialog: ResMut<'w, NativeDialogState>,
+    loading: ResMut<'w, LoadingState>,
+    mesh_import_task: ResMut<'w, MeshImportTask>,
 }
 
 #[derive(SystemParam)]
@@ -414,10 +420,8 @@ pub fn editor_ui(
         ctx,
         &mut history_and_dialog.dialog,
         &mut editor_ui,
-        &mut commands,
-        &mut asset_resources.meshes,
-        &mut mesh_scene_state,
-        &mut mesh_preview,
+        &mut history_and_dialog.mesh_import_task,
+        &mut history_and_dialog.loading,
     );
 
     // Atlas map
@@ -441,6 +445,12 @@ pub fn editor_ui(
 
     // Prevent viewport interactions while an egui popup or dropdown is open.
     mesh_input.pointer_over_ui |= egui::Popup::is_any_open(ctx);
+
+    loading_overlay(ctx, &history_and_dialog.loading);
+
+    if history_and_dialog.loading.is_loading() {
+        mesh_input.pointer_over_ui = true;
+    }
 
     Ok(())
 }

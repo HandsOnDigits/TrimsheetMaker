@@ -2,14 +2,9 @@ use bevy::prelude::*;
 use bevy_egui::egui;
 
 use crate::{
-    mesh::{
-        MeshSceneState,
-        import::{self, MeshBackend, MeshImportSettings},
-        spawn_mesh_scene_with_visibility,
-    },
+    mesh::import::{MeshBackend, MeshImportSettings},
     native_dialog::{NativeDialogRequest, NativeDialogState},
-    ui::EditorUi,
-    viewport::MeshPreview,
+    ui::{EditorUi, loading::LoadingState, mesh_import_task::MeshImportTask},
 };
 
 use super::FloatingWindowInteraction;
@@ -18,10 +13,8 @@ pub fn import_mesh_window(
     ctx: &egui::Context,
     dialog: &mut NativeDialogState,
     editor_ui: &mut EditorUi,
-    commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    mesh_scene_state: &mut MeshSceneState,
-    mesh_preview: &mut MeshPreview,
+    task: &mut MeshImportTask,
+    loading: &mut LoadingState,
 ) -> bool {
     let mut open = editor_ui.show_import_mesh_window;
 
@@ -109,7 +102,7 @@ pub fn import_mesh_window(
                     editor_ui.show_import_mesh_window = false;
                 }
 
-                let can_import = !editor_ui.mesh_import_paths.is_empty();
+                let can_import = !editor_ui.mesh_import_paths.is_empty() && !task.is_running();
 
                 if ui
                     .add_enabled(can_import, egui::Button::new("Import"))
@@ -121,80 +114,14 @@ pub fn import_mesh_window(
                         assimp_library: editor_ui.editor_settings.assimp_library_path.clone(),
                     };
 
-                    let mut imported = 0usize;
-                    let mut errors = Vec::new();
-
-                    for path in paths {
-                        match import::import(&path, editor_ui.mesh_import_backend, &settings) {
-                            Ok(scene) => {
-                                // Reserve the ID before spawning the entity so the
-                                // ImportedMeshRoot receives the same ID as MeshEntry.
-                                let mesh_id = mesh_scene_state.next_id;
-
-                                let (root, parts, bounds_center, bounds_radius) =
-                                    spawn_mesh_scene_with_visibility(
-                                        commands,
-                                        meshes,
-                                        &scene,
-                                        mesh_id,
-                                        mesh_preview.material.clone(),
-                                        None,
-                                    );
-
-                                let name = path
-                                    .file_stem()
-                                    .and_then(|name| name.to_str())
-                                    .unwrap_or("Mesh")
-                                    .to_owned();
-
-                                mesh_scene_state.add(
-                                    name,
-                                    path,
-                                    scene.clone(),
-                                    root,
-                                    parts,
-                                    bounds_center,
-                                    bounds_radius,
-                                );
-
-                                mesh_preview.selected_mesh_id = Some(mesh_id);
-
-                                imported += 1;
-                            }
-
-                            Err(error) => {
-                                errors.push(format!("{}: {error}", path.display()));
-                            }
-                        }
-                    }
-
-                    if imported > 0 {
-                        editor_ui.project_dirty = true;
-
-                        if let Some((bounds_center, bounds_radius)) =
-                            mesh_scene_state.visible_bounds()
-                        {
-                            mesh_preview.target = bounds_center;
-
-                            let fit_distance = (bounds_radius * 2.5).max(0.25);
-
-                            mesh_preview.distance = fit_distance;
-                            mesh_preview.target_distance = fit_distance;
-                        }
-                    }
-
-                    if errors.is_empty() {
-                        editor_ui.mesh_import_error = None;
-                        editor_ui.show_import_mesh_window = false;
-                    } else {
-                        editor_ui.mesh_import_error = Some(format!(
-                            "Imported {imported} mesh{}.\n\n{}",
-                            if imported == 1 { "" } else { "es" },
-                            errors.join("\n")
-                        ));
-
-                        // Keep the window open so the user can see which
-                        // files failed.
+                    if !task.start(
+                        paths,
+                        editor_ui.mesh_import_backend.clone(),
+                        settings,
+                        loading,
+                    ) {
+                        editor_ui.mesh_import_error =
+                            Some("A mesh import is already running.".to_string());
                     }
                 }
             });

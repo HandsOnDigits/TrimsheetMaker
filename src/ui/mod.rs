@@ -15,9 +15,13 @@ use crate::{
     native_dialog::NativeDialogState,
     project_settings::ProjectSettings,
     transform::UvTransform,
-    ui::windows::floating_context_menus::AtlasContextMenu,
+    ui::{loading::LoadingState, windows::floating_context_menus::AtlasContextMenu},
 };
 
+pub mod mesh_import_task;
+use mesh_import_task::{MeshImportTask, poll_mesh_import_task};
+
+pub mod loading;
 pub mod panels;
 pub mod windows;
 
@@ -29,6 +33,8 @@ impl Plugin for EditorUiPlugin {
             .init_resource::<data::Atlas>()
             .init_resource::<AtlasContextMenu>()
             .init_resource::<NativeDialogState>()
+            .init_resource::<LoadingState>()
+            .init_resource::<MeshImportTask>()
             .add_systems(Startup, (setup, load_editor_settings))
             .add_systems(
                 EguiPrimaryContextPass,
@@ -37,7 +43,14 @@ impl Plugin for EditorUiPlugin {
                     panels::editor_ui,
                 ),
             )
-            .add_systems(Update, (handle_window_close_requests, update_window_title));
+            .add_systems(
+                Update,
+                (
+                    handle_window_close_requests,
+                    update_window_title,
+                    poll_mesh_import_task,
+                ),
+            );
     }
 }
 
