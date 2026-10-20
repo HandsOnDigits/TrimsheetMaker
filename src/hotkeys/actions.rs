@@ -9,6 +9,7 @@ use crate::{
     history::{EditorHistory, EditorSnapshot},
     linking,
     mesh::{MeshLight, MeshSceneState, spawn_mesh_scene_with_visibility},
+    native_dialog::{NativeDialogRequest, NativeDialogResult, NativeDialogState},
     project,
     project_settings::ProjectSettings,
     ui::EditorUi,
@@ -87,6 +88,167 @@ impl EditorActionMessage {
     pub const fn new(action: EditorAction) -> Self {
         Self { action }
     }
+}
+
+pub fn dispatch_action(
+    action: EditorAction,
+    dialog: &mut NativeDialogState,
+    editor_ui: &mut EditorUi,
+    atlas: &mut Atlas,
+    images: &mut Assets<Image>,
+    mesh_preview: &mut MeshPreview,
+    mesh_light: &mut MeshLight,
+    mesh_scene_state: &mut MeshSceneState,
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    history: &mut EditorHistory,
+) {
+    if dialog.active {
+        return;
+    }
+
+    match action {
+        EditorAction::OpenProject => {
+            dialog.start(NativeDialogRequest::OpenProject);
+        }
+        EditorAction::SaveProjectAs => {
+            dialog.start(NativeDialogRequest::SaveProjectAs);
+        }
+        EditorAction::ExportModel => {
+            dialog.start(NativeDialogRequest::ExportModel);
+        }
+        EditorAction::SaveProject if editor_ui.project_path.is_none() => {
+            dialog.start(NativeDialogRequest::SaveProjectAs);
+        }
+        _ => execute_action(
+            action,
+            editor_ui,
+            atlas,
+            images,
+            mesh_preview,
+            mesh_light,
+            mesh_scene_state,
+            commands,
+            meshes,
+            history,
+        ),
+    }
+}
+
+pub fn open_project_from_path(
+    path: std::path::PathBuf,
+    editor_ui: &mut EditorUi,
+    atlas: &mut Atlas,
+    images: &mut Assets<Image>,
+    mesh_preview: &mut MeshPreview,
+    mesh_scene_state: &mut MeshSceneState,
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+) {
+    match project::ProjectFile::load(&path, images) {
+        Ok((mut loaded_atlas, project_settings, project_meshes)) => {
+            crate::viewport::clear_all_meshes(commands, mesh_scene_state);
+            mesh_preview.clear_selection();
+            editor_ui.clear_mesh_selection();
+
+            loaded_atlas.load_textures(images);
+            *atlas = loaded_atlas;
+
+            atlas.uv_revision = atlas.uv_revision.wrapping_add(1);
+            atlas.image_revision = atlas.image_revision.wrapping_add(1);
+
+            editor_ui.project_settings = project_settings;
+            editor_ui.project_path = Some(path.clone());
+            editor_ui.inspected_atlas_region = None;
+            editor_ui.dragging_atlas_region = None;
+            editor_ui.drag_offset = egui::Vec2::ZERO;
+            editor_ui.selected_mesh = None;
+            editor_ui.atlas_zoom = 1.0;
+            editor_ui.atlas_pan = egui::Vec2::ZERO;
+            editor_ui.mesh_import_path = None;
+            editor_ui.mesh_import_paths.clear();
+            mesh_preview.selected_primitive = None;
+
+            match project::load_project_meshes(
+                &path,
+                &project_meshes,
+                editor_ui,
+                commands,
+                meshes,
+                mesh_scene_state,
+                mesh_preview,
+            ) {
+                Ok(()) => info!("Project opened: {}", path.display()),
+                Err(error) => {
+                    error!("Project opened, but some saved meshes could not be loaded: {error}")
+                }
+            }
+        }
+        Err(error) => {
+            error!("Failed to open project '{}': {error}", path.display());
+        }
+    }
+}
+
+pub fn handle_native_dialog_result(
+    result: NativeDialogResult,
+    editor_ui: &mut EditorUi,
+    atlas: &mut Atlas,
+    images: &mut Assets<Image>,
+    mesh_preview: &mut MeshPreview,
+    mesh_light: &mut MeshLight,
+    mesh_scene_state: &mut MeshSceneState,
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+) {
+    match result {
+        NativeDialogResult::OpenProject(Some(path)) => {
+            open_project_from_path(
+                path,
+                editor_ui,
+                atlas,
+                images,
+                mesh_preview,
+                mesh_scene_state,
+                commands,
+                meshes,
+            );
+        }
+        NativeDialogResult::OpenProject(None) => {
+            info!("Open Project cancelled");
+        }
+
+        NativeDialogResult::SaveProjectAs(Some(path)) => {
+            match project::save_project(&path, atlas, &editor_ui.project_settings, mesh_scene_state)
+            {
+                Ok(()) => {
+                    info!("Project saved: {}", path.display());
+                    editor_ui.project_path = Some(path);
+                }
+                Err(error) => {
+                    error!("Failed to save project '{}': {error}", path.display());
+                }
+            }
+        }
+        NativeDialogResult::SaveProjectAs(None) => {
+            info!("Save Project As cancelled");
+        }
+
+        NativeDialogResult::ExportModel(Some(path)) => {
+            match export_glb(&path, mesh_scene_state, atlas) {
+                Ok(()) => info!("Model exported: {}", path.display()),
+                Err(error) => {
+                    error!("Failed to export model '{}': {error:#}", path.display());
+                }
+            }
+        }
+        NativeDialogResult::ExportModel(None) => {
+            info!("Export Model cancelled");
+        }
+    }
+
+    // Keep the signature consistent with the action handler resources.
+    let _ = (images, mesh_light);
 }
 
 /// Executes an editor action against the current editor state.

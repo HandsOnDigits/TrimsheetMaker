@@ -9,6 +9,7 @@ use crate::{
     history::{EditorHistory, EditorSnapshot},
     hotkeys::{self, EditorAction, EditorActionMessage},
     mesh::{MeshLight, MeshSceneState},
+    native_dialog::NativeDialogState,
     project_settings::ProjectSettings,
     transform::UvTransform,
     ui::windows::floating_context_menus::AtlasContextMenu,
@@ -24,6 +25,7 @@ impl Plugin for EditorUiPlugin {
         app.init_resource::<EditorUi>()
             .init_resource::<data::Atlas>()
             .init_resource::<AtlasContextMenu>()
+            .init_resource::<NativeDialogState>()
             .add_systems(Startup, (setup, load_editor_settings))
             .add_systems(
                 EguiPrimaryContextPass,
@@ -49,6 +51,7 @@ fn setup(mut commands: Commands, mut egui_settings: ResMut<EguiGlobalSettings>) 
 /// send messages that are handled here.
 fn apply_editor_actions(
     mut messages: MessageReader<EditorActionMessage>,
+    mut dialog: ResMut<NativeDialogState>,
     mut editor_ui: ResMut<EditorUi>,
     mut atlas: ResMut<data::Atlas>,
     mut images: ResMut<Assets<Image>>,
@@ -60,8 +63,9 @@ fn apply_editor_actions(
     mut history: ResMut<EditorHistory>,
 ) {
     for message in messages.read() {
-        hotkeys::execute_action(
+        hotkeys::dispatch_action(
             message.action,
+            &mut dialog,
             &mut editor_ui,
             &mut atlas,
             &mut images,
@@ -70,7 +74,7 @@ fn apply_editor_actions(
             &mut mesh_scene_state,
             &mut commands,
             &mut meshes,
-            &mut *history,
+            &mut history,
         );
     }
 }

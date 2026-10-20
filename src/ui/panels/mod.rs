@@ -30,8 +30,9 @@ use super::{EditorUi, LeftPanelTab};
 use crate::{
     data::Atlas,
     history::EditorHistory,
-    hotkeys::{EditorActionMessage, HotkeyManager},
+    hotkeys::{EditorActionMessage, HotkeyManager, handle_native_dialog_result},
     mesh::{MeshLight, MeshSceneState},
+    native_dialog::NativeDialogState,
     ui::windows::{self, floating_context_menus::AtlasContextMenu},
     viewport::{MeshPreview, MeshViewportContextMenu, MeshViewportInput, MeshViewportLayout},
 };
@@ -40,6 +41,12 @@ use crate::{
 pub struct EditorUiContextMenus<'w> {
     viewport: ResMut<'w, MeshViewportContextMenu>,
     atlas: ResMut<'w, AtlasContextMenu>,
+}
+
+#[derive(SystemParam)]
+pub struct EditorUiHistoryAndDialog<'w> {
+    history: ResMut<'w, EditorHistory>,
+    dialog: ResMut<'w, NativeDialogState>,
 }
 
 pub fn editor_ui(
@@ -57,9 +64,23 @@ pub fn editor_ui(
     mut meshes: ResMut<Assets<Mesh>>,
     mut mesh_scene_state: ResMut<MeshSceneState>,
     mut action_messages: MessageWriter<EditorActionMessage>,
-    mut history: ResMut<EditorHistory>,
+    mut history_and_dialog: EditorUiHistoryAndDialog,
     mut context_menus: EditorUiContextMenus,
 ) -> Result {
+    if let Some(result) = history_and_dialog.dialog.take_result() {
+        handle_native_dialog_result(
+            result,
+            &mut editor_ui,
+            &mut atlas,
+            &mut images,
+            &mut mesh_preview,
+            &mut mesh_light,
+            &mut mesh_scene_state,
+            &mut commands,
+            &mut meshes,
+        );
+    }
+
     mesh_input.pointer_over_ui = false;
     mesh_input.floating_window_dragging = false;
 
@@ -76,6 +97,21 @@ pub fn editor_ui(
     }
 
     let ctx = contexts.ctx_mut()?;
+
+    if history_and_dialog.dialog.active {
+        egui::Area::new(egui::Id::new("native_dialog_lock"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(ctx.content_rect().center() - egui::vec2(150.0, 25.0))
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.set_min_width(300.0);
+                    ui.label("Waiting for the file dialog to close...");
+                    ui.spinner();
+                });
+            });
+
+        return Ok(());
+    }
 
     #[cfg(debug_assertions)]
     ctx.global_style_mut(|style| {
@@ -94,6 +130,7 @@ pub fn editor_ui(
         .exact_size(44.0)
         .show(&mut root_ui, |ui| {
             toolbar(
+                &mut history_and_dialog.dialog,
                 ui,
                 &mut editor_ui,
                 &mut atlas,
@@ -104,7 +141,7 @@ pub fn editor_ui(
                 &mut mesh_scene_state,
                 &mut commands,
                 &mut meshes,
-                &mut *history,
+                &mut history_and_dialog.history,
             );
         });
 
@@ -139,7 +176,7 @@ pub fn editor_ui(
                         ui,
                         &mut editor_ui,
                         &mut atlas,
-                        &mut history,
+                        &mut history_and_dialog.history,
                         &mesh_scene_state,
                     );
                 }
@@ -155,7 +192,7 @@ pub fn editor_ui(
                         &mut mesh_scene_state,
                         &mut commands,
                         &mut meshes,
-                        &mut history,
+                        &mut history_and_dialog.history,
                     );
                 }
             }
@@ -172,7 +209,7 @@ pub fn editor_ui(
                         ui,
                         &mut editor_ui,
                         &mut atlas,
-                        &mut *history,
+                        &mut history_and_dialog.history,
                         &mut mesh_scene_state,
                     );
                 });
@@ -255,7 +292,7 @@ pub fn editor_ui(
             &mut atlas,
             &keyboard,
             &mut mesh_scene_state,
-            &mut *history,
+            &mut history_and_dialog.history,
             &mut mesh_preview,
             &mut context_menus.atlas,
         );
@@ -298,7 +335,7 @@ pub fn editor_ui(
         &mut atlas,
         &mesh_scene_state,
         &mesh_preview,
-        &mut history,
+        &mut history_and_dialog.history,
     );
 
     // 3D viewport primitive context menu.

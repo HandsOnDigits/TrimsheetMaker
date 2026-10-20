@@ -6,13 +6,15 @@ use super::EditorUi;
 use crate::{
     data::Atlas,
     history::{EditorHistory, EditorSnapshot},
-    hotkeys::{EditorAction, HotkeyManager, execute_action},
+    hotkeys::{EditorAction, HotkeyManager, dispatch_action, execute_action},
     mesh::{MeshLight, MeshSceneState},
+    native_dialog::NativeDialogState,
     project_settings::HighlightMaterial,
     viewport::MeshPreview,
 };
 
 pub fn toolbar(
+    dialog: &mut NativeDialogState,
     ui: &mut egui::Ui,
     editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
@@ -52,8 +54,9 @@ pub fn toolbar(
                 }
 
                 if hotkeys.menu_button(ui, EditorAction::OpenProject, "Open Project…") {
-                    execute_action(
+                    dispatch_action(
                         EditorAction::OpenProject,
+                        dialog,
                         editor_ui,
                         atlas,
                         images,
@@ -68,8 +71,9 @@ pub fn toolbar(
                 }
 
                 if hotkeys.menu_button(ui, EditorAction::SaveProject, "Save Project") {
-                    execute_action(
+                    dispatch_action(
                         EditorAction::SaveProject,
+                        dialog,
                         editor_ui,
                         atlas,
                         images,
@@ -84,8 +88,9 @@ pub fn toolbar(
                 }
 
                 if hotkeys.menu_button(ui, EditorAction::SaveProjectAs, "Save Project As…") {
-                    execute_action(
+                    dispatch_action(
                         EditorAction::SaveProjectAs,
+                        dialog,
                         editor_ui,
                         atlas,
                         images,
@@ -176,8 +181,9 @@ pub fn toolbar(
                 }
 
                 if hotkeys.menu_button(ui, EditorAction::ExportModel, "Export Model…") {
-                    execute_action(
+                    dispatch_action(
                         EditorAction::ExportModel,
+                        dialog,
                         editor_ui,
                         atlas,
                         images,

@@ -14,6 +14,7 @@ mod export;
 mod image;
 mod linking;
 mod mesh;
+mod native_dialog;
 mod project;
 mod project_settings;
 mod rendering;
@@ -28,6 +29,7 @@ use hotkeys::HotkeyPlugin;
 fn main() {
     App::new()
         .insert_resource(EditorHistory::default())
+        .init_resource::<native_dialog::NativeDialogState>()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Trimsheet Maker".into(),

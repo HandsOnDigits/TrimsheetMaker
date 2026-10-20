@@ -1,7 +1,9 @@
 mod actions;
 mod manager;
 
-pub use actions::{EditorAction, EditorActionMessage, execute_action};
+pub use actions::{
+    EditorAction, EditorActionMessage, dispatch_action, execute_action, handle_native_dialog_result,
+};
 
 #[allow(unused)]
 pub use manager::{CaptureResult, Hotkey, HotkeyConflict, HotkeyManager, hotkey_system};

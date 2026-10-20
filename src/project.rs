@@ -412,6 +412,12 @@ pub struct ProjectMaterialMeshAssignment {
     pub uv_transform: UvTransform,
 }
 
+pub fn open_project_dialog() -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
+    Ok(rfd::FileDialog::new()
+        .add_filter("Trimsheet Project", &[PROJECT_EXTENSION])
+        .pick_file())
+}
+
 pub fn save_project_as_dialog(
     atlas: &Atlas,
     settings: &ProjectSettings,
@@ -430,17 +436,6 @@ pub fn save_project_as_dialog(
     }
 
     ProjectFile::save(&path, atlas, settings, mesh_scene_state)?;
-
-    Ok(Some(path))
-}
-
-pub fn open_project_dialog() -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
-    let Some(path) = rfd::FileDialog::new()
-        .add_filter("Trimsheet Project", &[PROJECT_EXTENSION])
-        .pick_file()
-    else {
-        return Ok(None);
-    };
 
     Ok(Some(path))
 }
