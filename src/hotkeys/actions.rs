@@ -137,7 +137,14 @@ pub fn dispatch_action(
                     editor_ui.save_before_pending_action = false;
                     editor_ui.show_unsaved_project_warning = false;
 
-                    if let Some(pending_action) = editor_ui.pending_project_action.take() {
+                    if editor_ui.pending_app_exit {
+                        // The user requested application exit and chose to save.
+                        editor_ui.pending_app_exit = false;
+                        editor_ui.pending_window_close = None;
+                        editor_ui.pending_project_action = None;
+
+                        app_exit.write(AppExit::Success);
+                    } else if let Some(pending_action) = editor_ui.pending_project_action.take() {
                         editor_ui.approved_project_action = Some(pending_action);
 
                         dispatch_action(
@@ -156,6 +163,7 @@ pub fn dispatch_action(
                         );
                     }
                 }
+
                 Err(error) => {
                     error!("Failed to save project '{}': {error}", path.display());
 
@@ -372,6 +380,8 @@ pub fn handle_native_dialog_result(
                     info!("Project saved: {}", path.display());
                     editor_ui.project_path = Some(path);
                     editor_ui.project_dirty = false;
+                    editor_ui.save_before_pending_action = false;
+                    editor_ui.show_unsaved_project_warning = false;
                     return true;
                 }
                 Err(error) => {

@@ -79,7 +79,12 @@ pub fn editor_ui(
             crate::native_dialog::NativeDialogResult::SaveProjectAs(_)
         );
 
-        handle_native_dialog_result(
+        info!(
+            "Dialog result received: save_as={}, pending_exit={}, save_before_pending={}",
+            was_save_as, editor_ui.pending_app_exit, editor_ui.save_before_pending_action,
+        );
+
+        let save_succeeded = handle_native_dialog_result(
             result,
             &mut editor_ui,
             &mut atlas,
@@ -91,24 +96,29 @@ pub fn editor_ui(
             &mut asset_resources.meshes,
         );
 
-        if was_save_as && editor_ui.save_before_pending_action {
+        info!("Dialog handler returned: save_succeeded={save_succeeded}");
+
+        if was_save_as && save_succeeded && editor_ui.pending_app_exit {
+            info!("Save succeeded while exiting; sending AppExit");
+
+            editor_ui.pending_app_exit = false;
+            editor_ui.pending_window_close = None;
+            editor_ui.pending_project_action = None;
+            editor_ui.save_before_pending_action = false;
+            editor_ui.show_unsaved_project_warning = false;
+
+            app_exit.write(AppExit::Success);
+        } else if was_save_as && editor_ui.save_before_pending_action {
             editor_ui.save_before_pending_action = false;
 
-            if editor_ui.project_path.is_some() && !editor_ui.project_dirty {
+            if save_succeeded {
                 editor_ui.show_unsaved_project_warning = false;
 
-                if editor_ui.pending_app_exit {
-                    editor_ui.pending_app_exit = false;
-                    editor_ui.pending_window_close = None;
-                    editor_ui.pending_project_action = None;
-
-                    app_exit.write(AppExit::Success);
-                } else if let Some(action) = editor_ui.pending_project_action.take() {
+                if let Some(action) = editor_ui.pending_project_action.take() {
                     editor_ui.approved_project_action = Some(action);
                     action_messages.write(EditorActionMessage::new(action));
                 }
             } else {
-                // Saving failed or was cancelled. Keep the warning open.
                 editor_ui.show_unsaved_project_warning = true;
             }
         }
