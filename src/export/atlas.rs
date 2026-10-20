@@ -1,13 +1,23 @@
 use bevy::{prelude::*, render::render_resource::TextureFormat};
 
-use crate::data::{Atlas, AtlasMap, atlas_source_image_from_image, read_source_pixel};
+use std::path::PathBuf;
 
-pub fn export_atlas_maps(atlas: &Atlas, images: &Assets<Image>) -> anyhow::Result<usize> {
-    use exr::prelude::write_rgba_file;
-    use std::path::PathBuf;
+use crate::data::{
+    Atlas, AtlasMap, AtlasSourceImage, atlas_source_image_from_image, read_source_pixel,
+};
+
+pub fn start_atlas_export(
+    task: &mut super::task::ExportTaskState,
+    atlas: &Atlas,
+    images: &Assets<Image>,
+) -> anyhow::Result<bool> {
+    if task.is_active() {
+        return Ok(false);
+    }
 
     let Some(output_dir) = rfd::FileDialog::new().pick_folder() else {
-        return Ok(0);
+        info!("Export Atlas cancelled");
+        return Ok(false);
     };
 
     let maps = [
@@ -19,7 +29,8 @@ pub fn export_atlas_maps(atlas: &Atlas, images: &Assets<Image>) -> anyhow::Resul
         (AtlasMap::Metallic, "atlas_metallic.exr"),
     ];
 
-    let mut exported = 0;
+    // Snapshot all required pixel data before starting the worker.
+    let mut snapshots: Vec<(AtlasMap, PathBuf, AtlasSourceImage)> = Vec::new();
 
     for (map, filename) in maps {
         let Some(handle) = atlas.images.get(map) else {
@@ -27,50 +38,54 @@ pub fn export_atlas_maps(atlas: &Atlas, images: &Assets<Image>) -> anyhow::Resul
         };
 
         let Some(image) = images.get(handle) else {
-            anyhow::bail!("Atlas image for '{}' is not available.", filename);
+            anyhow::bail!("Atlas image for '{filename}' is not available.");
         };
 
         let Some(source) = atlas_source_image_from_image(image) else {
-            anyhow::bail!(
-                "Atlas image '{}' has no CPU-accessible pixel data.",
-                filename
-            );
+            anyhow::bail!("Atlas image '{filename}' has no CPU-accessible pixel data.");
         };
 
-        let path: PathBuf = output_dir.join(filename);
-
-        write_rgba_file(&path, source.width, source.height, |x, y| {
-            let pixel =
-                read_source_pixel(&source, x, y).expect("Unsupported or invalid atlas pixel data");
-
-            let [mut r, mut g, mut b, a] = pixel;
-
-            // Base Color is stored as sRGB in the generated atlas.
-            // Convert to linear values for the EXR output.
-            if map == AtlasMap::BaseColor && source.format == TextureFormat::Rgba8UnormSrgb {
-                let to_linear = |v: f32| {
-                    if v <= 0.04045 {
-                        v / 12.92
-                    } else {
-                        ((v + 0.055) / 1.055).powf(2.4)
-                    }
-                };
-
-                r = to_linear(r);
-                g = to_linear(g);
-                b = to_linear(b);
-            }
-
-            (r, g, b, a)
-        })
-        .map_err(|error| anyhow::anyhow!("Failed to export '{}': {error}", path.display()))?;
-
-        exported += 1;
+        snapshots.push((map, output_dir.join(filename), source));
     }
 
-    if exported == 0 {
+    if snapshots.is_empty() {
         anyhow::bail!("There are no generated atlas maps to export.");
     }
 
-    Ok(exported)
+    task.start("Exporting atlas textures…", move |sender| {
+        use exr::prelude::write_rgba_file;
+
+        let total = snapshots.len();
+
+        for (index, (map, path, source)) in snapshots.into_iter().enumerate() {
+            write_rgba_file(&path, source.width, source.height, |x, y| {
+                let [mut r, mut g, mut b, a] = read_source_pixel(&source, x, y)
+                    .expect("Unsupported or invalid atlas pixel data");
+
+                if map == AtlasMap::BaseColor && source.format == TextureFormat::Rgba8UnormSrgb {
+                    let to_linear = |v: f32| {
+                        if v <= 0.04045 {
+                            v / 12.92
+                        } else {
+                            ((v + 0.055) / 1.055).powf(2.4)
+                        }
+                    };
+
+                    r = to_linear(r);
+                    g = to_linear(g);
+                    b = to_linear(b);
+                }
+
+                (r, g, b, a)
+            })
+            .map_err(|error| anyhow::anyhow!("Failed to export '{}': {error}", path.display()))?;
+
+            let progress = (index + 1) as f32 / total as f32;
+            let _ = sender.send(super::task::ExportMessage::Progress(progress));
+        }
+
+        Ok(format!("Exported {total} atlas texture maps"))
+    })
+    .then_some(true)
+    .ok_or_else(|| anyhow::anyhow!("An export is already in progress"))
 }

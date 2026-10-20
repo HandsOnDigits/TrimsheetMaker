@@ -21,7 +21,7 @@ const UNSIGNED_INT: u32 = 5125;
 /// but vertices are never welded across different MeshObjects.
 ///
 /// No materials or textures are written to the GLB.
-pub fn export_glb(
+fn export_glb(
     path: impl AsRef<Path>,
     scene_state: &MeshSceneState,
     atlas: &Atlas,
@@ -601,4 +601,23 @@ fn write_glb(path: &Path, document: &Value, binary: &[u8]) -> anyhow::Result<()>
     file.flush()?;
 
     Ok(())
+}
+
+pub fn start_model_export(
+    task: &mut super::task::ExportTaskState,
+    path: std::path::PathBuf,
+    scene_state: &crate::mesh::MeshSceneState,
+    atlas: &Atlas,
+) -> bool {
+    if task.is_active() {
+        return false;
+    }
+
+    let scene = scene_state.clone();
+    let atlas = atlas.clone();
+
+    task.start("Exporting model…", move |_| {
+        crate::export::model::export_glb(&path, &scene, &atlas)
+            .map(|()| format!("Model exported: {}", path.display()))
+    })
 }

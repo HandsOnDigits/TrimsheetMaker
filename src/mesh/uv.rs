@@ -92,9 +92,6 @@ pub(crate) fn transform_uvs(
         return source_uvs.to_vec();
     }
 
-    // Use a uniform scale or the max dimension to keep pixel aspect ratios square
-    let max_atlas_dim = atlas_width.max(atlas_height);
-
     let (x, y, width, height) = transform.atlas_rect();
 
     let x = x as f32;

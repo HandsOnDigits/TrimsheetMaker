@@ -5,7 +5,6 @@ use bevy_egui::egui;
 
 use crate::{
     data::Atlas,
-    export::model::export_glb,
     history::{EditorHistory, EditorSnapshot},
     linking,
     mesh::{MeshLight, MeshSceneState, spawn_mesh_scene_with_visibility},
@@ -397,13 +396,16 @@ pub fn handle_native_dialog_result(
         }
 
         NativeDialogResult::ExportModel(Some(path)) => {
-            match export_glb(&path, mesh_scene_state, atlas) {
-                Ok(()) => info!("Model exported: {}", path.display()),
-                Err(error) => {
-                    error!("Failed to export model '{}': {error:#}", path.display());
-                }
+            if !crate::export::start_model_export(
+                &mut editor_ui.export_task,
+                path,
+                mesh_scene_state,
+                atlas,
+            ) {
+                warn!("An export is already in progress");
             }
         }
+
         NativeDialogResult::ExportModel(None) => {
             info!("Export Model cancelled");
         }
@@ -594,17 +596,13 @@ pub fn execute_action(
             }
         }
 
-        EditorAction::ExportAtlas => match crate::export::atlas::export_atlas_maps(atlas, images) {
-            Ok(0) => {
-                info!("Export Atlas cancelled");
+        EditorAction::ExportAtlas => {
+            match crate::export::start_atlas_export(&mut editor_ui.export_task, atlas, images) {
+                Ok(true) => {}
+                Ok(false) => {}
+                Err(error) => error!("Failed to start atlas export: {error:#}"),
             }
-            Ok(exported) => {
-                info!("Exported {exported} atlas texture maps");
-            }
-            Err(error) => {
-                error!("Failed to export atlas maps: {error:#}");
-            }
-        },
+        }
 
         EditorAction::ExportModel => {
             let Some(path) = rfd::FileDialog::new()
@@ -616,13 +614,13 @@ pub fn execute_action(
                 return;
             };
 
-            match export_glb(&path, mesh_scene_state, atlas) {
-                Ok(()) => {
-                    info!("Model exported: {}", path.display());
-                }
-                Err(error) => {
-                    error!("Failed to export model '{}': {error:#}", path.display());
-                }
+            if !crate::export::start_model_export(
+                &mut editor_ui.export_task,
+                path,
+                mesh_scene_state,
+                atlas,
+            ) {
+                warn!("An export is already in progress");
             }
         }
 

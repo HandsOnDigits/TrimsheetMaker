@@ -44,7 +44,7 @@ pub struct ImportedMeshRoot {
     pub id: u64,
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 pub struct MeshSceneState {
     pub meshes: Vec<MeshEntry>,
     pub next_id: u64,

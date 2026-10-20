@@ -503,7 +503,7 @@ pub fn atlas_source_image_from_image(image: &Image) -> Option<AtlasSourceImage> 
     })
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct AtlasImages {
     pub base_color: Option<Handle<Image>>,
     pub normal: Option<Handle<Image>>,
@@ -537,7 +537,7 @@ impl AtlasImages {
     }
 }
 
-#[derive(Resource)]
+#[derive(Clone, Resource)]
 pub struct Atlas {
     pub width: u32,
     pub height: u32,
@@ -1230,6 +1230,7 @@ pub struct MaterialMeshAssignment {
     pub uv_transform: UvTransform,
 }
 
+#[derive(Clone)]
 pub struct AtlasMaterial {
     pub index: usize,
     pub name: String,

@@ -9,6 +9,7 @@ use bevy_egui::{EguiGlobalSettings, EguiPrimaryContextPass, PrimaryEguiContext, 
 use crate::{
     data::{self, Atlas},
     editor_settings::EditorSettings,
+    export::task::{ExportTaskState, poll_export_task},
     history::{EditorHistory, EditorSnapshot},
     hotkeys::{self, EditorAction, EditorActionMessage, has_unsaved_project_content},
     mesh::{MeshLight, MeshSceneState},
@@ -53,6 +54,7 @@ impl Plugin for EditorUiPlugin {
                     handle_window_close_requests,
                     update_window_title,
                     poll_mesh_import_task,
+                    poll_export_task,
                 ),
             );
     }
@@ -112,6 +114,8 @@ pub struct EditorUi {
     pub pending_app_exit: bool,
     pub approved_project_action: Option<EditorAction>,
     pub save_before_pending_action: bool,
+
+    pub export_task: ExportTaskState,
 
     pub project_dirty: bool,
     pub project_path: Option<std::path::PathBuf>,
@@ -206,6 +210,8 @@ impl Default for EditorUi {
             pending_app_exit: false,
             approved_project_action: None,
             save_before_pending_action: false,
+
+            export_task: ExportTaskState::default(),
 
             project_dirty: false,
             project_path: None,
