@@ -230,6 +230,7 @@ fn drag_uv_rotation(
 
     assignment.uv_transform.rotation -= delta;
     atlas.mark_uv_dirty();
+    editor_ui.project_dirty = true;
 
     let _ = start_transform;
 }
@@ -280,7 +281,7 @@ fn start_uv_drag(
     editor_ui.atlas_uv_rotation_start_angle = None;
 }
 
-fn drag_uv(response: &egui::Response, editor_ui: &EditorUi, atlas: &mut Atlas) {
+fn drag_uv(response: &egui::Response, editor_ui: &mut EditorUi, atlas: &mut Atlas) {
     let Some(index) = editor_ui.inspected_atlas_region else {
         return;
     };
@@ -335,6 +336,7 @@ fn drag_uv(response: &egui::Response, editor_ui: &EditorUi, atlas: &mut Atlas) {
     }
 
     atlas.mark_uv_dirty();
+    editor_ui.project_dirty = true;
 }
 
 fn start_atlas_region_drag(
@@ -374,7 +376,7 @@ fn start_atlas_region_drag(
 fn drag_atlas_region(
     response: &egui::Response,
     atlas_rect: egui::Rect,
-    editor_ui: &EditorUi,
+    editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
 ) {
     let Some(index) = editor_ui.dragging_atlas_region else {
@@ -399,6 +401,7 @@ fn drag_atlas_region(
     );
 
     atlas.mark_uv_dirty();
+    editor_ui.project_dirty = true;
 }
 
 pub fn atlas_screen_rect(viewport: egui::Rect, editor_ui: &EditorUi, atlas: &Atlas) -> egui::Rect {
