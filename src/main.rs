@@ -1,4 +1,7 @@
-use bevy::prelude::*;
+use bevy::{
+    prelude::*,
+    window::{PrimaryWindow, WindowMode},
+};
 use bevy_egui::EguiPlugin;
 
 mod ui;
@@ -36,6 +39,7 @@ fn main() {
                 title: "Trimsheet Maker".into(),
                 resolution: (1400, 900).into(),
                 resizable: true,
+                mode: WindowMode::Windowed,
                 ..default()
             }),
             ..default()
@@ -44,5 +48,12 @@ fn main() {
         .add_plugins(HotkeyPlugin)
         .add_plugins(MeshPreviewPlugin)
         .add_plugins(EditorUiPlugin)
+        .add_systems(Startup, maximize_window)
         .run();
+}
+
+fn maximize_window(mut windows: Query<&mut Window, With<PrimaryWindow>>) {
+    if let Ok(mut window) = windows.single_mut() {
+        window.set_maximized(true);
+    }
 }
