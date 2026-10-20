@@ -1,6 +1,9 @@
 use std::collections::{BTreeMap, HashSet};
 
-use bevy::{prelude::*, window::WindowCloseRequested};
+use bevy::{
+    prelude::*,
+    window::{PrimaryWindow, WindowCloseRequested},
+};
 use bevy_egui::{EguiGlobalSettings, EguiPrimaryContextPass, PrimaryEguiContext, egui};
 
 use crate::{
@@ -34,7 +37,7 @@ impl Plugin for EditorUiPlugin {
                     panels::editor_ui,
                 ),
             )
-            .add_systems(Update, handle_window_close_requests);
+            .add_systems(Update, (handle_window_close_requests, update_window_title));
     }
 }
 
@@ -284,5 +287,36 @@ fn handle_window_close_requests(
         } else {
             app_exit.write(AppExit::Success);
         }
+    }
+}
+
+fn update_window_title(
+    editor_ui: Res<EditorUi>,
+    atlas: Res<Atlas>,
+    mesh_scene_state: Res<MeshSceneState>,
+    mut window: Query<&mut Window, With<PrimaryWindow>>,
+) {
+    let Ok(mut window) = window.single_mut() else {
+        return;
+    };
+
+    let project_name = editor_ui
+        .project_path
+        .as_deref()
+        .and_then(std::path::Path::file_stem)
+        .map(|name| name.to_string_lossy().into_owned());
+
+    let unsaved = has_unsaved_project_content(&editor_ui, &atlas, &mesh_scene_state);
+
+    let title = match project_name {
+        Some(name) => format!(
+            "Trimsheet Maker — {name}{}",
+            if unsaved { " *" } else { "" }
+        ),
+        None => format!("Trimsheet Maker{}", if unsaved { " *" } else { "" }),
+    };
+
+    if window.title != title {
+        window.title = title;
     }
 }
