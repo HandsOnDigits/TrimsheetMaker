@@ -6,7 +6,7 @@ use bevy_egui::egui;
 use crate::{
     data::Atlas,
     native_dialog::{NativeDialogRequest, NativeDialogState},
-    ui::EditorUi,
+    ui::{EditorUi, image_import_task::ImageImportTask, loading::LoadingState},
 };
 
 use super::FloatingWindowInteraction;
@@ -17,6 +17,8 @@ pub fn import_multiple_materials_window(
     editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
     images: &mut Assets<Image>,
+    task: &mut ImageImportTask,
+    loading: &mut LoadingState,
 ) -> bool {
     let mut open = editor_ui.show_import_multiple_materials_window;
     let mut close_window = false;
@@ -112,7 +114,9 @@ pub fn import_multiple_materials_window(
                 }
 
                 let can_import = editor_ui.multiple_materials_root.is_some()
-                    && !editor_ui.import_materials.is_empty();
+                    && !editor_ui.import_materials.is_empty()
+                    && !task.is_running()
+                    && !loading.is_loading();
 
                 if ui
                     .add_enabled(can_import, egui::Button::new("Import"))
@@ -120,11 +124,16 @@ pub fn import_multiple_materials_window(
                 {
                     let materials = std::mem::take(&mut editor_ui.import_materials);
 
-                    for source in materials.into_values() {
-                        atlas.add_material(source);
+                    let material_ids: Vec<usize> = materials
+                        .into_values()
+                        .map(|source| atlas.add_material(source))
+                        .collect();
+
+                    if !task.start(atlas, &material_ids, loading) {
+                        // No pending decode work: placement can still be finalized immediately.
+                        atlas.finish_texture_loading(images, false);
                     }
 
-                    atlas.load_textures(images);
                     editor_ui.project_settings.sync_from_atlas(atlas);
                     editor_ui.project_dirty = true;
 

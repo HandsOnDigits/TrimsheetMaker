@@ -21,6 +21,9 @@ use crate::{
 pub mod mesh_import_task;
 use mesh_import_task::{MeshImportTask, poll_mesh_import_task};
 
+pub mod image_import_task;
+use image_import_task::ImageImportTask;
+
 pub mod loading;
 pub mod panels;
 pub mod windows;
@@ -35,6 +38,7 @@ impl Plugin for EditorUiPlugin {
             .init_resource::<NativeDialogState>()
             .init_resource::<LoadingState>()
             .init_resource::<MeshImportTask>()
+            .init_resource::<ImageImportTask>()
             .add_systems(Startup, (setup, load_editor_settings))
             .add_systems(
                 EguiPrimaryContextPass,

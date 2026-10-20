@@ -302,27 +302,6 @@ fn combine_object(
             None => primitive.uvs.clone(),
         };
 
-        if primitive_index == 5 {
-            let bounds = |uvs: &[[f32; 2]]| {
-                let mut min = Vec2::splat(f32::INFINITY);
-                let mut max = Vec2::splat(f32::NEG_INFINITY);
-
-                for uv in uvs {
-                    let uv = Vec2::from_array(*uv);
-                    min = min.min(uv);
-                    max = max.max(uv);
-                }
-
-                (min, max, max - min)
-            };
-
-            info!(
-                "GLB UV bounds, primitive 5: source={:?}, output={:?}",
-                bounds(&primitive.uvs),
-                bounds(&transformed_uvs),
-            );
-        }
-
         ensure!(
             transformed_uvs.len() == primitive.positions.len(),
             "UV transformation produced an invalid vertex count"

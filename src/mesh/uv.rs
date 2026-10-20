@@ -118,8 +118,8 @@ pub(crate) fn transform_uvs(
 
             // Normalize using the uniform max dimension so pixels maintain a 1:1 ratio
             let atlas_uv = Vec2::new(
-                (x + local_uv.x * width) / max_atlas_dim,
-                (y + (1.0 - local_uv.y) * height) / max_atlas_dim,
+                (x + local_uv.x * width) / atlas_width,
+                (y + (1.0 - local_uv.y) * height) / atlas_height,
             );
 
             atlas_uv.to_array()

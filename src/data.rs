@@ -669,18 +669,6 @@ impl Atlas {
         index
     }
 
-    pub fn add_material_and_load(
-        &mut self,
-        source: MaterialSource,
-        images: &mut Assets<Image>,
-    ) -> usize {
-        let index = self.add_material(source);
-
-        self.load_textures(images);
-
-        index
-    }
-
     pub fn add_placeholder(&mut self) -> usize {
         let index = self.next_index();
         let size = 128;
@@ -742,10 +730,6 @@ impl Atlas {
     }
 
     pub fn load_textures(&mut self, images: &mut Assets<Image>) {
-        let mut uv_changed = false;
-        let mut image_changed = false;
-
-        // First collect the textures that actually need decoding.
         let pending: Vec<(usize, usize, PathBuf)> = self
             .materials
             .iter()
@@ -762,7 +746,7 @@ impl Atlas {
             })
             .collect();
 
-        // Decode images in parallel.
+        // Keep the existing synchronous loader for project loading and history.
         let decoded: Vec<(usize, usize, PathBuf, Result<Image, String>)> = pending
             .into_par_iter()
             .map(|(material_index, texture_index, path)| {
@@ -772,53 +756,42 @@ impl Atlas {
             })
             .collect();
 
-        // Add decoded images to Bevy's Assets on the main thread.
+        let mut image_changed = false;
+
+        // Bevy assets are updated on the main thread.
         for (material_index, texture_index, path, result) in decoded {
             match result {
                 Ok(image) => {
-                    let size = (image.width(), image.height());
-
                     let material = &mut self.materials[material_index];
                     let texture = &mut material.textures[texture_index];
 
                     texture.image = Some(images.add(image));
-
                     image_changed = true;
-
-                    // Store the dimensions for placement below.
-                    // We handle placement after all textures are loaded.
-                    if material.transform.width == 0 || material.transform.height == 0 {
-                        let _ = size;
-                    }
                 }
-
                 Err(error) => {
                     error!("Failed to load texture '{}': {error}", path.display());
                 }
             }
         }
 
-        // Determine placement after all images have been loaded.
-        for material_index in 0..self.materials.len() {
-            let mut preferred_size = None;
+        self.finish_texture_loading(images, image_changed);
+    }
 
-            {
+    pub fn finish_texture_loading(&mut self, images: &Assets<Image>, mut image_changed: bool) {
+        let mut uv_changed = false;
+
+        // Preserve the existing placement behavior.
+        for material_index in 0..self.materials.len() {
+            let preferred_size = {
                 let material = &self.materials[material_index];
 
-                for texture in &material.textures {
-                    let Some(handle) = &texture.image else {
-                        continue;
-                    };
+                material.textures.iter().find_map(|texture| {
+                    let handle = texture.image.as_ref()?;
+                    let image = images.get(handle)?;
 
-                    let Some(image) = images.get(handle) else {
-                        continue;
-                    };
-
-                    if preferred_size.is_none() {
-                        preferred_size = Some((image.width(), image.height()));
-                    }
-                }
-            }
+                    Some((image.width(), image.height()))
+                })
+            };
 
             let Some((width, height)) = preferred_size else {
                 continue;
@@ -826,7 +799,6 @@ impl Atlas {
 
             let needs_placement = {
                 let material = &self.materials[material_index];
-
                 material.transform.width == 0 || material.transform.height == 0
             };
 
@@ -836,9 +808,7 @@ impl Atlas {
 
             let (x, y) = self.find_free_rect(width, height);
 
-            let material = &mut self.materials[material_index];
-
-            material.transform = Transform {
+            self.materials[material_index].transform = Transform {
                 x: x as i32,
                 y: y as i32,
                 width,

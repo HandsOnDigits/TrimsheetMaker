@@ -102,7 +102,9 @@ pub fn import_mesh_window(
                     editor_ui.show_import_mesh_window = false;
                 }
 
-                let can_import = !editor_ui.mesh_import_paths.is_empty() && !task.is_running();
+                let can_import = !editor_ui.mesh_import_paths.is_empty()
+                    && !task.is_running()
+                    && !loading.is_loading();
 
                 if ui
                     .add_enabled(can_import, egui::Button::new("Import"))

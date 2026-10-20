@@ -4,7 +4,7 @@ use bevy_egui::egui;
 use crate::{
     data::Atlas,
     native_dialog::{NativeDialogRequest, NativeDialogState},
-    ui::EditorUi,
+    ui::{EditorUi, image_import_task::ImageImportTask, loading::LoadingState},
 };
 
 use super::importer::material_source_from_paths;
@@ -17,6 +17,8 @@ pub fn import_single_material_window(
     editor_ui: &mut EditorUi,
     atlas: &mut Atlas,
     images: &mut Assets<Image>,
+    task: &mut ImageImportTask,
+    loading: &mut LoadingState,
 ) -> bool {
     let mut open = editor_ui.show_import_single_material_window;
     let mut close_window = false;
@@ -125,13 +127,15 @@ pub fn import_single_material_window(
                     && editor_ui
                         .single_material_textures
                         .values()
-                        .any(|path| path.is_some());
+                        .any(|path| path.is_some())
+                    && !task.is_running()
+                    && !loading.is_loading();
 
                 if ui
                     .add_enabled(can_import, egui::Button::new("Import"))
                     .clicked()
                 {
-                    import_material(editor_ui, atlas, images);
+                    import_material(editor_ui, atlas, images, task, loading);
 
                     close_window = true;
                 }
@@ -190,7 +194,17 @@ fn texture_file_row(
     });
 }
 
-fn import_material(editor_ui: &mut EditorUi, atlas: &mut Atlas, images: &mut Assets<Image>) {
+fn import_material(
+    editor_ui: &mut EditorUi,
+    atlas: &mut Atlas,
+    images: &mut Assets<Image>,
+    task: &mut ImageImportTask,
+    loading: &mut LoadingState,
+) {
+    if task.is_running() || loading.is_loading() {
+        return;
+    }
+
     let name = editor_ui.single_material_name.trim().to_string();
 
     if name.is_empty() {
@@ -216,12 +230,14 @@ fn import_material(editor_ui: &mut EditorUi, atlas: &mut Atlas, images: &mut Ass
     }
 
     let source = material_source_from_paths(name, None, textures);
+    let index = atlas.add_material(source);
 
-    let index = atlas.add_material_and_load(source, images);
-
-    atlas.load_textures(images);
-
-    editor_ui.project_settings.sync_from_atlas(atlas);
     editor_ui.inspected_atlas_region = Some(index);
     editor_ui.project_dirty = true;
+
+    if !task.start(atlas, &[index], loading) {
+        atlas.finish_texture_loading(images, false);
+    }
+
+    editor_ui.project_settings.sync_from_atlas(atlas);
 }

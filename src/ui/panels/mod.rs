@@ -34,6 +34,7 @@ use crate::{
     mesh::{MeshLight, MeshSceneState},
     native_dialog::NativeDialogState,
     ui::{
+        image_import_task::{ImageImportTask, poll_image_import_task},
         loading::{LoadingState, loading_overlay},
         mesh_import_task::MeshImportTask,
         windows::{self, floating_context_menus::AtlasContextMenu},
@@ -53,6 +54,7 @@ pub struct EditorUiHistoryAndDialog<'w> {
     dialog: ResMut<'w, NativeDialogState>,
     loading: ResMut<'w, LoadingState>,
     mesh_import_task: ResMut<'w, MeshImportTask>,
+    image_import_task: ResMut<'w, ImageImportTask>,
 }
 
 #[derive(SystemParam)]
@@ -388,6 +390,14 @@ pub fn editor_ui(
         );
     });
 
+    poll_image_import_task(
+        &mut history_and_dialog.image_import_task,
+        &mut history_and_dialog.loading,
+        &mut editor_ui,
+        &mut atlas,
+        &mut asset_resources.images,
+    );
+
     // Bulk/folder import.
     mesh_input.floating_window_dragging |=
         windows::import_multiple_materials::import_multiple_materials_window(
@@ -396,6 +406,8 @@ pub fn editor_ui(
             &mut editor_ui,
             &mut atlas,
             &mut asset_resources.images,
+            &mut history_and_dialog.image_import_task,
+            &mut history_and_dialog.loading,
         );
 
     // Single-material import.
@@ -406,6 +418,8 @@ pub fn editor_ui(
             &mut editor_ui,
             &mut atlas,
             &mut asset_resources.images,
+            &mut history_and_dialog.image_import_task,
+            &mut history_and_dialog.loading,
         );
 
     // Mesh import.
