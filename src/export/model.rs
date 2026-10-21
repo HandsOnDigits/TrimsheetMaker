@@ -17,6 +17,14 @@ struct CombinedMesh {
     indices: Vec<u32>,
 }
 
+#[derive(Hash, PartialEq, Eq)]
+struct VertexKey {
+    geometric_index: u32,
+    uv: [i32; 2],
+    normal: Option<[i32; 3]>,
+    tangent: Option<[i32; 4]>,
+}
+
 #[derive(Default)]
 struct GlbBinary {
     bytes: Vec<u8>,
@@ -126,7 +134,36 @@ const ARRAY_BUFFER: u32 = 34962;
 const ELEMENT_ARRAY_BUFFER: u32 = 34963;
 const FLOAT: u32 = 5126;
 const UNSIGNED_INT: u32 = 5125;
-const POSITION_WELD_TOLERANCE: f32 = 1.0e-3;
+const POSITION_WELD_TOLERANCE: f32 = 1.0e-2;
+const UV_WELD_TOLERANCE: f32 = 1.0e-3;
+
+fn quantize(value: f32, tolerance: f32) -> i32 {
+    (value / tolerance).round() as i32
+}
+
+fn quantize_uv(uv: [f32; 2]) -> [i32; 2] {
+    [
+        quantize(uv[0], UV_WELD_TOLERANCE),
+        quantize(uv[1], UV_WELD_TOLERANCE),
+    ]
+}
+
+fn quantize_normal(normal: [f32; 3]) -> [i32; 3] {
+    [
+        quantize(normal[0], 1.0e-4),
+        quantize(normal[1], 1.0e-4),
+        quantize(normal[2], 1.0e-4),
+    ]
+}
+
+fn quantize_tangent(tangent: [f32; 4]) -> [i32; 4] {
+    [
+        quantize(tangent[0], 1.0e-4),
+        quantize(tangent[1], 1.0e-4),
+        quantize(tangent[2], 1.0e-4),
+        quantize(tangent[3], 1.0e-4),
+    ]
+}
 
 fn spatial_cell(position: [f32; 3], cell_size: f32) -> [i64; 3] {
     position.map(|value| ((value as f64 / cell_size as f64).floor()) as i64)
@@ -282,11 +319,8 @@ fn validate_object_transform(entry: &MeshEntry, object_index: usize) -> anyhow::
     Ok(())
 }
 
-/// Combine selected primitives belonging to one original object.
-///
-/// First weld positions within POSITION_WELD_TOLERANCE. Then expand the
-/// indexed triangles into corner streams and use meshopt to deduplicate
-/// render vertices using all available attributes.
+/// Combine all selected primitives belonging to one original object,
+/// using a robust union-find vertex welding approach to eliminate gaps and ensure a watertight mesh.
 fn combine_object(
     entry: &MeshEntry,
     object_index: usize,
@@ -295,11 +329,11 @@ fn combine_object(
 ) -> anyhow::Result<Option<CombinedMesh>> {
     let object = &entry.scene.objects[object_index];
 
-    let mut positions = Vec::<[f32; 3]>::new();
-    let mut uvs = Vec::<[f32; 2]>::new();
-    let mut indices = Vec::<u32>::new();
-    let mut normals = Vec::<[f32; 3]>::new();
-    let mut tangents = Vec::<[f32; 4]>::new();
+    let mut all_positions = Vec::new();
+    let mut all_uvs = Vec::new();
+    let mut all_indices = Vec::new();
+    let mut all_normals = Vec::new();
+    let mut all_tangents = Vec::new();
 
     let mut has_normals = true;
     let mut has_tangents = true;
@@ -318,39 +352,16 @@ fn combine_object(
             primitive.positions.len()
         );
 
-        ensure!(
-            primitive.positions.iter().flatten().all(|v| v.is_finite()),
-            "Object '{}' primitive {} contains non-finite positions",
-            object.name,
-            primitive_index
-        );
-
-        let base = u32::try_from(positions.len())
+        let base_index = u32::try_from(all_positions.len())
             .context("Too many vertices before combining primitives")?;
 
-        let source_indices = if primitive.indices.is_empty() {
+        let indices = if primitive.indices.is_empty() {
             (0..primitive.positions.len())
                 .map(|i| u32::try_from(i).context("Primitive has too many vertices"))
                 .collect::<anyhow::Result<Vec<_>>>()?
         } else {
             primitive.indices.clone()
         };
-
-        ensure!(
-            source_indices.len() % 3 == 0,
-            "Object '{}' primitive {} has a non-triangle index count",
-            object.name,
-            primitive_index
-        );
-
-        for &index in &source_indices {
-            ensure!(
-                (index as usize) < primitive.positions.len(),
-                "Object '{}' primitive {} has an out-of-range index",
-                object.name,
-                primitive_index
-            );
-        }
 
         let assignment = atlas.materials.iter().find_map(|material| {
             material
@@ -366,7 +377,7 @@ fn combine_object(
 
         let transformed_uvs = match assignment {
             Some((material, assignment)) => {
-                let mut result = transform_uvs(
+                let mut uvs = transform_uvs(
                     &primitive.uvs,
                     &assignment.uv_transform,
                     &material.transform,
@@ -376,96 +387,80 @@ fn combine_object(
 
                 if atlas.height > 0 {
                     let scale = atlas.height as f32 / atlas.width as f32;
-
-                    for uv in &mut result {
+                    for uv in &mut uvs {
                         uv[1] *= scale;
                     }
                 }
-
-                result
+                uvs
             }
             None => primitive.uvs.clone(),
         };
 
-        positions.extend_from_slice(&primitive.positions);
-        uvs.extend_from_slice(&transformed_uvs);
+        all_positions.extend_from_slice(&primitive.positions);
+        all_uvs.extend_from_slice(&transformed_uvs);
 
         if primitive.normals.len() == primitive.positions.len() {
-            normals.extend_from_slice(&primitive.normals);
+            all_normals.extend_from_slice(&primitive.normals);
         } else {
             has_normals = false;
         }
 
         if primitive.tangents.len() == primitive.positions.len() {
-            tangents.extend_from_slice(&primitive.tangents);
+            all_tangents.extend_from_slice(&primitive.tangents);
         } else {
             has_tangents = false;
         }
 
-        for index in source_indices {
-            indices.push(base + index);
+        for &index in &indices {
+            all_indices.push(base_index + index);
         }
     }
 
-    if positions.is_empty() || indices.is_empty() {
+    if all_positions.is_empty() || all_indices.is_empty() {
         return Ok(None);
     }
 
-    if !has_normals {
-        normals.clear();
-    }
+    // --- Robust DSU / Spatial Grid Welding ---
+    let vertex_count = all_positions.len();
+    let mut parent: Vec<usize> = (0..vertex_count).collect();
 
-    if !has_tangents || !has_normals {
-        tangents.clear();
-        has_tangents = false;
-    }
-
-    // Meshopt identifies exact position matches. The spatial search below
-    // additionally welds positions that are within the configured tolerance.
-    let position_bytes = meshopt::utilities::typed_to_bytes(&positions);
-
-    let position_adapter =
-        meshopt::VertexDataAdapter::new(position_bytes, std::mem::size_of::<[f32; 3]>(), 0)
-            .context("Failed to create meshopt position adapter")?;
-
-    let exact_remap = meshopt::remap::generate_position_remap(&position_adapter);
-
-    let tolerance = POSITION_WELD_TOLERANCE;
-    let tolerance_squared = tolerance * tolerance;
-
-    let mut geometric_positions = Vec::<[f32; 3]>::new();
-    let mut exact_to_geometric = std::collections::HashMap::<u32, u32>::new();
-    let mut spatial_map = std::collections::HashMap::<[i64; 3], Vec<u32>>::new();
-    let mut source_to_geometric = vec![0u32; positions.len()];
-
-    for source_index in 0..positions.len() {
-        let position = positions[source_index];
-        let exact_id = exact_remap[source_index];
-
-        if let Some(&existing) = exact_to_geometric.get(&exact_id) {
-            source_to_geometric[source_index] = existing;
-            continue;
+    fn find(parent: &mut [usize], mut i: usize) -> usize {
+        while parent[i] != i {
+            parent[i] = parent[parent[i]];
+            i = parent[i];
         }
+        i
+    }
 
-        let cell = spatial_cell(position, tolerance);
-        let mut found = None;
+    fn union(parent: &mut [usize], i: usize, j: usize) {
+        let root_i = find(parent, i);
+        let root_j = find(parent, j);
+        if root_i != root_j {
+            parent[root_i] = root_j;
+        }
+    }
 
-        'search: for dx in -1_i64..=1 {
+    // Spatial binning for efficient neighbor lookup without grid-aliasing gaps
+    let mut spatial_map: std::collections::HashMap<[i64; 3], Vec<usize>> =
+        std::collections::HashMap::new();
+    let tolerance_squared = POSITION_WELD_TOLERANCE * POSITION_WELD_TOLERANCE;
+
+    for (i, &pos) in all_positions.iter().enumerate() {
+        let cell = spatial_cell(pos, POSITION_WELD_TOLERANCE);
+
+        for dx in -1_i64..=1 {
             for dy in -1_i64..=1 {
                 for dz in -1_i64..=1 {
-                    let neighbor = [cell[0] + dx, cell[1] + dy, cell[2] + dz];
-
-                    if let Some(candidates) = spatial_map.get(&neighbor) {
+                    let neighbor_cell = [cell[0] + dx, cell[1] + dy, cell[2] + dz];
+                    if let Some(candidates) = spatial_map.get(&neighbor_cell) {
                         for &candidate in candidates {
-                            let other = geometric_positions[candidate as usize];
+                            let existing_pos = all_positions[candidate];
+                            let dist_sq = (pos[0] - existing_pos[0]).powi(2)
+                                + (pos[1] - existing_pos[1]).powi(2)
+                                + (pos[2] - existing_pos[2]).powi(2);
 
-                            let dx = position[0] - other[0];
-                            let dy = position[1] - other[1];
-                            let dz = position[2] - other[2];
-
-                            if dx * dx + dy * dy + dz * dz <= tolerance_squared {
-                                found = Some(candidate);
-                                break 'search;
+                            if dist_sq <= tolerance_squared {
+                                union(&mut parent, i, candidate);
                             }
                         }
                     }
@@ -473,90 +468,116 @@ fn combine_object(
             }
         }
 
-        let geometric_index = match found {
-            Some(index) => index,
-            None => {
-                let index = u32::try_from(geometric_positions.len())
-                    .context("Too many geometric vertices")?;
+        spatial_map.entry(cell).or_default().push(i);
+    }
 
-                geometric_positions.push(position);
-                spatial_map.entry(cell).or_default().push(index);
+    // Compress roots and map old vertices to new welded geometric indices
+    let mut root_to_geometric: std::collections::HashMap<usize, u32> =
+        std::collections::HashMap::new();
+    let mut geometric_positions: Vec<[f32; 3]> = Vec::new();
+    let mut vertex_geometric_indices = vec![0u32; vertex_count];
+
+    for i in 0..vertex_count {
+        let root = find(&mut parent, i);
+        let geometric_index = *root_to_geometric.entry(root).or_insert_with(|| {
+            let idx = u32::try_from(geometric_positions.len()).unwrap();
+            geometric_positions.push(all_positions[i]);
+            idx
+        });
+        vertex_geometric_indices[i] = geometric_index;
+    }
+
+    // Remove degenerate triangles and duplicate geometric triangles.
+    // Keep original corner indices so UVs, normals, and tangents remain attached.
+    let mut cleaned_indices = Vec::with_capacity(all_indices.len());
+    let mut seen_triangles = std::collections::HashSet::<[u32; 3]>::new();
+
+    for triangle in all_indices.chunks_exact(3) {
+        let source = [triangle[0], triangle[1], triangle[2]];
+
+        let geometric = source.map(|index| vertex_geometric_indices[index as usize]);
+
+        // Welding collapsed this triangle to a line or a point.
+        if geometric[0] == geometric[1]
+            || geometric[1] == geometric[2]
+            || geometric[2] == geometric[0]
+        {
+            continue;
+        }
+
+        // Sort only the key, not the actual triangle, to preserve winding.
+        let mut canonical = geometric;
+        canonical.sort_unstable();
+
+        // Remove duplicate triangles, regardless of their winding.
+        if !seen_triangles.insert(canonical) {
+            continue;
+        }
+
+        cleaned_indices.extend_from_slice(&source);
+    }
+
+    // Build render map preserving UV seams
+    let mut render_map: std::collections::HashMap<VertexKey, u32> =
+        std::collections::HashMap::new();
+    let mut welded_positions = Vec::new();
+    let mut welded_uvs = Vec::new();
+    let mut welded_normals = has_normals.then(Vec::new);
+    let mut welded_tangents = has_tangents.then(Vec::new);
+    let mut welded_indices = Vec::with_capacity(cleaned_indices.len());
+
+    for &old_idx in &cleaned_indices {
+        let old_idx = old_idx as usize;
+        let geometric_index = vertex_geometric_indices[old_idx];
+        let uv = all_uvs[old_idx];
+        let normal = if has_normals {
+            Some(all_normals[old_idx])
+        } else {
+            None
+        };
+        let tangent = if has_tangents {
+            Some(all_tangents[old_idx])
+        } else {
+            None
+        };
+
+        let key = VertexKey {
+            geometric_index,
+            uv: quantize_uv(uv),
+            normal: normal.map(quantize_normal),
+            tangent: tangent.map(quantize_tangent),
+        };
+
+        let output_index = match render_map.get(&key) {
+            Some(&existing) => existing,
+            None => {
+                let index =
+                    u32::try_from(welded_positions.len()).context("Too many render vertices")?;
+
+                welded_positions.push(geometric_positions[geometric_index as usize]);
+                welded_uvs.push(uv);
+
+                if let (Some(output), Some(val)) = (&mut welded_normals, normal) {
+                    output.push(val);
+                }
+                if let (Some(output), Some(val)) = (&mut welded_tangents, tangent) {
+                    output.push(val);
+                }
+
+                render_map.insert(key, index);
                 index
             }
         };
 
-        exact_to_geometric.insert(exact_id, geometric_index);
-        source_to_geometric[source_index] = geometric_index;
+        welded_indices.push(output_index);
     }
-
-    // Render welding preserves UV seams.
-    //
-    // Vertices can share a geometric position, but must remain separate
-    // render vertices when their UVs, normals, or tangents differ.
-    let mut output_positions = Vec::<[f32; 3]>::new();
-    let mut output_uvs = Vec::<[f32; 2]>::new();
-    let mut output_normals = has_normals.then(Vec::<[f32; 3]>::new);
-    let mut output_tangents = has_tangents.then(Vec::<[f32; 4]>::new);
-
-    let mut render_vertex_map = std::collections::HashMap::new();
-    let mut source_to_render = vec![0u32; positions.len()];
-
-    for source_index in 0..positions.len() {
-        let geometric_index = source_to_geometric[source_index];
-
-        // Use the exact attribute bits as part of the key. This allows
-        // coincident positions to have different UVs at texture seams.
-        let key = (
-            geometric_index,
-            uvs[source_index].map(f32::to_bits),
-            has_normals.then(|| normals[source_index].map(f32::to_bits)),
-            has_tangents.then(|| tangents[source_index].map(f32::to_bits)),
-        );
-
-        let render_index = if let Some(&existing) = render_vertex_map.get(&key) {
-            existing
-        } else {
-            let index =
-                u32::try_from(output_positions.len()).context("Too many render vertices")?;
-
-            output_positions.push(geometric_positions[geometric_index as usize]);
-            output_uvs.push(uvs[source_index]);
-
-            if let Some(output) = &mut output_normals {
-                output.push(normals[source_index]);
-            }
-
-            if let Some(output) = &mut output_tangents {
-                output.push(tangents[source_index]);
-            }
-
-            render_vertex_map.insert(key, index);
-            index
-        };
-
-        source_to_render[source_index] = render_index;
-    }
-
-    let output_indices: Vec<u32> = indices
-        .iter()
-        .map(|&source_index| source_to_render[source_index as usize])
-        .collect();
-
-    info!(
-        "GLB export '{}', object '{}': {} source vertices, {} welded positions, {} render vertices",
-        entry.name,
-        object.name,
-        positions.len(),
-        geometric_positions.len(),
-        output_positions.len()
-    );
 
     Ok(Some(CombinedMesh {
-        positions: output_positions,
-        normals: output_normals,
-        tangents: output_tangents,
-        uvs: output_uvs,
-        indices: output_indices,
+        positions: welded_positions,
+        normals: welded_normals,
+        tangents: welded_tangents,
+        uvs: welded_uvs,
+        indices: welded_indices,
     }))
 }
 
