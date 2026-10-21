@@ -26,3 +26,4 @@ image = { version = "0.25.10", default-features = false, features = [
     "bmp",
     "tiff",
 ] }
+meshopt = "0.7"
