@@ -21,8 +21,6 @@ struct CombinedMesh {
 struct VertexKey {
     geometric_index: u32,
     uv: [i32; 2],
-    normal: Option<[i32; 3]>,
-    tangent: Option<[i32; 4]>,
 }
 
 #[derive(Default)]
@@ -134,7 +132,7 @@ const ARRAY_BUFFER: u32 = 34962;
 const ELEMENT_ARRAY_BUFFER: u32 = 34963;
 const FLOAT: u32 = 5126;
 const UNSIGNED_INT: u32 = 5125;
-const POSITION_WELD_TOLERANCE: f32 = 1.0e-2;
+const POSITION_WELD_TOLERANCE: f32 = 5.0e-3;
 const UV_WELD_TOLERANCE: f32 = 1.0e-3;
 
 fn quantize(value: f32, tolerance: f32) -> i32 {
@@ -145,23 +143,6 @@ fn quantize_uv(uv: [f32; 2]) -> [i32; 2] {
     [
         quantize(uv[0], UV_WELD_TOLERANCE),
         quantize(uv[1], UV_WELD_TOLERANCE),
-    ]
-}
-
-fn quantize_normal(normal: [f32; 3]) -> [i32; 3] {
-    [
-        quantize(normal[0], 1.0e-4),
-        quantize(normal[1], 1.0e-4),
-        quantize(normal[2], 1.0e-4),
-    ]
-}
-
-fn quantize_tangent(tangent: [f32; 4]) -> [i32; 4] {
-    [
-        quantize(tangent[0], 1.0e-4),
-        quantize(tangent[1], 1.0e-4),
-        quantize(tangent[2], 1.0e-4),
-        quantize(tangent[3], 1.0e-4),
     ]
 }
 
@@ -332,11 +313,6 @@ fn combine_object(
     let mut all_positions = Vec::new();
     let mut all_uvs = Vec::new();
     let mut all_indices = Vec::new();
-    let mut all_normals = Vec::new();
-    let mut all_tangents = Vec::new();
-
-    let mut has_normals = true;
-    let mut has_tangents = true;
 
     for &(primitive_index, primitive) in primitives {
         if primitive.positions.is_empty() {
@@ -398,18 +374,6 @@ fn combine_object(
 
         all_positions.extend_from_slice(&primitive.positions);
         all_uvs.extend_from_slice(&transformed_uvs);
-
-        if primitive.normals.len() == primitive.positions.len() {
-            all_normals.extend_from_slice(&primitive.normals);
-        } else {
-            has_normals = false;
-        }
-
-        if primitive.tangents.len() == primitive.positions.len() {
-            all_tangents.extend_from_slice(&primitive.tangents);
-        } else {
-            has_tangents = false;
-        }
 
         for &index in &indices {
             all_indices.push(base_index + index);
@@ -517,35 +481,24 @@ fn combine_object(
         cleaned_indices.extend_from_slice(&source);
     }
 
-    // Build render map preserving UV seams
+    // Build render vertices from welded geometry while preserving UV seams.
+    // Normals and tangents are omitted so Blender can calculate them after
+    // merging coincident vertices.
     let mut render_map: std::collections::HashMap<VertexKey, u32> =
         std::collections::HashMap::new();
+
     let mut welded_positions = Vec::new();
     let mut welded_uvs = Vec::new();
-    let mut welded_normals = has_normals.then(Vec::new);
-    let mut welded_tangents = has_tangents.then(Vec::new);
     let mut welded_indices = Vec::with_capacity(cleaned_indices.len());
 
     for &old_idx in &cleaned_indices {
         let old_idx = old_idx as usize;
         let geometric_index = vertex_geometric_indices[old_idx];
         let uv = all_uvs[old_idx];
-        let normal = if has_normals {
-            Some(all_normals[old_idx])
-        } else {
-            None
-        };
-        let tangent = if has_tangents {
-            Some(all_tangents[old_idx])
-        } else {
-            None
-        };
 
         let key = VertexKey {
             geometric_index,
             uv: quantize_uv(uv),
-            normal: normal.map(quantize_normal),
-            tangent: tangent.map(quantize_tangent),
         };
 
         let output_index = match render_map.get(&key) {
@@ -557,13 +510,6 @@ fn combine_object(
                 welded_positions.push(geometric_positions[geometric_index as usize]);
                 welded_uvs.push(uv);
 
-                if let (Some(output), Some(val)) = (&mut welded_normals, normal) {
-                    output.push(val);
-                }
-                if let (Some(output), Some(val)) = (&mut welded_tangents, tangent) {
-                    output.push(val);
-                }
-
                 render_map.insert(key, index);
                 index
             }
@@ -574,8 +520,8 @@ fn combine_object(
 
     Ok(Some(CombinedMesh {
         positions: welded_positions,
-        normals: welded_normals,
-        tangents: welded_tangents,
+        normals: None,
+        tangents: None,
         uvs: welded_uvs,
         indices: welded_indices,
     }))
