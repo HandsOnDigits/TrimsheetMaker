@@ -4,6 +4,7 @@ version = "0.0.0"
 edition = "2024"
 
 [dependencies]
+winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
 anyhow = "1.0.104"
 bevy = { version = "0.19.1", features = ["exr"] }
 bevy_egui = "0.42.0"

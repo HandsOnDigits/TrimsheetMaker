@@ -22,6 +22,7 @@ mod project;
 mod project_settings;
 mod rendering;
 mod transform;
+mod window_icon;
 
 mod viewport;
 use viewport::MeshPreviewPlugin;
@@ -49,6 +50,7 @@ fn main() {
         .add_plugins(MeshPreviewPlugin)
         .add_plugins(EditorUiPlugin)
         .add_systems(Startup, maximize_window)
+        .add_systems(Last, window_icon::set_window_icon)
         .run();
 }
 
