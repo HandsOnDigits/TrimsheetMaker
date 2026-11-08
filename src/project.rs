@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     data::{
         Atlas, AtlasMaterial, MaterialMeshAssignment, MaterialMeshIslandTransform, MaterialTexture,
+        TextureNaming,
     },
     mesh::{
         MeshSceneState,
@@ -204,6 +205,11 @@ impl ProjectFile {
         atlas.height = project.settings.atlas_height;
         atlas.padding = project.settings.padding;
 
+        let default_group_id = TextureNaming::default()
+            .groups
+            .first()
+            .map(|group| group.id.clone());
+
         atlas.materials = project
             .materials
             .into_iter()
@@ -224,7 +230,7 @@ impl ProjectFile {
 
                         MaterialTexture {
                             id: texture.id,
-                            group_id: texture.group_id,
+                            group_id: texture.group_id.or_else(|| default_group_id.clone()),
                             path: resolved_path,
                             image: None,
                             egui_texture: None,

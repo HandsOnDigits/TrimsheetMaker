@@ -10,12 +10,16 @@ use crate::{
 };
 
 pub fn classify_textures(paths: Vec<PathBuf>, naming: &TextureNaming) -> Vec<MaterialTexture> {
+    let default_group_id = naming.groups.first().map(|group| group.id.clone());
+
     paths
         .into_iter()
         .filter_map(|path| {
             let filename = path.file_name()?.to_str()?;
 
-            let group_id = naming.group_for_filename(filename)?;
+            let group_id = naming
+                .group_for_filename(filename)
+                .or_else(|| default_group_id.clone())?;
 
             Some(MaterialTexture {
                 id: uuid::Uuid::new_v4().to_string(),

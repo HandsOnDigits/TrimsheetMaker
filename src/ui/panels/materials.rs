@@ -23,6 +23,16 @@ pub fn materials_panel(
 
     ui.separator();
 
+    // Default to the first texture group if no preview group is selected.
+    if editor_ui.project_settings.preview_texture_group.is_none() {
+        editor_ui.project_settings.preview_texture_group = editor_ui
+            .project_settings
+            .texture_naming
+            .groups
+            .first()
+            .map(|group| group.id.clone());
+    }
+
     ui.label("Preview Map");
 
     let selected_group_name = editor_ui
@@ -165,7 +175,12 @@ pub fn materials_panel(
 
         if editor_ui.project_settings.preview_texture_group.as_deref() == Some(removed_id.as_str())
         {
-            editor_ui.project_settings.preview_texture_group = None;
+            editor_ui.project_settings.preview_texture_group = editor_ui
+                .project_settings
+                .texture_naming
+                .groups
+                .first()
+                .map(|group| group.id.clone());
         }
 
         editor_ui
