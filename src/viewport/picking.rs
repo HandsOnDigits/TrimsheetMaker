@@ -538,7 +538,10 @@ pub fn sync_mesh_primitive_wireframe(
     let material = highlight_material
         .get_or_insert_with(|| {
             materials.add(StandardMaterial {
+                base_color: Color::NONE,
+                alpha_mode: AlphaMode::Blend,
                 unlit: true,
+                depth_bias: 0.01,
                 ..default()
             })
         })
