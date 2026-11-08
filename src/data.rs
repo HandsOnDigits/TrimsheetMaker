@@ -23,6 +23,13 @@ use super::{
 
 const ATLAS_ROW_CHUNK: usize = 32;
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MaterialMeshIslandTransform {
+    /// Triangle indices within this primitive.
+    pub face_indices: Vec<usize>,
+    pub uv_transform: UvTransform,
+}
+
 #[derive(Clone)]
 pub struct MaterialTexture {
     pub id: String,
@@ -1228,6 +1235,7 @@ pub struct MaterialMeshAssignment {
     pub object_index: usize,
     pub primitive_index: usize,
     pub uv_transform: UvTransform,
+    pub island_transforms: Vec<MaterialMeshIslandTransform>,
 }
 
 #[derive(Clone)]
@@ -1267,6 +1275,7 @@ impl AtlasMaterial {
             object_index,
             primitive_index,
             uv_transform: UvTransform::default(),
+            island_transforms: Vec::new(),
         });
     }
 

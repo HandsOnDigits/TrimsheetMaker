@@ -3,7 +3,9 @@ use std::path::PathBuf;
 use bevy::prelude::*;
 
 use crate::{
-    data::{Atlas, AtlasMaterial, MaterialMeshAssignment, MaterialTexture},
+    data::{
+        Atlas, AtlasMaterial, MaterialMeshAssignment, MaterialMeshIslandTransform, MaterialTexture,
+    },
     mesh::{
         MeshSceneState,
         import::{MeshMaterialRef, MeshScene},
@@ -176,6 +178,7 @@ impl AtlasMaterialSnapshot {
                     object_index: assignment.object_index,
                     primitive_index: assignment.primitive_index,
                     uv_transform: assignment.uv_transform,
+                    island_transforms: assignment.island_transforms.clone(),
                 })
                 .collect(),
         }
@@ -209,6 +212,7 @@ impl AtlasMaterialSnapshot {
                     object_index: assignment.object_index,
                     primitive_index: assignment.primitive_index,
                     uv_transform: assignment.uv_transform,
+                    island_transforms: assignment.island_transforms.clone(),
                 })
                 .collect(),
         }
@@ -240,6 +244,7 @@ pub struct MaterialMeshAssignmentSnapshot {
     pub object_index: usize,
     pub primitive_index: usize,
     pub uv_transform: UvTransform,
+    pub island_transforms: Vec<MaterialMeshIslandTransform>,
 }
 
 #[derive(Debug, Clone)]

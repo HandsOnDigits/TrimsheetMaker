@@ -8,7 +8,9 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    data::{Atlas, AtlasMaterial, MaterialMeshAssignment, MaterialTexture},
+    data::{
+        Atlas, AtlasMaterial, MaterialMeshAssignment, MaterialMeshIslandTransform, MaterialTexture,
+    },
     mesh::{
         MeshSceneState,
         import::{self},
@@ -150,6 +152,7 @@ impl ProjectFile {
                             object_index: assignment.object_index,
                             primitive_index: assignment.primitive_index,
                             uv_transform: assignment.uv_transform,
+                            island_transforms: assignment.island_transforms.clone(),
                         })
                         .collect(),
                 })
@@ -239,6 +242,7 @@ impl ProjectFile {
                         object_index: assignment.object_index,
                         primitive_index: assignment.primitive_index,
                         uv_transform: assignment.uv_transform,
+                        island_transforms: assignment.island_transforms.clone(),
                     })
                     .collect(),
             })
@@ -410,6 +414,9 @@ pub struct ProjectMaterialMeshAssignment {
 
     #[serde(default)]
     pub uv_transform: UvTransform,
+
+    #[serde(default)]
+    pub island_transforms: Vec<MaterialMeshIslandTransform>,
 }
 
 pub fn open_project_dialog() -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {

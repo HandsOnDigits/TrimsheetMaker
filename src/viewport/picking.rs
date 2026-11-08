@@ -4,6 +4,18 @@ use bevy::{
     window::PrimaryWindow,
 };
 
+use std::collections::HashMap;
+
+const ISLAND_POSITION_TOLERANCE: f32 = 1.0e-4;
+const ISLAND_UV_TOLERANCE: f32 = 1.0e-5;
+const PICK_DRAG_THRESHOLD: f32 = 4.0;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+struct UvIslandVertexKey {
+    position: [i64; 3],
+    uv: [i64; 2],
+}
+
 use crate::{
     data::Atlas,
     mesh::{ImportedMeshPart, MeshSceneState},
@@ -13,17 +25,31 @@ use crate::{
 
 use super::{MeshPreview, MeshPreviewCamera, MeshViewportInput, MeshViewportLayout};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MeshPrimitiveSelection {
-    pub mesh_id: u64,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MeshFaceRef {
     pub object_index: usize,
     pub primitive_index: usize,
+    pub face_index: usize,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MeshUvIslandSelection {
+    pub mesh_id: u64,
+    pub faces: Vec<MeshFaceRef>,
 }
 
 #[derive(Resource, Default)]
 pub struct MeshViewportPicking {
     pressed_position: Option<Vec2>,
     dragged: bool,
+    pub selected_uv_island: Option<MeshUvIslandSelection>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MeshPrimitiveSelection {
+    pub mesh_id: u64,
+    pub object_index: usize,
+    pub primitive_index: usize,
 }
 
 #[derive(Resource, Default)]
@@ -33,7 +59,124 @@ pub struct MeshViewportContextMenu {
     pub open: bool,
 }
 
-const PICK_DRAG_THRESHOLD: f32 = 4.0;
+#[derive(Component)]
+pub struct MeshUvIslandHighlight;
+
+fn quantize(value: f32, tolerance: f32) -> i64 {
+    (value as f64 / tolerance as f64).round() as i64
+}
+
+fn island_vertex_key(position: [f32; 3], uv: [f32; 2]) -> Option<UvIslandVertexKey> {
+    if !position.iter().chain(uv.iter()).all(|v| v.is_finite()) {
+        return None;
+    }
+
+    Some(UvIslandVertexKey {
+        position: position.map(|v| quantize(v, ISLAND_POSITION_TOLERANCE)),
+        uv: uv.map(|v| quantize(v, ISLAND_UV_TOLERANCE)),
+    })
+}
+
+fn uv_island_for_face(
+    scene: &crate::mesh::import::MeshScene,
+    object_index: usize,
+    primitive_index: usize,
+    face_index: usize,
+) -> Vec<MeshFaceRef> {
+    let Some(object) = scene.objects.get(object_index) else {
+        return Vec::new();
+    };
+
+    type EdgeKey = (UvIslandVertexKey, UvIslandVertexKey);
+
+    let mut edge_faces: HashMap<EdgeKey, Vec<MeshFaceRef>> = HashMap::new();
+
+    for (primitive_index, primitive) in object.primitives.iter().enumerate() {
+        if primitive.uvs.len() != primitive.positions.len() {
+            continue;
+        }
+
+        for (face_index, triangle) in primitive.indices.chunks_exact(3).enumerate() {
+            let mut vertices = [None; 3];
+
+            for corner in 0..3 {
+                let index = triangle[corner] as usize;
+
+                let (Some(position), Some(uv)) =
+                    (primitive.positions.get(index), primitive.uvs.get(index))
+                else {
+                    continue;
+                };
+
+                vertices[corner] = island_vertex_key(*position, *uv);
+            }
+
+            let [Some(a), Some(b), Some(c)] = vertices else {
+                continue;
+            };
+
+            let face = MeshFaceRef {
+                object_index,
+                primitive_index,
+                face_index,
+            };
+
+            for (start, end) in [(a, b), (b, c), (c, a)] {
+                if start == end {
+                    continue;
+                }
+
+                let edge = if start <= end {
+                    (start, end)
+                } else {
+                    (end, start)
+                };
+
+                edge_faces.entry(edge).or_default().push(face);
+            }
+        }
+    }
+
+    let target = MeshFaceRef {
+        object_index,
+        primitive_index,
+        face_index,
+    };
+
+    let mut adjacency: HashMap<MeshFaceRef, Vec<MeshFaceRef>> = HashMap::new();
+
+    for faces in edge_faces.values() {
+        for i in 0..faces.len() {
+            for j in (i + 1)..faces.len() {
+                adjacency.entry(faces[i]).or_default().push(faces[j]);
+                adjacency.entry(faces[j]).or_default().push(faces[i]);
+            }
+        }
+    }
+
+    if !adjacency.contains_key(&target) {
+        // No matching UV edges: still select the clicked face.
+        return vec![target];
+    }
+
+    let mut visited = std::collections::HashSet::new();
+    let mut stack = vec![target];
+    visited.insert(target);
+
+    while let Some(face) = stack.pop() {
+        if let Some(neighbors) = adjacency.get(&face) {
+            for &neighbor in neighbors {
+                if visited.insert(neighbor) {
+                    stack.push(neighbor);
+                }
+            }
+        }
+    }
+
+    let mut result: Vec<_> = visited.into_iter().collect();
+    result.sort_by_key(|face| (face.object_index, face.primitive_index, face.face_index));
+    result
+}
 
 pub fn pick_mesh_primitive(
     buttons: Res<ButtonInput<MouseButton>>,
@@ -117,7 +260,7 @@ pub fn pick_mesh_primitive(
         return;
     };
 
-    let mut closest: Option<(f32, MeshPrimitiveSelection, Vec3, Vec3)> = None;
+    let mut closest: Option<(f32, MeshPrimitiveSelection, usize, Vec3, Vec3)> = None;
 
     for (part, transform, mesh_handle) in &parts {
         let Some(mesh_entry) = mesh_scene_state.get(part.mesh_id) else {
@@ -146,7 +289,7 @@ pub fn pick_mesh_primitive(
             continue;
         };
 
-        let Some(distance) = ray_mesh_intersection(&ray, mesh, transform) else {
+        let Some((distance, face_index)) = ray_mesh_intersection(&ray, mesh, transform) else {
             continue;
         };
 
@@ -169,23 +312,24 @@ pub fn pick_mesh_primitive(
 
         if closest
             .as_ref()
-            .is_none_or(|(closest_distance, _, _, _)| distance < *closest_distance)
+            .is_none_or(|(closest_distance, _, _, _, _)| distance < *closest_distance)
         {
-            closest = Some((distance, selection, center, normal));
+            closest = Some((distance, selection, face_index, center, normal));
         }
     }
 
     if right_clicked {
         context_menu.position = cursor;
-        context_menu.selection = closest.map(|(_, selection, _, _)| selection);
+        context_menu.selection = closest.map(|(_, selection, _, _, _)| selection);
         context_menu.open = context_menu.selection.is_some();
         return;
     }
 
-    let Some((_, selection, center, normal)) = closest else {
+    let Some((_, selection, face_index, center, normal)) = closest else {
         mesh_preview.selected_primitive = None;
         mesh_preview.selected_primitive_center = None;
         mesh_preview.selected_primitive_normal = None;
+        picking.selected_uv_island = None;
 
         if mesh_preview.transform_mode == TransformMode::Uv {
             editor_ui.selected_uv_assignment = None;
@@ -193,6 +337,19 @@ pub fn pick_mesh_primitive(
 
         return;
     };
+
+    picking.selected_uv_island =
+        mesh_scene_state
+            .get(selection.mesh_id)
+            .map(|mesh_entry| MeshUvIslandSelection {
+                mesh_id: selection.mesh_id,
+                faces: uv_island_for_face(
+                    &mesh_entry.scene,
+                    selection.object_index,
+                    selection.primitive_index,
+                    face_index,
+                ),
+            });
 
     mesh_preview.selected_primitive = Some(selection);
     mesh_preview.selected_primitive_center = Some(center);
@@ -226,60 +383,56 @@ pub fn pick_mesh_primitive(
     }
 }
 
-fn ray_mesh_intersection(ray: &Ray3d, mesh: &Mesh, transform: &GlobalTransform) -> Option<f32> {
+fn ray_mesh_intersection(
+    ray: &Ray3d,
+    mesh: &Mesh,
+    transform: &GlobalTransform,
+) -> Option<(f32, usize)> {
+    use bevy::mesh::VertexAttributeValues;
+
     let positions = match mesh.attribute(Mesh::ATTRIBUTE_POSITION)? {
-        bevy::mesh::VertexAttributeValues::Float32x3(values) => values,
+        VertexAttributeValues::Float32x3(values) => values,
         _ => return None,
     };
 
-    let indices = mesh.indices()?;
+    if mesh.primitive_topology() != bevy::mesh::PrimitiveTopology::TriangleList {
+        return None;
+    }
+
+    let indices: Vec<usize> = match mesh.indices() {
+        Some(indices) => indices.iter().collect(),
+        None => (0..positions.len()).collect(),
+    };
 
     let inverse = transform.affine().inverse();
-
     let local_origin = inverse.transform_point3(ray.origin);
     let local_direction = inverse.transform_vector3(*ray.direction).normalize();
 
-    let mut closest = None;
+    let mut closest: Option<(f32, usize)> = None;
 
-    let mut triangle_indices = indices.iter();
-
-    loop {
-        let Some(i0) = triangle_indices.next() else {
-            break;
-        };
-
-        let Some(i1) = triangle_indices.next() else {
-            break;
-        };
-
-        let Some(i2) = triangle_indices.next() else {
-            break;
-        };
-
-        let Some(a) = positions.get(i0 as usize) else {
+    for (face_index, triangle) in indices.chunks_exact(3).enumerate() {
+        let Some(&a) = positions.get(triangle[0] as usize) else {
             continue;
         };
-
-        let Some(b) = positions.get(i1 as usize) else {
+        let Some(&b) = positions.get(triangle[1] as usize) else {
             continue;
         };
-
-        let Some(c) = positions.get(i2 as usize) else {
+        let Some(&c) = positions.get(triangle[2] as usize) else {
             continue;
         };
 
         let Some(distance) = ray_triangle_intersection(
             local_origin,
             local_direction,
-            Vec3::from_array(*a),
-            Vec3::from_array(*b),
-            Vec3::from_array(*c),
+            Vec3::from_array(a),
+            Vec3::from_array(b),
+            Vec3::from_array(c),
         ) else {
             continue;
         };
 
-        if closest.is_none_or(|current| distance < current) {
-            closest = Some(distance);
+        if closest.is_none_or(|(current, _)| distance < current) {
+            closest = Some((distance, face_index));
         }
     }
 
@@ -332,56 +485,159 @@ fn ray_triangle_intersection(
 }
 
 pub fn sync_mesh_primitive_wireframe(
-    mesh_preview: Res<MeshPreview>,
-    mesh_scene_state: Res<MeshSceneState>,
+    picking: Res<MeshViewportPicking>,
     editor_ui: Res<EditorUi>,
+    mesh_scene_state: Res<MeshSceneState>,
     mut commands: Commands,
-    parts: Query<(Entity, &ImportedMeshPart)>,
+    parts: Query<(Entity, &ImportedMeshPart, &Mesh3d)>,
+    old_highlights: Query<Entity, With<MeshUvIslandHighlight>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut last_selection: Local<Option<MeshUvIslandSelection>>,
+    mut last_style: Local<Option<(bool, [u32; 4], u32)>>,
+    mut highlight_material: Local<Option<Handle<StandardMaterial>>>,
 ) {
-    let selected = mesh_preview.selected_primitive;
+    let highlight = &editor_ui.project_settings.highlights.mesh;
+    let style = (
+        highlight.enabled,
+        highlight.color.map(f32::to_bits),
+        highlight.strength.to_bits(),
+    );
 
-    for (entity, part) in &parts {
-        let is_selected = selected.is_some_and(|selected| {
-            if selected.mesh_id != part.mesh_id {
-                return false;
-            }
+    if *last_selection == picking.selected_uv_island && *last_style == Some(style) {
+        return;
+    }
 
-            let Some(mesh_entry) = mesh_scene_state.get(part.mesh_id) else {
-                return false;
-            };
+    *last_selection = picking.selected_uv_island.clone();
+    *last_style = Some(style);
 
-            let Some(mesh_part) = mesh_entry
-                .parts
-                .iter()
-                .find(|entry| entry.index == part.part_index)
-            else {
-                return false;
-            };
+    // Remove previous island overlays.
+    for entity in &old_highlights {
+        commands.entity(entity).despawn();
+    }
 
-            selected.object_index == mesh_part.object_index
-                && selected.primitive_index == mesh_part.primitive_index
-        });
+    // Remove any legacy whole-primitive wireframes.
+    for (entity, _, _) in &parts {
+        commands
+            .entity(entity)
+            .remove::<(Wireframe, WireframeColor, WireframeLineWidth)>();
+    }
 
-        if is_selected && editor_ui.project_settings.highlights.mesh.enabled {
-            let highlight = &editor_ui.project_settings.highlights.mesh;
+    if !highlight.enabled {
+        return;
+    }
 
-            commands.entity(entity).insert((
-                Wireframe,
-                WireframeColor {
-                    color: Color::srgba(
-                        highlight.color[0],
-                        highlight.color[1],
-                        highlight.color[2],
-                        highlight.color[3] * highlight.strength,
-                    ),
-                },
-                WireframeLineWidth { width: 1.0 },
-            ));
-        } else {
-            commands
-                .entity(entity)
-                .remove::<(Wireframe, WireframeColor, WireframeLineWidth)>();
+    let Some(selection) = picking.selected_uv_island.as_ref() else {
+        return;
+    };
+
+    if selection.faces.is_empty() {
+        return;
+    }
+
+    let material = highlight_material
+        .get_or_insert_with(|| {
+            materials.add(StandardMaterial {
+                unlit: true,
+                ..default()
+            })
+        })
+        .clone();
+
+    // Group selected faces by their original primitive.
+    let mut faces_by_primitive: HashMap<(usize, usize), Vec<usize>> = HashMap::new();
+
+    for face in &selection.faces {
+        faces_by_primitive
+            .entry((face.object_index, face.primitive_index))
+            .or_default()
+            .push(face.face_index);
+    }
+
+    for (entity, part, mesh_handle) in &parts {
+        if part.mesh_id != selection.mesh_id {
+            continue;
         }
+
+        let Some(mesh_entry) = mesh_scene_state.get(part.mesh_id) else {
+            continue;
+        };
+
+        let Some(mesh_part) = mesh_entry
+            .parts
+            .get(part.part_index)
+            .filter(|entry| entry.index == part.part_index)
+        else {
+            continue;
+        };
+
+        let Some(face_indices) =
+            faces_by_primitive.get(&(mesh_part.object_index, mesh_part.primitive_index))
+        else {
+            continue;
+        };
+
+        let Some(source_mesh) = meshes.get(&mesh_handle.0) else {
+            continue;
+        };
+
+        if source_mesh.primitive_topology() != bevy::mesh::PrimitiveTopology::TriangleList {
+            continue;
+        }
+
+        use bevy::mesh::Indices;
+
+        let source_indices: Vec<usize> = match source_mesh.indices() {
+            Some(indices) => indices.iter().collect(),
+            None => {
+                let Some(positions) = source_mesh.attribute(Mesh::ATTRIBUTE_POSITION) else {
+                    continue;
+                };
+
+                let bevy::mesh::VertexAttributeValues::Float32x3(positions) = positions else {
+                    continue;
+                };
+
+                (0..positions.len()).collect()
+            }
+        };
+
+        let mut selected_indices = Vec::new();
+
+        for &face_index in face_indices {
+            let start = face_index * 3;
+            let Some(triangle) = source_indices.get(start..start + 3) else {
+                continue;
+            };
+
+            selected_indices.extend(triangle.iter().map(|&index| index as u32));
+        }
+
+        if selected_indices.is_empty() {
+            continue;
+        }
+
+        // Clone the source mesh and retain only the selected triangles.
+        let mut overlay_mesh = source_mesh.clone();
+        overlay_mesh.insert_indices(Indices::U32(selected_indices));
+
+        let color = Color::srgba(
+            highlight.color[0],
+            highlight.color[1],
+            highlight.color[2],
+            highlight.color[3] * highlight.strength,
+        );
+
+        commands.spawn((
+            Mesh3d(meshes.add(overlay_mesh)),
+            MeshMaterial3d(material.clone()),
+            Wireframe,
+            WireframeColor { color },
+            WireframeLineWidth { width: 1.0 },
+            MeshUvIslandHighlight,
+            ChildOf(entity),
+            Transform::default(),
+        ));
     }
 }
 

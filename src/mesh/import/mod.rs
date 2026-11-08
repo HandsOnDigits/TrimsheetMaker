@@ -148,13 +148,11 @@ pub fn import(
         backend => backend,
     };
 
-    let mut scene = match backend {
+    let scene = match backend {
         MeshBackend::Auto => unreachable!(),
         MeshBackend::Gltf => gltf::import(path)?,
         MeshBackend::Assimp => assimp::import(path, settings.assimp_library.as_deref())?,
     };
-
-    crate::mesh::topology::split_scene_by_connected_faces(&mut scene);
 
     Ok(scene)
 }
