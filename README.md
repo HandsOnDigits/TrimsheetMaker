@@ -129,3 +129,5 @@ TrimsheetMaker is being developed around a few central principles:
 TrimsheetMaker is under active development.
 
 Features and workflows are being implemented incrementally, and the application is not yet considered a stable release.
+
+Contains some AI-generated code. All art is made by humans.
